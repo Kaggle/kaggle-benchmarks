@@ -1,0 +1,43 @@
+{
+  "name": "Python 3",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "options": [
+      "--network=host"
+    ],
+  },
+  "runArgs": [
+    "--network=host"
+  ],
+  "features": {
+    "ghcr.io/va-h/devcontainers-features/uv:1": {
+      "shellautocompletion": true,
+      "version": "latest"
+    },
+    "ghcr.io/rocker-org/devcontainer-features/quarto-cli:1": {
+      "installChromium": true
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "tamasfe.even-better-toml",
+        "ms-toolsai.jupyter",
+        "ms-python.vscode-pylance",
+        "zxh404.vscode-proto3",
+        "google.geminicodeassist",
+        "GitHub.vscode-pull-request-github",
+        "ms-vscode.live-server",
+        "quarto.quarto",
+      ]
+    }
+  },
+  "postCreateCommand": "uv sync && playwright install --with-deps",
+  "postStartCommand": "uv run pre-commit install",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
+  ],
+}

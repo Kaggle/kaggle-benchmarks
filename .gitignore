@@ -1,0 +1,12 @@
+__pycache__
+.ipynb_checkpoints
+.Trash-0
+.env
+.venv
+.*cache
+**/*task.json
+**/*run.json
+dev/
+_site/
+site_libs/
+docs/

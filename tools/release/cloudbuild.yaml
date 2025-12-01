@@ -1,0 +1,109 @@
+# Copyright 2025 Kaggle Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+steps:
+
+
+# TODO: Remove token after it's open-sourced.
+# Step 0: Make a fresh clone of repository and save it to _GITHUB_REPOSITORY
+- name: 'gcr.io/cloud-builders/git'
+  id: clone-repo
+  secretEnv: ['GITHUB_TOKEN']
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    git clone https://x-access-token:$$GITHUB_TOKEN@github.com/kaggle/$_GITHUB_REPOSITORY.git
+  volumes:
+  - name: 'root'
+    path: /root
+
+# Step 1: Build the artifacts and save them to /root/dist
+# The image `personal-benchmarks-new` is built from cicd/cloudbuild.yaml.
+# The source is from the fresh github clone.
+- name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest"
+  id: build-artifacts
+  dir: $_GITHUB_REPOSITORY
+  entrypoint: uv
+  args: ["build", "--out-dir", "/root/dist"]
+  volumes:
+    - name: 'root'
+      path: /root
+  waitFor: ["clone-repo"]
+
+
+# Step 2: Publish to pypi or pypitest.
+- name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest"
+  id: publish-artifacts
+  secretEnv: ['PYPI_TOKEN', 'TEST_PYPI_TOKEN']
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    if [ "${_PYPI_REPOSITORY}" = "pypi" ]; then
+      echo "🚀 Publishing to Production PyPI..."
+      export UV_PUBLISH_TOKEN=$$PYPI_TOKEN
+      uv publish --publish-url https://upload.pypi.org/legacy/ /root/dist/*
+    else
+      echo "🧪 Publishing to Test PyPI..."
+      export UV_PUBLISH_TOKEN=$$TEST_PYPI_TOKEN
+      uv publish --publish-url https://test.pypi.org/legacy/ /root/dist/*
+    fi
+  volumes:
+    - name: 'root'
+      path: /root
+  waitFor: ["build-artifacts"]
+
+# Step 3: Create a release on GitHub.
+# The source is from the fresh github clone.
+# This should only run after we have successfully published to pypi.
+- name: 'us-docker.pkg.dev/$PROJECT_ID/tools/hub'
+  id: 'github-release'
+  dir: $_GITHUB_REPOSITORY
+  secretEnv: ['GITHUB_TOKEN']
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    export RELEASE_VERSION=`grep __version__ src/kaggle_benchmarks/__init__.py | sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/"`
+    echo "✅ Preparing github release for version $$RELEASE_VERSION"
+    if [ "${_PYPI_REPOSITORY}" = "pypi" ]; then
+      echo "Creating a release on GitHub..."
+      hub release create -m "release v$$RELEASE_VERSION" "v$$RELEASE_VERSION"
+    else
+      echo "Skipping GitHub release, this is a release to pypitest"
+    fi
+  env:
+  - GITHUB_USER=kaggle
+  - GITHUB_REPOSITORY=$_GITHUB_REPOSITORY
+  - HUB_PROTOCOL=https
+  volumes:
+  - name: 'root'
+    path: /root
+  waitFor: ["publish-artifacts"]
+
+substitutions:
+  _GITHUB_REPOSITORY: kaggle-benchmarks
+  _IMAGE_REPO_NAME: gcr.io/kaggle-private-byod
+  _IMAGE_NAME: personal-benchmarks-new
+  _PYPI_REPOSITORY: pypitest
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/$PROJECT_ID/secrets/kaggleteam-github-access-token/versions/latest
+    env: 'GITHUB_TOKEN'
+  - versionName: projects/$PROJECT_ID/secrets/pypi-token/versions/latest
+    env: 'PYPI_TOKEN'
+  - versionName: projects/$PROJECT_ID/secrets/test-pypi-token/versions/latest
+    env: 'TEST_PYPI_TOKEN'

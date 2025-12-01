@@ -1,0 +1,29 @@
+steps:
+  - id: "build-image"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest",
+        "--file=${_DOCKERFILE_PATH}",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "push-image"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}", "--all-tags"]
+    waitFor: ["build-image"]
+
+images:
+  - "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}"
+
+timeout: 3600s # 1 hour
+
+substitutions:
+  _IMAGE_REPO_NAME: gcr.io/kaggle-private-byod
+  _IMAGE_NAME: personal-benchmarks-new
+  _DOCKERFILE_PATH: cicd/Dockerfile

@@ -1,0 +1,5 @@
+
+BENCHMARK_MODE=DOC
+UI_THEME=default
+LLMS_AVAILABLE=google/gemini-2.0-flash,google/gemini-1.5-pro,anthropic/claude-3-5-sonnet-v2
+LLM_DEFAULT=google/gemini-2.0-flash

@@ -1,0 +1,32 @@
+project:
+  type: website
+  render:
+    - "*.qmd"
+    - "*.py"
+    - "!guides/"
+    - "!examples/"
+  output-dir: ../docs
+  execute-dir: project
+
+toc: true
+
+website:
+  title: "Benchmarks"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+
+  sidebar:
+    contents: auto
+
+format:
+  html:
+    # theme: darkly
+    theme: yeti
+    css: styles.css
+    toc: true
+    page-layout: full
+
+execute:
+  cache: true

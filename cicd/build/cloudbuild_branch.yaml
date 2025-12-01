@@ -1,0 +1,48 @@
+steps:
+  - id: "build-image"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest",
+        "--file=${_DOCKERFILE_PATH}",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "push-image"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}", "--all-tags"]
+    waitFor: ["build-image"]
+
+  - id: test
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    dir: /benchmarks
+    entrypoint: uv
+    args: ["run", "--group", "test",  "pytest", "tests"]
+    waitFor: ["push-image"]
+    env:
+      - "LLM_DEFAULT=x"
+      - "MODEL_PROXY_URL=y"
+      - "MODEL_PROXY_API_KEY=z"
+      - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
+
+  - id: ruff
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    dir: /benchmarks
+    entrypoint: uvx
+    args: ["ruff", "check"]
+    waitFor: ["push-image"]
+
+images:
+  - "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}"
+
+timeout: 3600s # 1 hour
+
+substitutions:
+  _IMAGE_REPO_NAME: gcr.io/kaggle-private-byod
+  _IMAGE_NAME: personal-benchmarks-new-pr
+  _DOCKERFILE_PATH: cicd/Dockerfile

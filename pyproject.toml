@@ -1,0 +1,85 @@
+[project]
+name = "kaggle_benchmarks"
+dynamic=["version"]
+description = ""
+readme = "README.md"
+authors = []
+requires-python = ">=3.11"
+dependencies = [
+  "openai>=1.66",
+  "pandas",
+  "tqdm",
+  "python-dotenv>=1.0.1",
+  "protobuf>=5.29.3,<6.0",
+  "jupyter",
+  "docker>=7.1.0",
+  "panel>=1.6.3",
+  "playwright>=1.50.0",
+  "nest-asyncio>=1.6.0",
+  "hishel==0.1.5",
+  "pydantic>=2.11.5",
+  "joblib",
+  "google-genai>=1.38.0",
+]
+# Configuration for the build backend to find the version file
+[tool.hatch.version]
+path = "src/kaggle_benchmarks/__init__.py"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+test = ["pytest", "pytest-asyncio>=0.25.3", "pytest-mock>=3.14.1"]
+kaggle = [
+  "kagglehub>=0.3.10",
+  "pip>=25.0.1",
+  "nbdev>=2.4.2",
+  "papermill>=2.6.0",
+  "jupyter-lsp>=2.2.2",
+  "jupyter-server==2.12.5",
+  "notebook>=6.5.4",
+  "nbconvert>=6.5.1",
+  "traitlets==5.9.0",
+  "jupyter-bokeh>=4.0.5",
+]
+docs = [
+  "chess>=1.11.2",
+  "emoji>=2.14.1",
+  "jupyter-cache>=1.0.1",
+  "pronouncing>=0.2.0",
+  "roman>=5.0",
+  "sentence-transformers>=4.1.0",
+  "syllables>=1.0.9",
+  "moviepy>=2.2.1",               # for doom example
+  "vizdoom>=1.2.4",
+]
+dev = [
+  { include-group = "test" },
+  { include-group = "kaggle" },
+  { include-group = "docs" },
+  "mypy",
+  "ruff",
+  "types-tqdm>=4.67.0.20241221",
+  "pandas-stubs>=2.2.3.241126",
+  "docker-stubs>=0.1.0",
+  "types-protobuf>=5.29.1.20241207",
+  "pre-commit>=4.2.0",
+  "mypy-protobuf>=3.6.0",
+]
+
+[tool.mypy]
+warn_unused_configs = true
+
+disable_error_code = ["import-untyped"]
+exclude = ["src/benchmarks/protos/utils"]
+
+[tool.ruff]
+extend-exclude = ["**/*_pb2.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+
+"__init__.py" = ["F401", "F402"]
