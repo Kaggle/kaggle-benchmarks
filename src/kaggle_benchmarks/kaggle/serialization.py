@@ -393,10 +393,12 @@ def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
                 "confidenceInterval": run.result[1],
             }
         }
-    elif isinstance(run.result, bool) or run.result is None:
+    elif run.result is None:
         result_data = {"boolean_result": run.passed}
     elif run.result is results.FAILED:
         result_data = {"boolean_result": False}
+    elif isinstance(run.result, bool):
+        result_data = {"boolean_result": run.result}
     elif isinstance(run.result, (int, float)):
         result_data = {"numeric_result": {"value": float(run.result)}}
     elif isinstance(run.result, dict):
