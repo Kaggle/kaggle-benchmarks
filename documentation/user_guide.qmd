@@ -239,6 +239,7 @@ The library comes with a set of common assertion functions. Here are some of the
 -   `assert_not_contains_regex(pattern, text, ...)`: Checks if a regular expression pattern is not found in the given text.
 -   `assert_empty(container, ...)`: Checks if a container (like a string or list) is empty.
 -   `assert_not_empty(container, ...)`: Checks if a container is not empty.
+-   `assert_fail(expectation)`: Signals a test failure unconditionally, with an optional message.
 
 Here is a complete example showing a simple task that uses an assertion with a descriptive `expectation` message.
 
@@ -308,6 +309,38 @@ def check_number(llm):
     assert_is_positive(response, expectation="LLM should return a positive number.")
 
 check_number.run(kbench.llm)
+```
+
+### Model-based Assertions with `assess_response_with_judge`
+
+For complex assessments that cannot be captured by simple checks, you can use `assess_response_with_judge`. This powerful assertion uses a separate "judge" LLM to evaluate a response against a set of detailed, natural language criteria. It is particularly useful for tasks where quality is subjective or requires nuanced understanding.
+
+Each criterion is assessed independently, and the function returns a report detailing which criteria passed or failed, along with a reason and a confidence score. This allows for granular feedback on the model's performance.
+
+Here is an example of how to use it to evaluate an explanation of a technical concept:
+
+```{python}
+import kaggle_benchmarks as kbench
+
+@kbench.task()
+def summarize_story(llm):
+    # The prompt asks for a summary of a classic story
+    response = llm.prompt(
+        "Summarize the story of '''Little Red Riding Hood''' in two sentences."
+    )
+
+    kbench.assertions.assess_response_with_judge(
+        criteria=(
+            "The summary must mention the main character, Little Red Riding Hood.",
+            "The summary must mention the antagonist, the Wolf.",
+            "The summary should mention the Woods or Forest as the setting.",
+            "The summary must be two sentences long.",
+        ),
+        response_text=response,
+        judge_llm=kbench.judge_llm,
+    )
+
+summarize_story.run(kbench.llm)
 ```
 
 ## 4. Evaluating Multiple Models on Kaggle
