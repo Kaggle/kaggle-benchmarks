@@ -333,3 +333,16 @@ def test_custom_expectation():
             "source_code": "r_custom_pass = assertions.assert_true(",
         },
     )
+
+
+def test_assert_fail():
+    r = assertions.assert_fail("This is a forced failure")
+    assert_assertion_result_matches(
+        r,
+        expected_passed=False,
+        expected_expectation="This is a forced failure",
+        expected_details_content={
+            "assertion_type": "assert_fail",
+            "source_code": 'r = assertions.assert_fail("This is a forced failure")',
+        },
+    )
