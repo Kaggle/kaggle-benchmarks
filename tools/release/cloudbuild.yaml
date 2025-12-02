@@ -97,7 +97,7 @@ substitutions:
   _GITHUB_REPOSITORY: kaggle-benchmarks
   _IMAGE_REPO_NAME: gcr.io/kaggle-private-byod
   _IMAGE_NAME: personal-benchmarks-new
-  _PYPI_REPOSITORY: pypitest
+  _PYPI_REPOSITORY: pypitest # Change this to pypi for prod
 
 availableSecrets:
   secretManager:
