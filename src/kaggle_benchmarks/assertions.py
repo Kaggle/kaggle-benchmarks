@@ -429,7 +429,7 @@ class AssessResult:
     criterion: str
     passed: bool
     reason: str
-    confidence: int  # 0-10
+    confidence: int
 
 
 @dataclasses.dataclass
