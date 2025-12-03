@@ -56,11 +56,16 @@ def explain_zero_knowledge_proofs(llm):
         judge_llm=kbench.judge_llm,
     )
 
-    for result in assess_report.results:
-        kbench.assertions.assert_true(
-            result.passed,
-            expectation=f"Criterion: {result.criterion}. Confidence: {result.confidence}. Reason: {result.reason}",
+    if assess_report is None:
+        kbench.assertions.assert_fail(
+            expectation="Judge LLM should respond with an assessment report."
         )
+    else:
+        for result in assess_report.results:
+            kbench.assertions.assert_true(
+                result.passed,
+                expectation=f"Should pass criterion: {result.criterion} with confidence: {result.confidence} and reason: {result.reason}",
+            )
 
 
 explain_zero_knowledge_proofs.run(kbench.judge_llm)
@@ -123,15 +128,20 @@ def critique_short_story(llm):
         output_schema=StoryCritique,
     )
 
-    # You can now add assertions based on your custom critique object.
-    kbench.assertions.assert_true(
-        critique.overall_rating >= 3,
-        f"Story rating was {critique.overall_rating}, which is below the acceptable threshold of 3.",
-    )
-    kbench.assertions.assert_true(
-        "The story is inspired by a true story." not in critique.passed_checks,
-        "The critique incorrectly passed a failing criterion.",
-    )
+    if critique is None:
+        kbench.assertions.assert_fail(
+            expectation="Judge LLM should respond with a critique."
+        )
+    else:
+        # You can now add assertions based on your custom critique object.
+        kbench.assertions.assert_true(
+            critique.overall_rating >= 3,
+            f"Story rating was {critique.overall_rating}, which is below the acceptable threshold of 3.",
+        )
+        kbench.assertions.assert_true(
+            "The story is inspired by a true story." not in critique.passed_checks,
+            "The critique incorrectly passed a failing criterion.",
+        )
 
 
 critique_short_story.run(kbench.judge_llm)
