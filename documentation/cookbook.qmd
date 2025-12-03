@@ -1,0 +1,267 @@
+# Kaggle Benchmarks SDK Cookbook
+
+Welcome to the Kaggle Benchmarks Cookbook! This guide provides a collection of "recipes" — practical examples and patterns to help you get the most out of the library. Whether you're building a simple evaluation or a complex game workflow, you'll find a recipe here to get you started.
+
+For a comprehensive overview of the API, please refer to the [Quick Start](quick_start.md) and [User Guide](user_guide.md).
+
+## Basics
+
+### How do I define a simple Pass/Fail task?
+
+The simplest task is one that asserts a condition and doesn't return a value. If all assertions pass, the task succeeds.
+
+**Recipe:**
+```{python}
+import kaggle_benchmarks as kbench
+
+@kbench.task(name="check_capital")
+def check_capital(llm):
+    response = llm.prompt("What is the capital of France?")
+    # We use assert_contains_regex for a case-insensitive match.
+    kbench.assertions.assert_contains_regex(
+        r"(?i)Paris", response, expectation="Model should answer Paris."
+    )
+
+check_capital.run(kbench.llm)
+```
+[Example: Kaggle Benchmarks Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions) shows the list of assertions that you can use out of box.
+
+### How do I return a score from a task?
+
+To track a metric like accuracy or a score, return a value from your task function. You **must** add a return type annotation.
+
+**Recipe:**
+```{python}
+@kbench.task(name="math_score")
+def math_score(llm) -> float:
+    # ... logic to calculate score ...
+    return 0.85
+```
+
+Supported return types:
+- `bool`: Pass/Fail (True/False)
+- `float` / `int`: A numerical score
+- `tuple[int, int]`: (passed, total)
+- `tuple[float, float]`: (mean, confidence_interval)
+
+[Example: Metrics on Leaderboard](TODO) shows how these metrics are displayed on a leaderboard.
+
+### How do I get structured output (JSON/Pydantic)?
+
+You can force the LLM to return data in a specific structure using `schema`.
+
+**Recipe:**
+```{python}
+from dataclasses import dataclass
+
+@dataclass
+class MovieReview:
+    sentiment: str
+    score: int
+
+@kbench.task(name="analyze_review")
+def analyze_review(llm):
+    review = "This movie was fantastic! I loved every minute."
+    result = llm.prompt(
+        f"Analyze this review: {review}",
+        schema=MovieReview
+    )
+    # result is now a MovieReview object
+    print(f"Score: {result.score}")
+
+analyze_review.run(kbench.llm)
+```
+[Example: Use Structured Output](TODO)
+
+---
+
+## Data & Evaluation
+
+### How do I evaluate a model on a dataset?
+
+Use the `.evaluate()` method to run your task over a pandas DataFrame.
+
+**Recipe:**
+```{python}
+import pandas as pd
+
+# 1. Define your data
+df = pd.DataFrame([
+    {"question": "2+2", "answer": "4"},
+    {"question": "Capital of UK", "answer": "London"},
+])
+
+# 2. Define a task that takes row columns as arguments
+@kbench.task()
+def solve_question(llm, question, answer) -> bool:
+    response = llm.prompt(question)
+    return answer.lower() in response.lower()
+
+# 3. Run evaluation
+results = solve_question.evaluate(
+    llm=[kbench.llm],
+    evaluation_data=df
+)
+
+# 4. Analyze results
+print(results.as_dataframe())
+```
+[Example: Dataset Evaluation](TODO)
+
+### How do I compare multiple models?
+
+You can pass a list of LLMs to `.evaluate()`.
+
+**Recipe:**
+```{python}
+models = [
+    kbench.llms["google/gemini-2.5-flash"],
+    kbench.llms["meta/llama-3.1-70b"]
+]
+
+results = solve_question.evaluate(
+    llm=models,
+    evaluation_data=df
+)
+```
+[View Example: Dataset Evaluation on Multiple Models](TODO:examples/simple_multiple_tasks.py)
+
+---
+
+## Tools & Interaction
+
+### How do I give the LLM access to Python tools?
+
+Use the built-in Python script runner to let the LLM write and execute code.
+
+**Recipe:**
+```{python}
+@kbench.task(name="python_solver")
+def python_solver(llm):
+    prompt = "Calculate the 20th Fibonacci number using Python."
+    response = llm.prompt(prompt)
+
+    # Extract and run code
+    code = kbench.tools.python.extract_code(response)
+    result = kbench.tools.python.script_runner.run_code(code)
+
+    print(f"Output: {result.stdout}")
+
+python_solver.run(kbench.llm)
+```
+[Example: Code Generation](TODO:examples/code_generation.py)
+
+### How do I use custom tools?
+
+You can pass your own Python functions as tools.
+
+**Recipe:**
+```{python}
+def get_weather(city: str) -> str:
+    """Returns the weather for a city."""
+    return "Sunny"
+
+@kbench.task()
+def weather_assistant(llm):
+    # Note: Automatic tool calling works best with 'genai' API
+    response = llm.prompt(
+        "What's the weather in Tokyo?",
+        tools=[get_weather]
+    )
+```
+[View Example: Use Tools](TODO: examples/prompt_with_tools.py)
+
+### How do I handle multi-turn conversations?
+
+Use `kbench.chats.new()` to manage context and `llm.prompt()` (or `llm.send()`/`llm.respond()`) to continue the conversation.
+
+**Recipe:**
+```python
+with kbench.chats.new("chat_session"):
+    # Turn 1
+    response1 = llm.prompt("Hi, I'm looking for a book recommendation.")
+
+    # Turn 2 (History is preserved in this chat block)
+    response2 = llm.prompt("I like science fiction.")
+```
+[Example: Multiple Conversations](TODO: examples/play_20_questions.py)
+
+---
+
+## Multimodal
+
+### How do I send images to the model?
+
+Use `kbench.user.send()` with an image object before prompting.
+
+**Recipe:**
+```{python}
+from kaggle_benchmarks.content_types import images
+
+@kbench.task()
+def vision_task(llm):
+    img = images.from_url("https://example.com/image.jpg")
+
+    with kbench.chats.new("vision_chat"):
+         # TODO update the example
+        kbench.user.send(img)
+        response = llm.prompt("Describe this image.")
+
+vision_task.run(kbench.llm)
+```
+[Example: prompt_with_image.py](examples/describe_image.py)
+
+---
+
+## Advanced Patterns
+
+### How do I implement a "Judge" LLM?
+
+Use one LLM to generate content and another (stronger) LLM to evaluate it.
+
+**Recipe:**
+```{python}
+
+TODO: use assess with judge llm example
+```
+[View Example: haiku.py](examples/haiku.py)
+
+### How do I create a game loop?
+
+For interactive environments like games, use a loop where you alternate between updating the game state and prompting the LLM.
+
+**Recipe:**
+```python
+@kbench.task()
+def play_game(llm):
+    game = TicTacToe()
+
+    while not game.is_over():
+        board_str = game.render()
+        move = llm.prompt(f"Current board:\n{board_str}\nYour move?")
+        game.apply_move(move)
+
+    return game.winner == "AI"
+```
+[View Example: tic_tac_toe_game.py](examples/tic_tac_toe_game.py)
+
+### How do I use custom assertions?
+
+Create reusable assertion logic with the `@assertion_handler` decorator.
+
+**Recipe:**
+```python
+from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
+
+@assertion_handler()
+def assert_is_even(value: int, expectation: str) -> AssertionResult:
+    return AssertionResult(
+        passed=(value % 2 == 0),
+        expectation=expectation
+    )
+
+@kbench.task()
+def even_task(llm):
+    num = int(llm.prompt("Pick a number", schema=int))
+    assert_is_even(num, expectation="Number should be even")
+```
