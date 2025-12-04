@@ -18,6 +18,8 @@
   - [Built-in Assertions](#built-in-assertions)
   - [The `expectation` Parameter](#the-expectation-parameter)
   - [Custom Assertions](#custom-assertions)
+  - [Model-based Assertions with
+    `assess_response_with_judge`](#model-based-assertions-with-assess_response_with_judge)
 - [4. Evaluating Multiple Models on
   Kaggle](#4-evaluating-multiple-models-on-kaggle)
 
@@ -309,6 +311,8 @@ some of the ones you’ll use most often:
   or list) is empty.
 - `assert_not_empty(container, ...)`: Checks if a container is not
   empty.
+- `assert_fail(expectation)`: Signals a test failure unconditionally,
+  with an optional message.
 
 Here is a complete example showing a simple task that uses an assertion
 with a descriptive `expectation` message.
@@ -387,6 +391,110 @@ def check_number(llm):
     assert_is_positive(response, expectation="LLM should return a positive number.")
 
 check_number.run(kbench.llm)
+```
+
+### Model-based Assertions with `assess_response_with_judge`
+
+For complex assessments that cannot be captured by simple checks, you
+can use `assess_response_with_judge`. This helper uses a separate
+“judge” LLM to evaluate a response against a set of detailed, natural
+language criteria. It is particularly useful for tasks where quality
+requires nuanced understanding.
+
+The function returns an `AssessReport` object containing a list of
+results, one for each criterion. You can then iterate over these results
+and make explicit assertions to record the pass/fail status for the
+benchmark.
+
+Here is an example of how to use it to evaluate an explanation of a
+technical concept:
+
+``` python
+import kaggle_benchmarks as kbench
+
+@kbench.task()
+def summarize_story(llm):
+    # The prompt asks for a summary of a classic story
+    response = llm.prompt(
+        "Summarize the story of '''Little Red Riding Hood''' in two sentences."
+    )
+
+    # 1. Get the assessment report from the judge
+    assess_report = kbench.assertions.assess_response_with_judge(
+        criteria=(
+            "The summary must mention the main character, Little Red Riding Hood.",
+            "The summary must mention the antagonist, the Wolf.",
+            "The summary should mention the Woods or Forest as the setting.",
+            "The summary must be two sentences long.",
+        ),
+        response_text=response,
+        judge_llm=kbench.judge_llm,
+    )
+
+    # 2. Iterate over the results and assert on each one
+    for result in assess_report.results:
+        kbench.assertions.assert_true(
+            result.passed,
+            expectation=f"Criterion: {result.criterion}. Reason: {result.reason}",
+        )
+
+summarize_story.run(kbench.llm)
+```
+
+#### Advanced Usage: Custom Prompts and Schemas
+
+You can customize how the judge evaluates the response by providing a
+`prompt_fn` (to generate the prompt sent to the judge) and an
+`output_schema` (to define the structure of the judge’s response).
+
+This is useful if you need the judge to return specific feedback.
+
+``` python
+import dataclasses
+from typing import Iterable, List
+import textwrap
+
+@dataclasses.dataclass
+class StoryCritique:
+    """A custom schema for receiving a story critique."""
+    overall_rating: int  # 1-5
+    feedback: str
+    passed_checks: List[str]
+
+def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
+    """Custom prompt for the judge."""
+    formatted_criteria = "\n".join(f"- {c}" for c in criteria)
+    return textwrap.dedent(f"""
+        Evaluate this story:
+        {response_text}
+
+        Criteria:
+        {formatted_criteria}
+
+        Return a JSON with:
+        - overall_rating (1-5)
+        - feedback (string)
+        - passed_checks (list of strings for met criteria)
+    """)
+
+@kbench.task()
+def critique_story(llm):
+    story = llm.prompt("Write a very short story about a robot.")
+
+    critique = kbench.assertions.assess_response_with_judge(
+        criteria=["Must be about a robot."],
+        response_text=story,
+        judge_llm=kbench.judge_llm,
+        prompt_fn=custom_story_prompt,
+        output_schema=StoryCritique,
+    )
+
+    kbench.assertions.assert_true(
+        critique.overall_rating >= 4,
+        expectation=f"Story rating {critique.overall_rating} should be at least 4."
+    )
+
+critique_story.run(kbench.llm)
 ```
 
 ## 4. Evaluating Multiple Models on Kaggle
