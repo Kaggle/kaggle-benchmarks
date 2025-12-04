@@ -333,3 +333,74 @@ def test_custom_expectation():
             "source_code": "r_custom_pass = assertions.assert_true(",
         },
     )
+
+
+def test_assert_fail():
+    r = assertions.assert_fail("This is a forced failure")
+    assert_assertion_result_matches(
+        r,
+        expected_passed=False,
+        expected_expectation="This is a forced failure",
+        expected_details_content={
+            "assertion_type": "assert_fail",
+            "source_code": 'r = assertions.assert_fail("This is a forced failure")',
+        },
+    )
+
+
+def test_assess_response_with_judge():
+    class MockJudge(actors.LLMChat):
+        def __init__(self, return_value):
+            super().__init__(name="MockJudge")
+            self.return_value = return_value
+
+        def prompt(self, message, schema=None, **kwargs):
+            return self.return_value
+
+    # Judge returns dict result
+    report_dict = {
+        "results": [
+            {
+                "criterion": "some expectation",
+                "passed": True,
+                "reason": "LGTM",
+                "confidence": 10,
+            }
+        ]
+    }
+    judge_pass = MockJudge(report_dict)
+
+    report = assertions.assess_response_with_judge(
+        criteria=["some expectation"],
+        response_text="some response",
+        judge_llm=judge_pass,
+    )
+
+    assert len(report.results) == 1
+    assert report.results[0].passed
+    assert report.results[0].criterion == "some expectation"
+    assert report.results[0].reason == "LGTM"
+    assert report.results[0].confidence == 10
+
+    # Judge returns AssessReport object
+    report_obj = assertions.AssessReport(
+        results=[
+            assertions.AssessResult(
+                criterion="some expectation",
+                passed=True,
+                reason="LGTM object",
+                confidence=9,
+            )
+        ]
+    )
+    judge_obj = MockJudge(report_obj)
+    report = assertions.assess_response_with_judge(
+        criteria=["some expectation"],
+        response_text="some response",
+        judge_llm=judge_obj,
+    )
+    assert len(report.results) == 1
+    assert report.results[0].passed
+    assert report.results[0].criterion == "some expectation"
+    assert report.results[0].reason == "LGTM object"
+    assert report.results[0].confidence == 9
