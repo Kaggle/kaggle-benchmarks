@@ -21,7 +21,7 @@ import json
 import re
 import textwrap
 import uuid
-from typing import Any, Callable, Iterable, List, Type
+from typing import Any, Callable, Iterable, Type
 
 import panel as pn
 from pydantic import TypeAdapter
@@ -446,7 +446,7 @@ class AssessReport:
     holds a list of the individual assessment outcomes.
     """
 
-    results: List[AssessResult]
+    results: list[AssessResult]
 
     def __post_init__(self):
         """
@@ -533,6 +533,8 @@ def assess_response_with_judge(
         if isinstance(assess_report, dict):
             assess_report = output_schema(**assess_report)
 
+    except KeyboardInterrupt: 
+         raise 
     except Exception:
         assess_report = None
 
