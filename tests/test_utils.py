@@ -13,8 +13,11 @@
 # limitations under the License.
 
 import json
+from unittest.mock import patch
 
+import httpx
 import pytest
+import respx
 
 from kaggle_benchmarks import utils
 
@@ -83,3 +86,32 @@ def test_json_encoder():
 )
 def test_normalize_name(name, expected):
     assert utils.normalize_name(name) == expected
+
+
+@respx.mock
+def test_client_caches_despite_server_headers(tmp_path):
+    with (
+        patch("kaggle_benchmarks.config.cache_directory", tmp_path),
+        patch("kaggle_benchmarks.config.disable_caching", False),
+    ):
+        url = "https://test.com/api"
+        route = respx.get(url)
+        client = utils.build_httpx_client(filename="test")
+
+        resp1 = client.get(url)
+        assert resp1.status_code == 200
+        assert route.called
+        assert not resp1.extensions.get("hishel_from_cache")
+
+        resp2 = client.get(url)
+        assert resp2.status_code == 200
+        assert route.call_count == 1
+        assert resp2.extensions.get("hishel_from_cache") is True
+
+
+def test_client_respects_disable_config():
+    with patch("kaggle_benchmarks.config.disable_caching", True):
+        client = utils.build_httpx_client()
+
+        assert isinstance(client, httpx.Client)
+        assert not hasattr(client, "_controller")
