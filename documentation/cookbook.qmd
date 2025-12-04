@@ -24,7 +24,7 @@ def check_capital(llm):
 
 check_capital.run(kbench.llm)
 ```
-[Example: Kaggle Benchmarks Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions) shows the list of assertions that you can use out of box.
+[Example: Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions) shows the list of assertions that you can use out of box.
 
 ### How do I return a score from a task?
 
@@ -44,7 +44,7 @@ Supported return types:
 - `tuple[int, int]`: (passed, total)
 - `tuple[float, float]`: (mean, confidence_interval)
 
-[Example: Metrics on Leaderboard](TODO) shows how these metrics are displayed on a leaderboard.
+[Example: Return Types Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-return-types) shows how use cases of different return types.
 
 ### How do I get structured output (JSON/Pydantic)?
 
@@ -71,7 +71,25 @@ def analyze_review(llm):
 
 analyze_review.run(kbench.llm)
 ```
-[Example: Use Structured Output](TODO)
+[Example: Use Structured Output](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-structured-output)
+
+
+### How do I publish my task to the leaderboard
+
+To publish your results to a Kaggle Benchmark leaderboard, you need to save your notebook and select a single task as the official output. The `%choose` magic command helps you do this.
+
+
+**Recipe:**
+
+1.  **Define and run your tasks.** You can have multiple tasks in your notebook.
+2.  **Choose the main task.** In the very last cell of your notebook, use the `%choose` magic command to designate the task you want to submit to the leaderboard.
+3.  **Ensure a supported return type.** The chosen task must return one of the supported types: `bool`, `int`, `float`, `tuple[int, int]`, or `tuple[float, float]`.
+4.  **Save the notebook.** When you save your notebook (e.g., with "Save Version"), the result of the chosen task will be created.
+5.  **Publish to a leaderboard.** Later you can publish the created task to your benchmark leaderboard.
+
+
+
+[Example: Create a task from notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-task-creation)
 
 ---
 
@@ -106,7 +124,6 @@ results = solve_question.evaluate(
 # 4. Analyze results
 print(results.as_dataframe())
 ```
-[Example: Dataset Evaluation](TODO)
 
 ### How do I compare multiple models?
 
@@ -124,54 +141,13 @@ results = solve_question.evaluate(
     evaluation_data=df
 )
 ```
-[View Example: Dataset Evaluation on Multiple Models](TODO:examples/simple_multiple_tasks.py)
+[View Example: Dataset Evaluation](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-dataset-evaluation)
 
 ---
 
-## Tools & Interaction
 
-### How do I give the LLM access to Python tools?
 
-Use the built-in Python script runner to let the LLM write and execute code.
-
-**Recipe:**
-```{python}
-@kbench.task(name="python_solver")
-def python_solver(llm):
-    prompt = "Calculate the 20th Fibonacci number using Python."
-    response = llm.prompt(prompt)
-
-    # Extract and run code
-    code = kbench.tools.python.extract_code(response)
-    result = kbench.tools.python.script_runner.run_code(code)
-
-    print(f"Output: {result.stdout}")
-
-python_solver.run(kbench.llm)
-```
-[Example: Code Generation](TODO:examples/code_generation.py)
-
-### How do I use custom tools?
-
-You can pass your own Python functions as tools.
-
-**Recipe:**
-```{python}
-def get_weather(city: str) -> str:
-    """Returns the weather for a city."""
-    return "Sunny"
-
-@kbench.task()
-def weather_assistant(llm):
-    # Note: Automatic tool calling works best with 'genai' API
-    response = llm.prompt(
-        "What's the weather in Tokyo?",
-        tools=[get_weather]
-    )
-```
-[View Example: Use Tools](TODO: examples/prompt_with_tools.py)
-
-### How do I handle multi-turn conversations?
+## How do I manage conversations?
 
 Use `kbench.chats.new()` to manage context and `llm.prompt()` (or `llm.send()`/`llm.respond()`) to continue the conversation.
 
@@ -265,3 +241,51 @@ def even_task(llm):
     num = int(llm.prompt("Pick a number", schema=int))
     assert_is_even(num, expectation="Number should be even")
 ```
+
+
+### How do I call tools
+
+Use the built-in Python script runner to let the LLM write and execute code.
+
+**Recipe:**
+```{python}
+@kbench.task(name="function_generator")
+def function_generator_task(llm):
+    # 1. Ask the LLM to write a function
+    prompt = "Write a Python function called `solve_quadratic(a, b, c)`..."
+    response = llm.prompt(prompt)
+
+    # 2. Extract the code
+    code = kbench.tools.python.extract_code(response)
+
+    # 3. Append test code
+    full_code = code + "\nprint(solve_quadratic(1, -3, 2))"
+
+    # 4. Run using script runner
+    result = kbench.tools.python.script_runner.run_code(full_code)
+
+    # Verify output contains expected roots
+    kbench.assertions.assert_contains_regex(r"1.*2", result.stdout)
+
+function_generator_task.run(kbench.llm)
+```
+
+### How do I use custom tools?
+
+You can pass your own Python functions as tools.
+
+**Recipe:**
+```{python}
+def get_weather(city: str) -> str:
+    """Returns the weather for a city."""
+    return "Sunny"
+
+@kbench.task()
+def weather_assistant(llm):
+    # Note: Automatic tool calling works best with 'genai' API
+    response = llm.prompt(
+        "What's the weather in Tokyo?",
+        tools=[get_weather]
+    )
+```
+[Example: LLM using tools](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-using-tools)
