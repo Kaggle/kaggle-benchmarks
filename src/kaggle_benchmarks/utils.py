@@ -42,12 +42,18 @@ class JSONEncoder(json.encoder.JSONEncoder):
 
 
 class UnconditionalCacheTransport(httpx.HTTPTransport):
+    def __init__(self, cache_timeout_seconds: int = 7 * 24 * 60 * 60) -> None:
+        super().__init__()
+        self.cache_timeout_seconds = cache_timeout_seconds
+
     def handle_request(self, request):
         response = super().handle_request(request)
 
         # Force the header to be cacheable for 1 week
         # This overrides whatever the server said (e.g. no-store)
-        response.headers["Cache-Control"] = "public, max-age=604800"
+        response.headers["Cache-Control"] = (
+            f"public, max-age={self.cache_timeout_seconds}"
+        )
 
         # Remove 'Expires' or 'Pragma' if they exist to avoid conflicts
         response.headers.pop("Pragma", None)
@@ -64,7 +70,9 @@ def build_httpx_client(filename: str = "cache") -> httpx.Client:
 
     return hishel.httpx.SyncCacheClient(
         transport=hishel.httpx.SyncCacheTransport(
-            next_transport=UnconditionalCacheTransport(),
+            next_transport=UnconditionalCacheTransport(
+                cache_timeout_seconds=config.cache_timeout_seconds
+            ),
         ),
         storage=hishel.SyncSqliteStorage(
             database_path=config.cache_directory / f"{filename}.sqlite",
