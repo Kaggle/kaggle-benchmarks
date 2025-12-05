@@ -19,6 +19,7 @@ def check_capital(llm):
 
     # 2. Assert the correctness of the response
     # We use a regex for robust, case-insensitive matching.
+    # For other supported assertions please see the Assertion Notebook linked below.
     kbench.assertions.assert_contains_regex(
         r"(?i)Paris", response, expectation="Model should answer Paris."
     )
@@ -26,6 +27,116 @@ def check_capital(llm):
 check_capital.run(kbench.llm)
 ```
 [See Example: Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions)
+
+### Recipe: Using a judge LLM
+For complex, open-ended, or subjective tasks, simple assertions may not suffice. You can leverage a "Judge" LLM to evaluate responses against a list of criteria using `assess_response_with_judge`.
+
+Note that unlike deterministic assertions, judge evaluations can be subjective and may vary between runs.
+
+```python
+import kaggle_benchmarks as kbench
+
+@kbench.task(name="haiku_evaluation")
+def haiku_evaluation(llm, topic):
+    response = llm.prompt(f"Write a haiku about {topic}.")
+
+    # Assess the response using a judge (can be the same LLM or a stronger one)
+    assessment = kbench.assertions.assess_response_with_judge(
+        criteria=[
+            "The poem must have exactly 3 lines.",
+            "The syllable structure must be 5-7-5.",
+            f"The poem must be about {topic}.",
+        ],
+        response_text=response,
+        judge_llm=llm
+    )
+
+    # Convert judge results into formal assertions
+    for result in assessment.results:
+        kbench.assertions.assert_true(
+            result.passed,
+            expectation=f"Criterion '{result.criterion}' failed: {result.reason}"
+        )
+
+haiku_evaluation.run(kbench.judge_llm, topic="AGI")
+```
+
+You can provide a custom prompt and output schema to tailor the judge's evaluation to your specific needs.
+
+```python
+import dataclasses
+import textwrap
+from typing import Iterable
+
+import kaggle_benchmarks as kbench
+
+@dataclasses.dataclass
+class StoryCritique:
+    """A custom schema for receiving a story critique from the judge."""
+
+    overall_rating: int  # A rating from 1 (poor) to 5 (excellent).
+    feedback: str  # General feedback on the story.
+    passed_checks: list[str]  # A list of criteria that the story successfully met.
+
+
+def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
+    """A custom prompt function that instructs the judge to use the StoryCritique schema."""
+    formatted_criteria = "\n".join(f"- {c}" for c in criteria)
+    return textwrap.dedent(f"""
+        You are a literary critic. Evaluate the following short story based on the provided criteria.
+
+        **Short Story:**
+        {response_text}
+
+        **Evaluation Criteria:**
+        {formatted_criteria}
+
+        Provide your assessment in a JSON format with three fields:
+        1. `overall_rating`: An integer from 1 to 5.
+        2. `feedback`: A short paragraph of constructive feedback.
+        3. `passed_checks`: A list of strings containing the criteria that were fully met.
+    """)
+
+
+@kbench.task()
+def critique_short_story(llm):
+    """This task demonstrates using a custom prompt and schema for the judge."""
+    story = llm.prompt(
+        "Write a one-paragraph short story about a robot who discovers music."
+    )
+
+    critique = kbench.assertions.assess_response_with_judge(
+        criteria=[
+            "The story is exactly one paragraph.",
+            "The main character is a robot.",
+            "The story is about the discovery of music.",
+            "The story has a clear beginning, middle, and end.",
+            "The story is inspired by a true story.",  # This should FAIL.
+        ],
+        response_text=story,
+        judge_llm=kbench.judge_llm,
+        prompt_fn=custom_story_prompt,
+        output_schema=StoryCritique,
+    )
+
+    if critique is None:
+        kbench.assertions.assert_fail(
+            expectation="Judge LLM should respond with a critique."
+        )
+    else:
+        # You can now add assertions based on your custom critique object.
+        kbench.assertions.assert_true(
+            critique.overall_rating >= 3,
+            f"Story rating was {critique.overall_rating}, which is below the acceptable threshold of 3.",
+        )
+        kbench.assertions.assert_true(
+            "The story is inspired by a true story." not in critique.passed_checks,
+            "The critique incorrectly passed a failing criterion.",
+        )
+
+
+critique_short_story.run(kbench.judge_llm)
+```
 
 ### Recipe: Returning a Numerical Score
 To track granular metrics like accuracy or a specific score, your task should return a value. You **must** add a return type annotation (e.g., `-> float`) so the leaderboard knows how to interpret the result.
@@ -156,6 +267,30 @@ def game_task(llm, judge_llm):
         judge_llm.prompt("Did the player make a valid move?")
 ```
 [See Example: Conversation Management Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-conversations)
+
+### Recipe: Managing Multi-Agent Conversations
+In complex multi-agent scenarios, you often need to maintain separate conversation histories for each agent. The *Dungeon Adventure* example demonstrates how to do this by creating a dedicated `Chat` object for each agent and using the `contexts.enter()` context manager to switch between them. This allows each agent to have its own isolated conversation history, which is crucial for role-playing and other complex interactions.
+
+```python
+# Create isolated chat contexts for each agent
+dm_chat = chats.Chat(name="Dungeon Master")
+player1_chat = chats.Chat(name="Player 1")
+
+# Create the agents with their own chat contexts
+dungeon_master = DungeonMasterAgent(dm_llm, dm_chat, story)
+player1 = PlayerAgent(player1_llm, player1_chat, "Aragorn")
+
+# --- In the PlayerAgent's __call__ method ---
+with contexts.enter(chat=self.player_chat):
+    # This prompt is only added to the player's chat history
+    action = self.llm.prompt(prompt)
+
+# --- In the DungeonMasterAgent's __call__ method ---
+with contexts.enter(chat=self.dm_chat):
+    # This prompt is only added to the Dungeon Master's chat history
+    self.story = self.llm.prompt(prompt)
+```
+[See Example: Dungeon Adventure Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-dungeon-adventure)
 
 ---
 
