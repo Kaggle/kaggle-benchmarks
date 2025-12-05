@@ -1,57 +1,54 @@
-# Kaggle Benchmarks SDK Cookbook
+# Kaggle Benchmarks Cookbook
 
-Welcome to the Kaggle Benchmarks Cookbook! This guide provides a collection of "recipes" — practical examples and patterns to help you get the most out of the library. Whether you're building a simple evaluation or a complex game workflow, you'll find a recipe here to get you started.
+Welcome to the Kaggle Benchmarks Cookbook! This guide provides a collection of "recipes" — practical examples and patterns to help you get the most out of the library.
 
-For a comprehensive overview of the API, please refer to the [Quick Start](quick_start.md) and [User Guide](user_guide.md).
+For a comprehensive overview, refer to the [Quick Start](quick_start.md) and [User Guide](user_guide.md). For starter, please take a look at this [example notebook](https://www.kaggle.com/code/nicholaskanggoog/starter-notebook-template-nick).
 
 ## Basics
 
-### How do I define a simple Pass/Fail task?
+### Recipe: Defining a Simple Pass/Fail Task
+The most fundamental task type is one that asserts a condition and returns nothing. If all assertions pass, the task succeeds; otherwise, it fails. This is perfect for simple Q&A checks.
 
-The simplest task is one that asserts a condition and doesn't return a value. If all assertions pass, the task succeeds.
-
-**Recipe:**
-```{python}
+```python
 import kaggle_benchmarks as kbench
 
 @kbench.task(name="check_capital")
 def check_capital(llm):
+    # 1. Prompt the model
     response = llm.prompt("What is the capital of France?")
-    # We use assert_contains_regex for a case-insensitive match.
+
+    # 2. Assert the correctness of the response
+    # We use a regex for robust, case-insensitive matching.
     kbench.assertions.assert_contains_regex(
         r"(?i)Paris", response, expectation="Model should answer Paris."
     )
 
 check_capital.run(kbench.llm)
 ```
-[Example: Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions) shows the list of assertions that you can use out of box.
+[See Example: Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions)
 
-### How do I return a score from a task?
+### Recipe: Returning a Numerical Score
+To track granular metrics like accuracy or a specific score, your task should return a value. You **must** add a return type annotation (e.g., `-> float`) so the leaderboard knows how to interpret the result.
 
-To track a metric like accuracy or a score, return a value from your task function. You **must** add a return type annotation.
-
-**Recipe:**
-```{python}
+```python
 @kbench.task(name="math_score")
 def math_score(llm) -> float:
-    # ... logic to calculate score ...
-    return 0.85
+    # ... perform complex logic or multiple checks ...
+    score = 0.85
+    return score
 ```
-
-Supported return types:
+**Supported Return Types:**
 - `bool`: Pass/Fail (True/False)
-- `float` / `int`: A numerical score
-- `tuple[int, int]`: (passed, total)
-- `tuple[float, float]`: (mean, confidence_interval)
+- `float` / `int`: A numerical score (e.g., 0.85)
+- `tuple[int, int]`: A count (e.g., `(8, 10)` for 8 out of 10 passed)
+- `tuple[float, float]`: A value with confidence interval (e.g., `(0.85, 0.05)`)
 
-[Example: Return Types Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-return-types) shows how use cases of different return types.
+[See Example: Return Types Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-return-types)
 
-### How do I get structured output (JSON/Pydantic)?
+### Recipe: Enforcing Structured Output with Schemas
+You can force the LLM to return data in a specific structure by providing a `schema` to the `prompt` method. This is essential for tasks that require structured output.
 
-You can force the LLM to return data in a specific structure using `schema`.
-
-**Recipe:**
-```{python}
+```python
 from dataclasses import dataclass
 
 @dataclass
@@ -61,176 +58,158 @@ class MovieReview:
 
 @kbench.task(name="analyze_review")
 def analyze_review(llm):
-    review = "This movie was fantastic! I loved every minute."
+    # The model will return an instance of MovieReview, not a string.
     result = llm.prompt(
-        f"Analyze this review: {review}",
+        "Analyze this review: 'Fantastic movie!'",
         schema=MovieReview
     )
-    # result is now a MovieReview object
-    print(f"Score: {result.score}")
-
-analyze_review.run(kbench.llm)
+    print(f"Score: {result.score}, Sentiment: {result.sentiment}")
 ```
-[Example: Use Structured Output](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-structured-output)
+[See Example: Structured Output Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-structured-output)
 
+### Recipe: Publishing Your Task to the Leaderboard
+Currently our leaderboard only supports a single task per notebook (This may change in the future). To submit your benchmark to a Kaggle leaderboard, you need to designate one "main" task output using the `%choose` magic command.
 
-### How do I publish my task to the leaderboard
+1.  **Define your tasks** in the notebook.
+2.  **Select the main task** in the very last cell using `%choose`.
+3.  **Save Version** of your notebook.
 
-To publish your results to a Kaggle Benchmark leaderboard, you need to save your notebook and select a single task as the official output. The `%choose` magic command helps you do this.
+```python
+# In the final cell of your notebook:
+%choose my_main_task
+```
 
-
-**Recipe:**
-
-1.  **Define and run your tasks.** You can have multiple tasks in your notebook.
-2.  **Choose the main task.** In the very last cell of your notebook, use the `%choose` magic command to designate the task you want to submit to the leaderboard.
-3.  **Ensure a supported return type.** The chosen task must return one of the supported types: `bool`, `int`, `float`, `tuple[int, int]`, or `tuple[float, float]`.
-4.  **Save the notebook.** When you save your notebook (e.g., with "Save Version"), the result of the chosen task will be created.
-5.  **Publish to a leaderboard.** Later you can publish the created task to your benchmark leaderboard.
-
-
-
-[Example: Create a task from notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-task-creation)
+[See Example: Task Creation Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-task-creation)
 
 ---
 
 ## Data & Evaluation
 
-### How do I evaluate a model on a dataset?
+### Recipe: Evaluating Performance on a Dataset
+Instead of a single run, you often want to evaluate a task over many examples. Use the `.evaluate()` method to run your task against every row in a pandas DataFrame.
 
-Use the `.evaluate()` method to run your task over a pandas DataFrame.
-
-**Recipe:**
-```{python}
+```python
 import pandas as pd
 
-# 1. Define your data
-df = pd.DataFrame([
-    {"question": "2+2", "answer": "4"},
-    {"question": "Capital of UK", "answer": "London"},
-])
-
-# 2. Define a task that takes row columns as arguments
+# 1. Define a task that accepts row columns as arguments
 @kbench.task()
 def solve_question(llm, question, answer) -> bool:
     response = llm.prompt(question)
     return answer.lower() in response.lower()
 
-# 3. Run evaluation
-results = solve_question.evaluate(
-    llm=[kbench.llm],
-    evaluation_data=df
-)
+# 2. Prepare your dataset
+df = pd.DataFrame([
+    {"question": "2+2", "answer": "4"},
+    {"question": "Capital of UK", "answer": "London"},
+])
 
-# 4. Analyze results
+# 3. Run evaluation
+results = solve_question.evaluate(llm=[kbench.llm], evaluation_data=df)
 print(results.as_dataframe())
 ```
 
-### How do I compare multiple models?
+### Recipe: Comparing Multiple Models Side-by-Side
+Typically, you should write your task for a single LLM using the `kbench.llm` placeholder. This allows you to schedule runs across multiple models using "Add Models" button on the Kaggle Task Detail page without changing your code.
 
-You can pass a list of LLMs to `.evaluate()`.
+However, if you need to compare models directly within your notebook (e.g., for debugging or immediate visualization), you can pass a list of LLMs to `.evaluate()` to run them all.
 
-**Recipe:**
-```{python}
+```python
 models = [
     kbench.llms["google/gemini-2.5-flash"],
     kbench.llms["meta/llama-3.1-70b"]
 ]
 
-results = solve_question.evaluate(
-    llm=models,
-    evaluation_data=df
-)
+# Runs the evaluation for BOTH models
+results = solve_question.evaluate(llm=models, evaluation_data=df)
 ```
-[View Example: Dataset Evaluation](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-dataset-evaluation)
+[See Example: Dataset Evaluation Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-dataset-evaluation)
 
 ---
 
+## Conversations
 
+### Recipe: Leveraging Automatic Conversation History
+By default, `llm.prompt()` maintains conversation history within the same session. This makes multi-turn conversations natural and easy to implement.
 
-## How do I manage conversations?
-
-Use `kbench.chats.new()` to manage context and `llm.prompt()` (or `llm.send()`/`llm.respond()`) to continue the conversation.
-
-**Recipe:**
 ```python
-with kbench.chats.new("chat_session"):
+@kbench.task()
+def chat_task(llm):
     # Turn 1
-    response1 = llm.prompt("Hi, I'm looking for a book recommendation.")
+    llm.prompt("Hi, I'm looking for a book.")
 
-    # Turn 2 (History is preserved in this chat block)
-    response2 = llm.prompt("I like science fiction.")
+    # Turn 2: The model "remembers" the previous turn automatically.
+    llm.prompt("I like science fiction.")
 ```
-[Example: Multiple Conversations](TODO: examples/play_20_questions.py)
+
+### Recipe: Creating Isolated Conversations for Judges
+Sometimes you need a side-conversation that shouldn't be seen by the main agent—for example, when a "Judge" LLM is evaluating the main agent's performance. Use `kbench.chats.new()` to create a clean slate.
+
+```python
+@kbench.task()
+def game_task(llm, judge_llm):
+    # Main conversation with the player
+    llm.prompt("Player move...")
+
+    # Isolated conversation for the judge
+    with kbench.chats.new("judging"):
+        # This prompt is NOT added to the 'llm' history
+        judge_llm.prompt("Did the player make a valid move?")
+```
+[See Example: Conversation Management Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-conversations)
 
 ---
 
 ## Multimodal
 
-### How do I send images to the model?
+### Recipe: Sending Images to Multimodal Models
+You can send images to vision-capable models using either a direct URL or a Base64 string.
 
-Use `kbench.user.send()` with an image object before prompting.
-
-**Recipe:**
-```{python}
+```python
 from kaggle_benchmarks.content_types import images
 
 @kbench.task()
 def vision_task(llm):
+    # Load image from a URL
     img = images.from_url("https://example.com/image.jpg")
 
-    with kbench.chats.new("vision_chat"):
-         # TODO update the example
-        kbench.user.send(img)
-        response = llm.prompt("Describe this image.")
-
-vision_task.run(kbench.llm)
+    # Pass the image alongside the text prompt
+    response = llm.prompt("Describe this image.", image=img)
 ```
-[Example: prompt_with_image.py](examples/describe_image.py)
+[See Example: Sending Images Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-images)
 
 ---
 
 ## Advanced Patterns
 
-### How do I implement a "Judge" LLM?
+### Recipe: Implementing an Interactive Game Loop
+For interactive environments like Tic-Tac-Toe or Chess, use a `while` loop to alternate between the LLM's move and the game state update.
 
-Use one LLM to generate content and another (stronger) LLM to evaluate it.
-
-**Recipe:**
-```{python}
-
-TODO: use assess with judge llm example
-```
-[View Example: haiku.py](examples/haiku.py)
-
-### How do I create a game loop?
-
-For interactive environments like games, use a loop where you alternate between updating the game state and prompting the LLM.
-
-**Recipe:**
 ```python
 @kbench.task()
 def play_game(llm):
     game = TicTacToe()
 
+    # Loop until the game ends
     while not game.is_over():
-        board_str = game.render()
-        move = llm.prompt(f"Current board:\n{board_str}\nYour move?")
+        # Render board and ask for move
+        move = llm.prompt(f"Board:\n{game.render()}\nYour move?")
+
+        # Update game state
         game.apply_move(move)
 
     return game.winner == "AI"
 ```
-[View Example: tic_tac_toe_game.py](examples/tic_tac_toe_game.py)
+[See Example: Games Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-games)
 
-### How do I use custom assertions?
+### Recipe: Writing Reusable Custom Assertions
+Keep your code clean by encapsulating complex checks into reusable assertion functions using the `@assertion_handler` decorator.
 
-Create reusable assertion logic with the `@assertion_handler` decorator.
-
-**Recipe:**
 ```python
 from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
 
 @assertion_handler()
 def assert_is_even(value: int, expectation: str) -> AssertionResult:
+    # Return a structured result object
     return AssertionResult(
         passed=(value % 2 == 0),
         expectation=expectation
@@ -238,54 +217,50 @@ def assert_is_even(value: int, expectation: str) -> AssertionResult:
 
 @kbench.task()
 def even_task(llm):
-    num = int(llm.prompt("Pick a number", schema=int))
+    num = int(llm.prompt("Pick a not odd number", schema=int))
+    # Use your custom assertion just like built-in ones
     assert_is_even(num, expectation="Number should be even")
 ```
+[See Example: Custom Assertions Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-customized-assertions)
 
+### Recipe: Using the Built-in Python Script Runner
+We provide some helper functions to make it easy for the LLM to write and execute Python code to solve problems. The library provides tools to extract and run this code safely.
 
-### How do I call tools
-
-Use the built-in Python script runner to let the LLM write and execute code.
-
-**Recipe:**
-```{python}
-@kbench.task(name="function_generator")
-def function_generator_task(llm):
-    # 1. Ask the LLM to write a function
-    prompt = "Write a Python function called `solve_quadratic(a, b, c)`..."
+```python
+@kbench.task()
+def python_task(llm):
+    prompt = "Calculate the 10th Fibonacci number using Python."
     response = llm.prompt(prompt)
 
-    # 2. Extract the code
+    # 1. Extract code from the markdown response
     code = kbench.tools.python.extract_code(response)
 
-    # 3. Append test code
-    full_code = code + "\nprint(solve_quadratic(1, -3, 2))"
+    # 2. Run the code
+    result = kbench.tools.python.script_runner.run_code(code)
 
-    # 4. Run using script runner
-    result = kbench.tools.python.script_runner.run_code(full_code)
-
-    # Verify output contains expected roots
-    kbench.assertions.assert_contains_regex(r"1.*2", result.stdout)
-
-function_generator_task.run(kbench.llm)
+    # 3. Verify the output
+    kbench.assertions.assert_contains_regex("55", result.stdout)
 ```
 
-### How do I use custom tools?
+### Recipe: Equipping Models with Custom Tools
+You can also pass your own Python functions as tools. The model can then call these functions to retrieve information or perform actions. Please note this is currently an experimental feature.
 
-You can pass your own Python functions as tools.
-
-**Recipe:**
-```{python}
+```python
 def get_weather(city: str) -> str:
     """Returns the weather for a city."""
     return "Sunny"
 
 @kbench.task()
-def weather_assistant(llm):
-    # Note: Automatic tool calling works best with 'genai' API
-    response = llm.prompt(
-        "What's the weather in Tokyo?",
-        tools=[get_weather]
-    )
+def weather_task(llm):
+    # Pass the function directly to the 'tools' argument
+    # Note: Works best with 'genai' API models
+    llm.prompt("Weather in Tokyo?", tools=[get_weather])
+
+llm= models.load_model(
+    model_name=kbench.llm.name,
+    api="genai",
+)
+
+weather_task.run(llm)
 ```
-[Example: LLM using tools](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-using-tools)
+[See Example: Using Tools Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-using-tools)
