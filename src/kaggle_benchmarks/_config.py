@@ -59,6 +59,12 @@ class Config:
         )
     )
 
+    cache_timeout_seconds: int = dataclasses.field(
+        default_factory=lambda: int(
+            os.environ.get("CACHE_TIMEOUT_SECONDS", str(7 * 24 * 60 * 60))
+        )
+    )
+
     interactive_mode: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(
             os.environ.get("INTERACTIVE_UI", "False")
