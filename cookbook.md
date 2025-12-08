@@ -74,7 +74,7 @@ check_capital.run(kbench.llm)
 ```
 
 [See Example: Assertions
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-assertions)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-assertions)
 
 ### Recipe: Using a judge LLM
 
@@ -211,7 +211,7 @@ def math_score(llm) -> float:
 value with confidence interval (e.g., `(0.85, 0.05)`)
 
 [See Example: Return Types
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-return-types)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-return-types)
 
 ### Recipe: Enforcing Structured Output with Schemas
 
@@ -238,7 +238,7 @@ def analyze_review(llm):
 ```
 
 [See Example: Structured Output
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-structured-output)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-structured-output)
 
 ### Recipe: Publishing Your Task to the Leaderboard
 
@@ -257,7 +257,7 @@ leaderboard, you need to designate one “main” task output using the
 ```
 
 [See Example: Task Creation
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-task-creation)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-task-creation)
 
 ------------------------------------------------------------------------
 
@@ -311,7 +311,7 @@ results = solve_question.evaluate(llm=models, evaluation_data=df)
 ```
 
 [See Example: Dataset Evaluation
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-dataset-evaluation)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-dataset-evaluation)
 
 ------------------------------------------------------------------------
 
@@ -352,7 +352,7 @@ def game_task(llm, judge_llm):
 ```
 
 [See Example: Conversation Management
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-conversations)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-conversations)
 
 ### Recipe: Managing Multi-Agent Conversations
 
@@ -385,7 +385,7 @@ with contexts.enter(chat=self.dm_chat):
 ```
 
 [See Example: Dungeon Adventure
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-dungeon-adventure)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-dungeon-adventure)
 
 ------------------------------------------------------------------------
 
@@ -409,7 +409,7 @@ def vision_task(llm):
 ```
 
 [See Example: Sending Images
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-images)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-images)
 
 ------------------------------------------------------------------------
 
@@ -437,7 +437,10 @@ def play_game(llm):
 ```
 
 [See Example: Games
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-games)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-games)
+
+[Another Game Example for Valid
+Spymaster](https://www.kaggle.com/code/goefft/codenames-valid-spymaster-clues-task)
 
 ### Recipe: Writing Reusable Custom Assertions
 
@@ -463,7 +466,7 @@ def even_task(llm):
 ```
 
 [See Example: Custom Assertions
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-customized-assertions)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-customized-assertions)
 
 ### Recipe: Using the Built-in Python Script Runner
 
@@ -513,4 +516,4 @@ weather_task.run(llm)
 ```
 
 [See Example: Using Tools
-Notebook](https://www.kaggle.com/code/limakaggle/kaggle-benchmark-cookbook-using-tools)
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-using-tools)
