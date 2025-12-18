@@ -68,7 +68,7 @@ def explain_zero_knowledge_proofs(llm):
             )
 
 
-explain_zero_knowledge_proofs.run(kbench.judge_llm)
+explain_zero_knowledge_proofs.run(kbench.llm)
 
 
 # %% [markdown]
@@ -144,6 +144,6 @@ def critique_short_story(llm):
         )
 
 
-critique_short_story.run(kbench.judge_llm)
+critique_short_story.run(kbench.llm)
 
 # %%

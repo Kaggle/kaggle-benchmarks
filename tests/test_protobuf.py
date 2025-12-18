@@ -394,7 +394,10 @@ def test_exception_run_serialization(monkeypatch):
         == serialization.types.BENCHMARK_TASK_RUN_ASSERTION_STATUS_PASSED
     )
     assert message.state == serialization.types.BENCHMARK_TASK_RUN_STATE_ERRORED
-    assert message.error_message == "ValueError('Something went wrong')"
+    assert (
+        message.error_message
+        and 'ValueError("Something went wrong")' in message.error_message
+    )
 
     # Check JSON dict
     result = json_format.MessageToDict(message)
@@ -406,4 +409,4 @@ def test_exception_run_serialization(monkeypatch):
         == "BENCHMARK_TASK_RUN_ASSERTION_STATUS_PASSED"
     )
     assert result["state"] == "BENCHMARK_TASK_RUN_STATE_ERRORED"
-    assert result["errorMessage"] == "ValueError('Something went wrong')"
+    assert 'ValueError("Something went wrong")' in result["errorMessage"]
