@@ -161,7 +161,10 @@ def test_standalone_run_on_exception(monkeypatch, continue_with_exceptions):
         run = task_that_errors.run()
         assert not run.passed
         assert run.status == utils.Status.FAILED
-        assert "ValueError: This is an intentional error" == run.error_message
+        assert (
+            run.error_message
+            and 'ValueError("This is an intentional error")' in run.error_message
+        )
     else:
         with pytest.raises(ValueError, match="This is an intentional error"):
             task_that_errors.run()
@@ -179,7 +182,10 @@ def test_run_with_subrun_on_exception(monkeypatch, continue_with_exceptions):
         run = wrapper_task.run()
         assert not run.passed
         assert run.status == utils.Status.FAILED
-        assert "ValueError: This is an intentional error" == run.error_message
+        assert (
+            run.error_message
+            and 'ValueError("This is an intentional error")' in run.error_message
+        )
     else:
         with pytest.raises(ValueError, match="This is an intentional error"):
             wrapper_task.run()
@@ -210,7 +216,10 @@ def test_run_evaluating_subrun_on_exception(monkeypatch, continue_with_exception
         run = wrapper_task.run(llm=Duck())
         assert not run.passed
         assert run.status == utils.Status.FAILED
-        assert "ValueError: This is an intentional error" == run.error_message
+        assert (
+            run.error_message
+            and 'ValueError("This is an intentional error")' in run.error_message
+        )
     else:
         with pytest.raises(ValueError, match="This is an intentional error"):
             wrapper_task.run(llm=Duck())

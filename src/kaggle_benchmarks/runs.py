@@ -79,7 +79,7 @@ class Run(Generic[T]):
         It will mark the run's status as FAILED.
         """
 
-        summary = "".join(traceback.format_exception_only(type(e), e)).strip()
+        summary = traceback.format_exc()
         self.fail_with_message(summary)
 
         raise e
