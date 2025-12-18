@@ -15,6 +15,7 @@
 import dataclasses
 import datetime
 import threading
+import traceback
 from collections import abc
 from typing import Any, Generic, Literal, Self, TypeVar
 
@@ -78,7 +79,8 @@ class Run(Generic[T]):
         It will mark the run's status as FAILED.
         """
 
-        self.fail_with_message(repr(e))
+        summary = "".join(traceback.format_exception_only(type(e), e)).strip()
+        self.fail_with_message(summary)
 
         raise e
 

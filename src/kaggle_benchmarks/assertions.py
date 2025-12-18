@@ -533,8 +533,8 @@ def assess_response_with_judge(
         if isinstance(assess_report, dict):
             assess_report = output_schema(**assess_report)
 
-    except KeyboardInterrupt: 
-         raise 
+    except KeyboardInterrupt:
+        raise
     except Exception:
         assess_report = None
 

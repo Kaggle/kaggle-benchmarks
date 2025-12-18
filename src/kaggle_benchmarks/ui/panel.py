@@ -128,6 +128,15 @@ def render_result(run: runs.Run) -> pn.viewable.Viewable:
     return pn.pane.Markdown(f"Result: `{run.format_result()}`")
 
 
+def render_error(run: runs.Run) -> pn.viewable.Viewable:
+    return pn.pane.Alert(
+        f"❌ **Thrown Error:**\n```\n{run.error_message or 'Unknown Error'}\n```",
+        alert_type="danger",
+        sizing_mode="stretch_width",
+        styles={"overflow-x": "auto"},
+    )
+
+
 def render_run(run: runs.Run, with_title: bool = True) -> pn.viewable.Viewable:
     objects: list[pn.viewable.Viewable | str] = (
         [
@@ -148,8 +157,11 @@ def render_run(run: runs.Run, with_title: bool = True) -> pn.viewable.Viewable:
     if run.chat and run.chat.history:
         objects.append(render_chat(run.chat, with_header=False))
 
-    if run.status == utils.Status.SUCCESS:
-        objects.append(render_result(run))
+    match run.status:
+        case utils.Status.SUCCESS:
+            objects.append(render_result(run))
+        case utils.Status.FAILED:
+            objects.append(render_error(run))
 
     return pn.Feed(objects=objects)
 
