@@ -95,10 +95,10 @@ def test_client_caches_despite_server_headers(tmp_path):
         patch("kaggle_benchmarks.config.disable_caching", False),
     ):
         url = "https://test.com/api"
-        route = respx.get(url)
         client = utils.build_httpx_client(filename="test")
+        route = respx.get(url).mock(return_value=httpx.Response(200))
 
-        resp1 = client.get(url)
+        resp1 = client.get(url, headers={"Cache-Control": "no-cache"})
         assert resp1.status_code == 200
         assert route.called
         assert not resp1.extensions.get("hishel_from_cache")
