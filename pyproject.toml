@@ -11,7 +11,6 @@ dependencies = [
   "tqdm",
   "python-dotenv>=1.0.1",
   "protobuf>=5.29.3,<6.0",
-  "jupyter",
   "docker>=7.1.0",
   "panel>=1.6.3",
   "playwright>=1.50.0",
@@ -36,18 +35,6 @@ test = [
     "pytest-mock>=3.14.1",
     "respx>=0.22.0",
 ]
-kaggle = [
-  "kagglehub>=0.3.10",
-  "pip>=25.0.1",
-  "nbdev>=2.4.2",
-  "papermill>=2.6.0",
-  "jupyter-lsp>=2.2.2",
-  "jupyter-server==2.12.5",
-  "notebook>=6.5.4",
-  "nbconvert>=6.5.1",
-  "traitlets==5.9.0",
-  "jupyter-bokeh>=4.0.5",
-]
 docs = [
   "chess>=1.11.2",
   "emoji>=2.14.1",
@@ -61,7 +48,6 @@ docs = [
 ]
 dev = [
   { include-group = "test" },
-  { include-group = "kaggle" },
   { include-group = "docs" },
   "mypy",
   "ruff",
