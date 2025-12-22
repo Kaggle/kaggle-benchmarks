@@ -20,6 +20,45 @@
 # %%
 import kaggle_benchmarks as kbench
 
+# %%
+print(kbench.llm)
+
+# %%
+import kaggle_benchmarks as kbench
+
+print(kbench.llms)
+
+@kbench.task("Recognize animals from images")
+def test_recognize_animals_from_images(llm):
+    cat_image_url = (
+        "https://upload.wikimedia.org/wikipedia/commons/2/25/Siam_lilacpoint.jpg"
+    )
+    kbench.user.send(kbench.content_types.images.from_url(cat_image_url))
+    dog_image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/%28Dog_park_at_Parque_La_Carolina%29_photo.aa.1.jpg/960px-%28Dog_park_at_Parque_La_Carolina%29_photo.aa.1.jpg"
+    kbench.user.send(kbench.content_types.images.from_url(dog_image_url))
+
+    def recognize_image():
+        response = llm.prompt("What is the name of this animal in the first image?")
+        kbench.assertions.assert_in(
+            "cat",
+            response.lower(),
+            expectation="The model should identify the animal in the image as a cat.",
+        )
+
+        response = llm.prompt("What is the name of this animal in the second image?")
+        kbench.assertions.assert_in(
+            "dog",
+            response.lower(),
+            expectation="The model should identify the animal in the image as a dog.",
+        )
+
+    kbench.assertions.assert_raises_no_exceptions(
+        recognize_image,
+        expectation="The image recognition prompt should run without errors.",
+    )
+
+test_recognize_animals_from_images.run(kbench.llms["openai/gpt-5.2-2025-12-11"])
+
 
 # %%
 @kbench.task(name="simple_riddle")
