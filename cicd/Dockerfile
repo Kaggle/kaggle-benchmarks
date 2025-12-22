@@ -5,14 +5,15 @@ COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /uvx /bin/
 
 WORKDIR /benchmarks
 
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
-
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev --group kaggle
-
+    --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=README.md,target=README.md \
+    UV_INDEX_URL=https://pypi.org/simple \
+    uv sync \
+      --no-install-project \
+      --no-dev \
+      --group kaggle
 
 # Manually install Playwright's system dependencies for Debian Trixie.
 # This step is necessary because the base image was recently updated to Debian

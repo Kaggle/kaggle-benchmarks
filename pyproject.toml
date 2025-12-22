@@ -20,6 +20,8 @@ dependencies = [
   "pydantic>=2.11.5",
   "joblib",
   "google-genai>=1.38.0",
+  "jupyterlab-lsp==3.10.2",
+  "python-lsp-server[all]==1.13.1",
 ]
 # Configuration for the build backend to find the version file
 [tool.hatch.version]
