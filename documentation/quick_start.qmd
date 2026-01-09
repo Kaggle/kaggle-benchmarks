@@ -168,7 +168,7 @@ def judge_poem(question: str) -> float:
     gemini = kbench.llms["google/gemini-2.5-flash"]
 
     # two models to act as the judge
-    judge_llm = kbench.llms["openai/gpt-4o"]
+    judge_llm = kbench.llms["google/gemini-2.5-pro"]
     judge_llm2 = kbench.llms["meta/llama-3.1-70b"]
 
     # Generate poem

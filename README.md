@@ -69,8 +69,8 @@ For local development, you will need to configure your environment to use the Ka
     MODEL_PROXY_URL=https://mp-staging.kaggle.net/models/openapi
     MODEL_PROXY_API_KEY={your_token}
     LLM_DEFAULT=google/gemini-2.5-flash
-    LLM_DEFAULT_EVAL=openai/gpt-4o
-    LLMS_AVAILABLE=anthropic/claude-sonnet-4,google/gemini-2.5-flash,meta/llama-3.1-70b,openai/gpt-4o
+    LLM_DEFAULT_EVAL=google/gemini-2.5-pro
+    LLMS_AVAILABLE=anthropic/claude-sonnet-4,google/gemini-2.5-flash,meta/llama-3.1-70b,google/gemini-2.5-pro
     PYTHONPATH=src
     ```
     - `LLM_DEFAULT`: Sets the model identifier for `kbench.llm`, the default model used for running tasks.

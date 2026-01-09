@@ -21,7 +21,7 @@ from kaggle_benchmarks import assertions, chats, task
 from kaggle_benchmarks.kaggle import model_proxy
 
 llm_with_openai_api = model_proxy.ModelProxy(
-    model="openai/gpt-4.1-2025-04-14",
+    model="google/gemini-2.5-flash",
     api="openai",
 )
 llm_with_genai_api = model_proxy.ModelProxy(
