@@ -393,19 +393,72 @@ Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-dungeon
 
 ### Recipe: Sending Images to Multimodal Models
 
-You can send images to vision-capable models using either a direct URL
-or a Base64 string.
+Support for image inputs varies across Large Language Models (LLMs).
+While some models do not accept images at all, multimodal models
+generally fall into two categories:
+
+- **Base64 Only**: The model requires the image data encoded as a
+  string.
+- **Base64 & URL**: The model can accept encoded strings or access
+  images from a URL (requires internet access).
+
+The `kaggle-benchmarks` SDK unifies these inputs using the `images`
+module, but behaves differently depending on whether you are sending a
+single prompt or building conversation history.
+
+**Constructing Image Objects:** Regardless of the sending method, you
+initiate images using three factory methods:
 
 ``` python
-from kaggle_benchmarks.content_types import images
+# 1. From URL (MIME type guessed from URL)
+img_url = images.from_url("https://example.com/image.jpg")
 
-@kbench.task()
-def vision_task(llm):
-    # Load image from a URL
-    img = images.from_url("https://example.com/image.jpg")
+# 2. From Local Path (MIME type guessed from extension; converted to Base64 automatically)
+img_local = images.from_path("local/image/path.png")
 
-    # Pass the image alongside the text prompt
-    response = llm.prompt("Describe this image.", image=img)
+# 3. From Base64 String (Default format is "jpeg")
+img_b64 = images.from_base64(image_b64_str, format="png")
+```
+
+**Sending Methods: `prompt` vs `send`** The SDK provides two methods to
+interact with models. It is crucial to understand how they handle
+**Image URLs** differently.
+
+| Method | Use Case | Behavior with Image URLs |
+|:---|:---|:---|
+| `llm.prompt` | Single message & immediate response. | **Auto-converts to Base64.** The SDK downloads the image and sends the data. Safe for models that don’t support URLs. |
+| `user.send` | Building multi-turn chat history. | **Sends Raw URL.** The SDK passes the URL directly. This is useful for testing if a model natively supports URL fetching. |
+
+*1.Single Turn: Using `llm.prompt`* Use this for straightforward
+interactions. The SDK handles the heavy lifting of downloading and
+encoding URLs, ensuring maximum compatibility.
+
+``` python
+# Create an image input from a URL
+image = images.from_url("https://example.com/cat.jpg")
+
+# The SDK downloads the image, converts it to Base64, and sends it with the text.
+# The auto conversion makes it easier for users since it's the most common use case.
+response = llm.prompt("Describe this image", image=image)
+```
+
+*2.Multi-Turn: Using `user.send`* Use `user.send` to stack multiple
+messages or images before asking for a response. Note that this method
+acts as a low-level pass-through for URLs.
+
+``` python
+# 1. Add a local image to history
+# This is read and converted to Base64 immediately.
+user.send(images.from_path("local/chart.png"))
+
+# 2. Add an image URL to history
+# This is NOT converted. The raw URL is sent to the model.
+# This will fail if the model does not support URL inputs.
+# However you can still use the local image or raw Base64.
+user.send(images.from_url("https://example.com/diagram.jpg"))
+
+# 3. Trigger the response based on the history accumulated above
+response = llm.prompt("Compare these two images")
 ```
 
 [See Example: Sending Images
