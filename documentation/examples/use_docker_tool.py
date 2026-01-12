@@ -136,11 +136,14 @@ def debug_py_code(llm, max_attempts=5):
         fixed_code = kbench.tools.python.extract_code(
             container.read_text_file(path=code_path)
         )
-        fixed_code_output = kbench.tools.python.script_runner.run_code(fixed_code)
+        kbench.assertions.assert_contains_regex(
+            r"(['\"])orange\1\s*,",
+            fixed_code,
+            "'orange' is followed by a comma in fixed code.",
+        )
+        output = container.run_command("python /working/fruits.py").strip()
         kbench.assertions.assert_equal(
-            "5",
-            fixed_code_output.stdout.strip(),
-            expectation="The fixed code should output 5, the correct length of the list.",
+            "5", output, "Running fixed code should print 5."
         )
 
 
