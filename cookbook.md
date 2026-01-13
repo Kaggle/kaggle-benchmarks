@@ -578,6 +578,9 @@ def docker_execution(llm):
 docker_execution.run(kbench.llm)
 ```
 
+[See Example: Use Docker
+Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmarks-cookbook-docker-tools)
+
 ### Recipe: Equipping Models with Custom Tools
 
 You can also pass your own Python functions as tools. The model can then
