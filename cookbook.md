@@ -33,7 +33,6 @@
       Assertions](#recipe-writing-reusable-custom-assertions)
     - [Recipe: Using the Built-in Python Script
       Runner](#recipe-using-the-built-in-python-script-runner)
-    - [Recipe: Using Docker Container](#recipe-using-docker-container)
     - [Recipe: Equipping Models with Custom
       Tools](#recipe-equipping-models-with-custom-tools)
 
@@ -543,43 +542,6 @@ def python_task(llm):
     # 3. Verify the output
     kbench.assertions.assert_contains_regex("55", result.stdout)
 ```
-
-### Recipe: Using Docker Container
-
-For tasks that require file system manipulation, shell command
-execution, or running untrusted code safely, you can use the
-`DockerContainer` tool. This provides an isolated environment where you
-can create files, execute commands, and read results.
-
-``` python
-import kaggle_benchmarks as kbench
-
-@kbench.task(name="docker_execution")
-def docker_execution(llm):
-    # Start a container session with a specific image
-    with kbench.tools.container.DockerContainer(image="python:3.11-slim") as container:
-
-        # 1. Write a file inside the container
-        container.write_text_file(
-            path="/working/script.py",
-            content="print('Hello from Docker!')"
-        )
-
-        # 2. Execute a shell command
-        # You can specify a working directory if needed
-        output = container.run_command("python script.py", workdir="/working")
-
-        # 3. Verify the output
-        kbench.assertions.assert_contains_regex("Hello from Docker", output)
-
-        # 4. Read files back
-        content = container.read_text_file("/working/script.py")
-
-docker_execution.run(kbench.llm)
-```
-
-[See Example: Use Docker
-Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmarks-cookbook-docker-tools)
 
 ### Recipe: Equipping Models with Custom Tools
 
