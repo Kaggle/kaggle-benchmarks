@@ -20,6 +20,7 @@ from kaggle_benchmarks.kaggle.benchmark_types_pb2 import (  # type: ignore[attr-
 from kaggle_benchmarks.kaggle.client import KaggleClient
 from kaggle_benchmarks.kaggle.model_proxy import ModelProxy
 from kaggle_benchmarks.kaggle.models import (
+    is_configured,
     load_available_models,
     load_default_model,
     load_judge_model,

@@ -18,6 +18,10 @@ from kaggle_benchmarks.actors import LLMChat
 from kaggle_benchmarks.kaggle.model_proxy import ModelProxy
 
 
+def is_configured():
+    return "MODEL_PROXY_URL" in os.environ and "MODEL_PROXY_API_KEY" in os.environ
+
+
 def load_default_model() -> LLMChat:
     if "MODEL_PROXY_URL" in os.environ:
         return load_model(os.environ["LLM_DEFAULT"])
