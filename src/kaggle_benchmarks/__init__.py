@@ -32,9 +32,10 @@ from kaggle_benchmarks.actors import Actor, LLMChat, system, user
 from kaggle_benchmarks.runs import Run, Runs
 from kaggle_benchmarks.tasks import benchmark, task
 
-llm = kaggle.load_default_model()
-judge_llm = kaggle.load_judge_model()
-llms = kaggle.load_available_models()
+if kaggle.is_configured():
+    llm = kaggle.load_default_model()
+    judge_llm = kaggle.load_judge_model()
+    llms = kaggle.load_available_models()
 
 
 client: clients.Client = clients.resolve_client()
