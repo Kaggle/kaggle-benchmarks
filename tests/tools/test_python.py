@@ -67,3 +67,93 @@ def test_repl():
     assert out.status == "ok", out
     assert out.output == "2"
     assert out.traceback is None
+
+
+def test_extract_code_single_block():
+    """Test extracting a single Python code block."""
+    text = """
+Here is some code:
+
+```python
+x = 1
+print(x)
+```
+"""
+    result = python.extract_code(text)
+    assert result == "x = 1\nprint(x)"
+
+
+def test_extract_code_multiple_blocks_default():
+    """Test that default behavior returns only first block."""
+    text = """
+```python
+x = 1
+```
+
+```python
+y = 2
+```
+"""
+    result = python.extract_code(text)
+    assert result == "x = 1"
+
+
+def test_extract_code_multiple_blocks_all():
+    """Test extracting all Python code blocks."""
+    text = """
+```python
+x = 1
+```
+
+Some explanation here.
+
+```python
+y = x + 1
+print(y)
+```
+"""
+    result = python.extract_code(text, all_blocks=True)
+    assert result == "x = 1\n\ny = x + 1\nprint(y)"
+
+
+def test_extract_code_no_blocks():
+    """Test fallback when no code blocks present."""
+    text = "Just some plain text"
+    result = python.extract_code(text)
+    assert result == text
+
+
+def test_extract_code_mixed_languages():
+    """Test that only Python blocks are extracted."""
+    text = """
+```javascript
+console.log('hello');
+```
+
+```python
+print('hello')
+```
+"""
+    result = python.extract_code(text)
+    assert result == "print('hello')"
+
+
+def test_repl_with_multiple_blocks():
+    """Test REPL execution with multiple concatenated code blocks."""
+    repl = python.IPythonREPL()
+
+    multi_block_text = """
+```python
+x = 10
+```
+
+```python
+y = x * 2
+print(y)
+```
+"""
+    code = python.extract_code(multi_block_text, all_blocks=True)
+    out = repl.run_code(code)
+
+    assert out.status == "ok"
+    assert out.stdout.strip() == "20"

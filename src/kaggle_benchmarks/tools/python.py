@@ -26,11 +26,29 @@ def run(code: str, env: envs.Environment, input: str | None = None) -> envs.RunR
     return env.run(["python", "-c", code], input=input)
 
 
-def extract_code(text: str) -> str:
-    if "```python" in text:
-        return re.findall("```python(:?.*?)```", text, flags=re.DOTALL)[0]
+def extract_code(text: str, all_blocks: bool = False) -> str:
+    """Extract Python code block(s) from markdown text.
 
-    return text
+    Args:
+        text: Text potentially containing markdown Python code blocks.
+        all_blocks: If True, extract and concatenate all ```python blocks.
+                   If False (default), extract only the first block.
+
+    Returns:
+        Extracted Python code, or the original text if no code blocks found.
+    """
+    if "```python" not in text:
+        return text
+
+    matches = re.findall(r"```python(.*?)```", text, flags=re.DOTALL)
+
+    if not matches:
+        return text
+
+    if all_blocks:
+        return "\n\n".join(m.strip() for m in matches)
+
+    return matches[0].strip()
 
 
 def markdown_code(string: str | None, kind: str = "", header: str = "") -> str:
