@@ -19,7 +19,7 @@ from typing import Literal
 
 import jupyter_client
 
-from kaggle_benchmarks import actors, chats, envs
+from kaggle_benchmarks import actors, chats, envs, utils
 
 
 def run(code: str, env: envs.Environment, input: str | None = None) -> envs.RunResult:
@@ -40,15 +40,9 @@ def extract_code(text: str, all_blocks: bool = False) -> str:
     if "```python" not in text:
         return text
 
-    matches = re.findall(r"```python(.*?)```", text, flags=re.DOTALL)
-
-    if not matches:
-        return text
-
-    if all_blocks:
-        return "\n\n".join(m.strip() for m in matches)
-
-    return matches[0].strip()
+    return utils.extract_code_block(
+        text, name="python", greedy=False, all_blocks=all_blocks
+    ).strip()
 
 
 def markdown_code(string: str | None, kind: str = "", header: str = "") -> str:

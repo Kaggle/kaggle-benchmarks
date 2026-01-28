@@ -80,13 +80,28 @@ def build_httpx_client(filename: str = "cache") -> httpx.Client:
     )
 
 
-def extract_code_block(text: str, name: str | None = None, greedy: bool = True) -> str:
-    """Extracts a code block (if exist) from a markdown string."""
+def extract_code_block(
+    text: str, name: str | None = None, greedy: bool = True, all_blocks: bool = False
+) -> str:
+    """Extracts code block(s) from a markdown string.
+
+    Args:
+        text: Text potentially containing markdown code blocks.
+        name: Language name to match (e.g., "python"). If None, matches any language.
+        greedy: If True, use greedy matching. If False, use non-greedy matching.
+        all_blocks: If True, extract and concatenate all matching blocks.
+                   If False (default), extract only the first block.
+
+    Returns:
+        Extracted code, or the original text if no code blocks found.
+    """
     name = name or r"\w*"
     matches = re.findall(
         f"```{name}(.+{'' if greedy else '?'})```", text, flags=re.DOTALL
     )
     if matches:
+        if all_blocks:
+            return "\n\n".join(m.strip() for m in matches)
         return matches[0]
     return text
 
