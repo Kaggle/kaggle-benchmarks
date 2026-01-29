@@ -19,18 +19,30 @@ from typing import Literal
 
 import jupyter_client
 
-from kaggle_benchmarks import actors, chats, envs
+from kaggle_benchmarks import actors, chats, envs, utils
 
 
 def run(code: str, env: envs.Environment, input: str | None = None) -> envs.RunResult:
     return env.run(["python", "-c", code], input=input)
 
 
-def extract_code(text: str) -> str:
-    if "```python" in text:
-        return re.findall("```python(:?.*?)```", text, flags=re.DOTALL)[0]
+def extract_code(text: str, all_blocks: bool = False) -> str:
+    """Extract Python code block(s) from markdown text.
 
-    return text
+    Args:
+        text: Text potentially containing markdown Python code blocks.
+        all_blocks: If True, extract and concatenate all ```python blocks.
+                   If False (default), extract only the first block.
+
+    Returns:
+        Extracted Python code, or the original text if no code blocks found.
+    """
+    if "```python" in text:  
+        return utils.extract_code_block(  
+                text, name="python", greedy=False, all_blocks=all_blocks  
+            ).strip()  
+    return text  
+
 
 
 def markdown_code(string: str | None, kind: str = "", header: str = "") -> str:
