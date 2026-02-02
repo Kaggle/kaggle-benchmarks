@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kaggle_benchmarks.actors.base import Actor, assertion, system, user
+from kaggle_benchmarks.actors.base import Actor, Tool, assertion, system, user
 from kaggle_benchmarks.actors.llms import LLMChat
