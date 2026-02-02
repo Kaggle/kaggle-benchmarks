@@ -1,0 +1,10 @@
+steps:
+  - id: "build-base"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "${_REPO}/${_NAME}:latest", "-f", "cicd/Dockerfile.base", "."]
+  - id: "push-base"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_REPO}/${_NAME}:latest"]
+substitutions:
+  _REPO: gcr.io/kaggle-private-byod
+  _NAME: personal-benchmarks-base
