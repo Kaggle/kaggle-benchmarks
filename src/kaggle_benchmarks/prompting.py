@@ -32,7 +32,7 @@ import dataclasses
 import datetime
 import inspect
 import json
-from typing import Generator, TypeVar, overload
+from typing import Generator, Generic, TypeVar, overload
 
 import pydantic
 
@@ -40,6 +40,31 @@ from kaggle_benchmarks import utils
 
 handlers = []
 T = TypeVar("T")
+
+
+class BaseModel(pydantic.BaseModel):
+    """Base pydantic model that renderable in markdown."""
+
+    def _repr_markdown_(self):
+        return "\n".join(
+            f"## {key.title().replace('_', '')}\n{value}"
+            for key, value in self.model_dump().items()
+        )
+
+
+class TypedResponse(BaseModel, Generic[T]):
+    value: T
+
+
+class ResponseParsingError(ValueError):
+    def __init__(self, value=None, message=None, schema=None, *args: object) -> None:
+        self.value = value
+        self.message = message
+        self.schema = schema
+        super().__init__(*args)
+
+    def __str__(self) -> str:
+        return f"ResponseParsingError(value={self.value}, message={self.message}, schema={self.schema})"
 
 
 def parse_response(handler: Generator[str | tuple[str, T], str, T], value: str) -> T:
@@ -82,7 +107,7 @@ def float_handler(_):
     try:
         return float(utils.extract_code_block(value))
     except ValueError:
-        raise ValueError("Invalid float provided.")
+        raise ResponseParsingError(value, "Invalid float provided.", float)
 
 
 @handler(types=int)
@@ -91,7 +116,7 @@ def integer(_):
     try:
         return int(utils.extract_code_block(value))
     except ValueError:
-        raise ValueError("Invalid integer provided.")
+        raise ResponseParsingError(value, "Invalid integer provided.", int)
 
 
 @handler(types=datetime.datetime)
@@ -102,16 +127,15 @@ def datetime_handler(_):
             utils.extract_code_block(value).replace("Z", "+00:00")
         )
     except ValueError:
-        raise ValueError("Invalid datetime format.")
+        raise ResponseParsingError(value, "Invalid datetime format.", datetime.datetime)
 
 
 @handler(types=bool)
 def boolean(_):
     value = yield "Start your answer with `True.` or `False.`."
-    value = value.lower()
-    assert ("true" in value) + ("false" in value) == 1, (
-        f"Boolean value of {value} is unclear."
-    )
+    value_lower = value.lower()
+    if ("true" in value_lower) + ("false" in value_lower) != 1:
+        raise ResponseParsingError(value, f"Boolean value of {value} is unclear.", bool)
     return "true" in value.lower()
 
 
@@ -126,18 +150,11 @@ def dataclass(cls):
     try:
         return cls(**json.loads(value))
     except json.JSONDecodeError:
-        raise AssertionError(f"Invalid JSON `{value}`")
+        raise ResponseParsingError(value, f"Invalid JSON `{value}`", cls)
 
 
 @handler(criterion=lambda x: isinstance(x, dict))
 def typed_dict(attrs: dict[str, type]):
-    class BaseModel(pydantic.BaseModel):
-        def _repr_markdown_(self):
-            return "\n".join(
-                f"## {key.title().replace('_', '')}\n{value}"
-                for key, value in self.model_dump().items()
-            )
-
     return pyndantic_like(
         pydantic.create_model(
             "Response",
@@ -154,7 +171,12 @@ def pyndantic_like(model: pydantic.BaseModel):
         model,
     )
 
-    return model.model_validate_json(utils.extract_code_block(response, name="json"))
+    try:
+        return model.model_validate_json(
+            utils.extract_code_block(response, name="json")
+        )
+    except pydantic.ValidationError as e:
+        raise ResponseParsingError(response, str(e), model.model_json_schema()) from e
 
 
 @overload

@@ -15,8 +15,12 @@
 import datetime
 from dataclasses import dataclass
 
+import pydantic
+import pytest
+
 from kaggle_benchmarks import actors, chats, messages, prompting
 from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks.prompting import ResponseParsingError
 
 
 def test_str():
@@ -80,3 +84,11 @@ def test_llm():
         response = LLM().prompt(message="?", schema=A)
         assert isinstance(response, A)
         assert response == A("a", 2)
+
+
+def test_pydantic_error():
+    class Model(pydantic.BaseModel):
+        a: int
+
+    with pytest.raises(ResponseParsingError):
+        prompting.parse_response(prompting.process_schema(Model), '{"a": "not an int"}')
