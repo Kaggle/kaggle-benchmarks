@@ -1,6 +1,6 @@
 # Local Development
 
-For local development, you will need to configure your environment to use the Kaggle Model Proxy.
+Local Development is for internal team (kaggle) only. For local development, you will need to configure your environment to use the Kaggle Model Proxy.
 
 **Prerequisites**:
 
