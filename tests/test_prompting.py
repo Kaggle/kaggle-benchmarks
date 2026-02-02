@@ -13,10 +13,15 @@
 # limitations under the License.
 
 import datetime
+import json
 from dataclasses import dataclass
+
+import pydantic
+import pytest
 
 from kaggle_benchmarks import actors, chats, messages, prompting
 from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks.prompting import ResponseParsingError
 
 
 def test_str():
@@ -24,18 +29,27 @@ def test_str():
         assert x == prompting.parse_response(prompting.process_schema(str), x)
 
 
-def test_bool():
-    assert prompting.parse_response(prompting.process_schema(bool), "true")
-    assert not prompting.parse_response(prompting.process_schema(bool), "False")
-
-
-def test_datetime():
-    assert isinstance(
-        prompting.parse_response(
-            prompting.process_schema(datetime.datetime), "2025-01-01T10:00:00Z"
+@pytest.mark.parametrize(
+    "schema_type, input_value, expected_value",
+    [
+        pytest.param(int, 123, 123, id="int"),
+        pytest.param(float, 123.45, 123.45, id="float"),
+        pytest.param(bool, True, True, id="bool_true"),
+        pytest.param(bool, False, False, id="bool_false"),
+        pytest.param(
+            datetime.datetime,
+            "2025-01-01T10:00:00Z",
+            datetime.datetime(2025, 1, 1, 10, 0, tzinfo=datetime.timezone.utc),
+            id="datetime",
         ),
-        datetime.datetime,
+    ],
+)
+def test_primitive_types(schema_type, input_value, expected_value):
+    json_input = json.dumps({"value": input_value})
+    output_value = prompting.parse_response(
+        prompting.process_schema(schema_type), json_input
     )
+    assert output_value == expected_value
 
 
 def test_dataclass():
@@ -80,3 +94,25 @@ def test_llm():
         response = LLM().prompt(message="?", schema=A)
         assert isinstance(response, A)
         assert response == A("a", 2)
+
+
+def test_pydantic_error():
+    class Model(pydantic.BaseModel):
+        a: int
+
+    with pytest.raises(ResponseParsingError):
+        prompting.parse_response(prompting.process_schema(Model), '{"a": "not an int"}')
+
+
+def test_nested_pydantic():
+    class Inner(pydantic.BaseModel):
+        c: int
+
+    class Outer(pydantic.BaseModel):
+        a: str
+        b: Inner
+
+    json_input = '{"a": "hello", "b": {"c": 123}}'
+    expected_output = Outer(a="hello", b=Inner(c=123))
+    output = prompting.parse_response(prompting.process_schema(Outer), json_input)
+    assert output == expected_output

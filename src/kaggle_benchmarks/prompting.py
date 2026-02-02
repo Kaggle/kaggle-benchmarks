@@ -32,7 +32,7 @@ import dataclasses
 import datetime
 import inspect
 import json
-from typing import Generator, TypeVar, overload
+from typing import Generator, Generic, TypeVar, overload
 
 import pydantic
 
@@ -40,6 +40,49 @@ from kaggle_benchmarks import utils
 
 handlers = []
 T = TypeVar("T")
+
+
+class RenderablePydanticModel(pydantic.BaseModel):
+    """Base pydantic model that renderable in markdown."""
+
+    def _repr_markdown_(self):
+        return "\n".join(
+            f"## {key.title().replace('_', '')}\n{value}"
+            for key, value in self.model_dump().items()
+        )
+
+
+class TypedResponse(RenderablePydanticModel, Generic[T]):
+    """
+        A generic container for wrapping a typed value.
+
+        This is particularly useful for APIs that require a JSON object as the
+        root of a response schema. It allows for defining a response format
+    for
+        primitive or generic types on the fly.
+
+        For example:
+        - `TypedResponse[int]` will expect a JSON object like `{"value": 123}`.
+        - `TypedResponse[list[int]]` will expect `{"value": [1, 2, 3]}`.
+        - `TypedResponse[tuple[int, str]]` will expect `{"value": [1, "hello"]}`.
+    """
+
+    value: T
+
+
+class ResponseParsingError(ValueError):
+    def __init__(self, value=None, message=None, schema=None, *args: object) -> None:
+        self.value = value
+        self.message = message
+        self.schema = schema
+        super().__init__(*args)
+
+    def __str__(self) -> str:
+        return f"ResponseParsingError(value={self.value}, message={self.message}, schema={self.schema})"
+
+
+class SchemaProcessingError(TypeError):
+    pass
 
 
 def parse_response(handler: Generator[str | tuple[str, T], str, T], value: str) -> T:
@@ -70,79 +113,13 @@ def handler(criterion=None, types=None):
     return decorator
 
 
-@handler(types=str)
-def string(_):
-    value = yield None
-    return value
-
-
-@handler(types=float)
-def float_handler(_):
-    value = yield "Provide a float."
-    try:
-        return float(utils.extract_code_block(value))
-    except ValueError:
-        raise ValueError("Invalid float provided.")
-
-
-@handler(types=int)
-def integer(_):
-    value = yield "Provide an integer."
-    try:
-        return int(utils.extract_code_block(value))
-    except ValueError:
-        raise ValueError("Invalid integer provided.")
-
-
-@handler(types=datetime.datetime)
-def datetime_handler(_):
-    value = yield "Provide a datetime in ISO 8601 format (e.g., 2024-10-27T10:00:00Z)."
-    try:
-        return datetime.datetime.fromisoformat(
-            utils.extract_code_block(value).replace("Z", "+00:00")
-        )
-    except ValueError:
-        raise ValueError("Invalid datetime format.")
-
-
-@handler(types=bool)
-def boolean(_):
-    value = yield "Start your answer with `True.` or `False.`."
-    value = value.lower()
-    assert ("true" in value) + ("false" in value) == 1, (
-        f"Boolean value of {value} is unclear."
-    )
-    return "true" in value.lower()
-
-
-@handler(criterion=dataclasses.is_dataclass)
-def dataclass(cls):
-    fields = "\n".join(
-        f"{field.name}: {field.type.__name__}" for field in dataclasses.fields(cls)
-    )
-
-    value = yield f"Write a JSON with the following keys: {fields}"
-    value = utils.extract_code_block(value, name="json", greedy=False)
-    try:
-        return cls(**json.loads(value))
-    except json.JSONDecodeError:
-        raise AssertionError(f"Invalid JSON `{value}`")
-
-
 @handler(criterion=lambda x: isinstance(x, dict))
 def typed_dict(attrs: dict[str, type]):
-    class BaseModel(pydantic.BaseModel):
-        def _repr_markdown_(self):
-            return "\n".join(
-                f"## {key.title().replace('_', '')}\n{value}"
-                for key, value in self.model_dump().items()
-            )
-
     return pyndantic_like(
         pydantic.create_model(
             "Response",
             **{key: (value, ...) for key, value in attrs.items()},
-            __base__=BaseModel,
+            __base__=RenderablePydanticModel,
         )
     )
 
@@ -154,7 +131,54 @@ def pyndantic_like(model: pydantic.BaseModel):
         model,
     )
 
-    return model.model_validate_json(utils.extract_code_block(response, name="json"))
+    try:
+        return model.model_validate_json(
+            utils.extract_code_block(response, name="json")
+        )
+    except pydantic.ValidationError as e:
+        raise ResponseParsingError(response, str(e), model) from e
+
+
+@handler(criterion=dataclasses.is_dataclass)
+def root_model_handler(cls):
+    schema = pydantic.TypeAdapter(cls).json_schema()
+    model_cls = pydantic.create_model(
+        cls.__name__,
+        __base__=(RenderablePydanticModel, cls),
+        **{field.name: (field.type, ...) for field in dataclasses.fields(cls)},
+    )
+
+    response = yield (
+        f"Output JSON using this schema: {json.dumps(schema)}",
+        model_cls,
+    )
+
+    try:
+        value = json.loads(utils.extract_code_block(response, name="json"))
+        return cls(**value)
+    except (json.JSONDecodeError, pydantic.ValidationError) as e:
+        raise ResponseParsingError(response, str(e), model_cls) from e
+
+
+@handler(types=(float, int, datetime.datetime, bool))
+def primitive_type_handler(cls):
+    model = TypedResponse[cls]
+    response = yield (
+        f"Output JSON using this schema: {json.dumps(model.model_json_schema())}",
+        model,
+    )
+    try:
+        return model.model_validate_json(
+            utils.extract_code_block(response, name="json")
+        ).value
+    except pydantic.ValidationError as e:
+        raise ResponseParsingError(response, str(e), model) from e
+
+
+@handler(types=str)
+def string(_):
+    value = yield None
+    return value
 
 
 @overload

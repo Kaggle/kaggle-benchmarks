@@ -24,6 +24,7 @@ import uuid
 from typing import Any, Callable, Iterable, Type
 
 import panel as pn
+import pydantic
 from pydantic import TypeAdapter
 
 from kaggle_benchmarks import chats
@@ -422,8 +423,7 @@ def assert_raises_no_exceptions(
 # --- Assessment with a Judge LLM ---
 
 
-@dataclasses.dataclass
-class AssessResult:
+class AssessResult(pydantic.BaseModel):
     """Represents the outcome of a single criterion's evaluation by a judge LLM."""
 
     criterion: str
@@ -432,8 +432,7 @@ class AssessResult:
     confidence: int
 
 
-@dataclasses.dataclass
-class AssessReport:
+class AssessReport(pydantic.BaseModel):
     """Represents the complete assessment report from a judge LLM.
 
     This dataclass is the default `output_schema` for the
@@ -497,7 +496,7 @@ def assess_response_with_judge(
 
     if prompt_fn is None:
         formatted_criteria = "\n".join(f"{i + 1}. {c}" for i, c in enumerate(criteria))
-        schema_desc = generate_schema_description(output_schema)
+        # schema_desc = generate_schema_description(output_schema)
 
         prompt_text = textwrap.dedent(f"""
         You are an impartial and strict technical evaluator.
@@ -517,11 +516,6 @@ def assess_response_with_judge(
         2. Be strict. If the text is ambiguous, the check fails.
         3. Output your assessment using the specific structure requested below.
 
-        ### Output Schema Requirements
-        You must return a JSON object containing the following fields:
-        {schema_desc}
-
-        *Ensure your JSON output strictly adheres to these types.*
         """)
     else:
         prompt_text = prompt_fn(criteria, response_text)
