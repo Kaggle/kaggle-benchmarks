@@ -33,6 +33,10 @@ def test_from_url():
     assert isinstance(img, images.ImageContent)
     assert img.url == url
     assert img.to_mime() == {"mime_type": "image/jpeg", "location": url}
+    assert not img.caption
+
+    img_with_caption = images.from_url(url, caption="A test image.")
+    assert img_with_caption.caption == "A test image."
 
 
 def test_from_base64():
@@ -40,6 +44,12 @@ def test_from_base64():
     assert isinstance(img, images.ImageBase64)
     assert img.b64_string == B64_STRING
     assert img.mime_type == "image/png"
+    assert not img.caption
+
+    img_with_caption = images.from_base64(
+        B64_STRING, format="png", caption="A test image."
+    )
+    assert img_with_caption.caption == "A test image."
 
 
 def test_from_array():
@@ -66,9 +76,15 @@ def test_image_base64_properties():
     assert img.b64_string == B64_STRING
     assert img.mime_type == "image/png"
     assert img.url == f"data:image/png;base64,{B64_STRING}"
+    assert not img.caption
 
     expected = {"mime_type": "image/png", "content": B64_STRING}
     assert img.to_mime() == expected
+
+    img_with_caption = images.ImageBase64(
+        B64_STRING, mime_type="image/png", caption="A test image."
+    )
+    assert img_with_caption.caption == "A test image."
 
 
 def test_from_image_url(mocker):
