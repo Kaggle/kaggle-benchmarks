@@ -41,7 +41,7 @@ handlers = []
 T = TypeVar("T")
 
 
-class BaseModel(pydantic.BaseModel):
+class RenderablePydanticModel(pydantic.BaseModel):
     """Base pydantic model that renderable in markdown."""
 
     def _repr_markdown_(self):
@@ -51,7 +51,7 @@ class BaseModel(pydantic.BaseModel):
         )
 
 
-class TypedResponse(BaseModel, Generic[T]):
+class TypedResponse(RenderablePydanticModel, Generic[T]):
     """
         A generic container for wrapping a typed value.
 
@@ -78,6 +78,10 @@ class ResponseParsingError(ValueError):
 
     def __str__(self) -> str:
         return f"ResponseParsingError(value={self.value}, message={self.message}, schema={self.schema})"
+
+
+class SchemaProcessingError(TypeError):
+    pass
 
 
 def parse_response(handler: Generator[str | tuple[str, T], str, T], value: str) -> T:
@@ -114,7 +118,7 @@ def typed_dict(attrs: dict[str, type]):
         pydantic.create_model(
             "Response",
             **{key: (value, ...) for key, value in attrs.items()},
-            __base__=BaseModel,
+            __base__=RenderablePydanticModel,
         )
     )
 
