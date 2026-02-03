@@ -48,7 +48,7 @@ class ImageContent(abc.ABC):
 
     def _repr_markdown_(self) -> str:
         """Returns a Markdown representation of the image."""
-        return f"![image]({self.url})"
+        return f"![image]({self.url})\n\n{self.caption}"
 
 
 class ImageURL(ImageContent):
