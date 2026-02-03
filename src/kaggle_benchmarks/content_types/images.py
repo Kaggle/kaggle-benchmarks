@@ -14,6 +14,7 @@
 
 import abc
 import base64
+import functools
 import io
 import mimetypes
 
@@ -23,7 +24,8 @@ import panel as pn
 
 
 class ImageContent(abc.ABC):
-    caption: str = ""
+    def __init__(self, caption: str = ""):
+        self.caption = caption
 
     @property
     @abc.abstractmethod
@@ -53,8 +55,8 @@ class ImageContent(abc.ABC):
 
 class ImageURL(ImageContent):
     def __init__(self, url: str, caption: str = ""):
+        super().__init__(caption=caption)
         self._url = url
-        self.caption = caption
 
     @property
     def url(self) -> str:
@@ -75,16 +77,16 @@ class ImageURL(ImageContent):
             "location": self.url,
         }
 
-    @property
+    @functools.cached_property
     def b64_string(self) -> str:
         return image_url_to_base64(self.url)
 
 
 class ImageBase64(ImageContent):
     def __init__(self, b64_string: str, mime_type: str, caption: str = ""):
+        super().__init__(caption=caption)
         self._b64_string = b64_string
         self._mime_type = mime_type
-        self.caption = caption
 
     @property
     def b64_string(self) -> str:
