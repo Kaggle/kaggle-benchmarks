@@ -28,7 +28,6 @@ Handlers are processed in reverse registration order, so later registered handle
 Supported types currently include several build-in types, Pydantic models, and dataclasses.
 """
 
-import dataclasses
 import datetime
 import inspect
 import json
@@ -53,6 +52,20 @@ class BaseModel(pydantic.BaseModel):
 
 
 class TypedResponse(BaseModel, Generic[T]):
+    """
+        A generic container for wrapping a typed value.
+
+        This is particularly useful for APIs that require a JSON object as the
+        root of a response schema. It allows for defining a response format
+    for
+        primitive or generic types on the fly.
+
+        For example:
+        - `TypedResponse[int]` will expect a JSON object like `{"value": 123}`.
+        - `TypedResponse[list[int]]` will expect `{"value": [1, 2, 3]}`.
+        - `TypedResponse[tuple[int, str]]` will expect `{"value": [1, "hello"]}`.
+    """
+
     value: T
 
 
@@ -95,64 +108,6 @@ def handler(criterion=None, types=None):
     return decorator
 
 
-@handler(types=str)
-def string(_):
-    value = yield None
-    return value
-
-
-@handler(types=float)
-def float_handler(_):
-    value = yield "Provide a float."
-    try:
-        return float(utils.extract_code_block(value))
-    except ValueError:
-        raise ResponseParsingError(value, "Invalid float provided.", float)
-
-
-@handler(types=int)
-def integer(_):
-    value = yield "Provide an integer."
-    try:
-        return int(utils.extract_code_block(value))
-    except ValueError:
-        raise ResponseParsingError(value, "Invalid integer provided.", int)
-
-
-@handler(types=datetime.datetime)
-def datetime_handler(_):
-    value = yield "Provide a datetime in ISO 8601 format (e.g., 2024-10-27T10:00:00Z)."
-    try:
-        return datetime.datetime.fromisoformat(
-            utils.extract_code_block(value).replace("Z", "+00:00")
-        )
-    except ValueError:
-        raise ResponseParsingError(value, "Invalid datetime format.", datetime.datetime)
-
-
-@handler(types=bool)
-def boolean(_):
-    value = yield "Start your answer with `True.` or `False.`."
-    value_lower = value.lower()
-    if ("true" in value_lower) + ("false" in value_lower) != 1:
-        raise ResponseParsingError(value, f"Boolean value of {value} is unclear.", bool)
-    return "true" in value.lower()
-
-
-@handler(criterion=dataclasses.is_dataclass)
-def dataclass(cls):
-    fields = "\n".join(
-        f"{field.name}: {field.type.__name__}" for field in dataclasses.fields(cls)
-    )
-
-    value = yield f"Write a JSON with the following keys: {fields}"
-    value = utils.extract_code_block(value, name="json", greedy=False)
-    try:
-        return cls(**json.loads(value))
-    except json.JSONDecodeError:
-        raise ResponseParsingError(value, f"Invalid JSON `{value}`", cls)
-
-
 @handler(criterion=lambda x: isinstance(x, dict))
 def typed_dict(attrs: dict[str, type]):
     return pyndantic_like(
@@ -176,7 +131,54 @@ def pyndantic_like(model: pydantic.BaseModel):
             utils.extract_code_block(response, name="json")
         )
     except pydantic.ValidationError as e:
-        raise ResponseParsingError(response, str(e), model.model_json_schema()) from e
+        raise ResponseParsingError(response, str(e), model) from e
+
+
+def can_be_root_model(cls):
+    try:
+        _ = pydantic.RootModel[cls]
+        _.model_json_schema()
+        return True
+    except Exception:
+        return False
+
+
+@handler(criterion=can_be_root_model)
+def root_model_handler(cls):
+    model_cls = pydantic.RootModel[cls]
+    response = yield (
+        f"Output JSON using this schema: {json.dumps(model_cls.model_json_schema())}",
+        model_cls,
+    )
+
+    try:
+        validated_model = model_cls.model_validate_json(
+            utils.extract_code_block(response, name="json")
+        )
+        return validated_model.root
+    except pydantic.ValidationError as e:
+        raise ResponseParsingError(response, str(e), model_cls) from e
+
+
+@handler(types=(float, int, datetime.datetime, bool))
+def primitive_type_handler(cls):
+    model = TypedResponse[cls]
+    response = yield (
+        f"Output JSON using this schema: {json.dumps(model.model_json_schema())}",
+        model,
+    )
+    try:
+        return model.model_validate_json(
+            utils.extract_code_block(response, name="json")
+        ).value
+    except pydantic.ValidationError as e:
+        raise ResponseParsingError(response, str(e), model) from e
+
+
+@handler(types=str)
+def string(_):
+    value = yield None
+    return value
 
 
 @overload
