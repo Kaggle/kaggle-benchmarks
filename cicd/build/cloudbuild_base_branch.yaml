@@ -22,6 +22,7 @@ steps:
         "-f", "cicd/Dockerfile.base",
         ".",
       ]
+    waitFor: ["-"]
     env:
       - "DOCKER_BUILDKIT=1"
 
@@ -29,6 +30,11 @@ steps:
     name: "gcr.io/cloud-builders/docker"
     args: ["push", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}"]
     waitFor: ["build-base-pr"]
+
+images:
+  - "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}"
+
+timeout: 3600s # 1 hour
 
 substitutions:
   _BASE_IMAGE_REPO: gcr.io/kaggle-private-byod

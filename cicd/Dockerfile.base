@@ -56,5 +56,3 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --group kaggle
 
 RUN uv run playwright install chromium --only-shell
-
-CMD ["/bin/bash"]
