@@ -28,6 +28,7 @@ Handlers are processed in reverse registration order, so later registered handle
 Supported types currently include several build-in types, Pydantic models, and dataclasses.
 """
 
+import dataclasses
 import datetime
 import inspect
 import json
@@ -138,16 +139,7 @@ def pyndantic_like(model: pydantic.BaseModel):
         raise ResponseParsingError(response, str(e), model) from e
 
 
-def can_be_root_model(cls):
-    try:
-        _ = pydantic.RootModel[cls]
-        _.model_json_schema()
-        return True
-    except Exception:
-        return False
-
-
-@handler(criterion=can_be_root_model)
+@handler(criterion=dataclasses.is_dataclass)
 def root_model_handler(cls):
     model_cls = pydantic.RootModel[cls]
     response = yield (
