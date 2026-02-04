@@ -24,7 +24,7 @@ import panel as pn
 
 
 class ImageContent(abc.ABC):
-    def __init__(self, caption: str = ""):
+    def __init__(self, caption: str | None = None):
         self.caption = caption
 
     @property
@@ -54,7 +54,7 @@ class ImageContent(abc.ABC):
 
 
 class ImageURL(ImageContent):
-    def __init__(self, url: str, caption: str = ""):
+    def __init__(self, url: str, caption: str | None = None):
         super().__init__(caption=caption)
         self._url = url
 
@@ -83,7 +83,7 @@ class ImageURL(ImageContent):
 
 
 class ImageBase64(ImageContent):
-    def __init__(self, b64_string: str, mime_type: str, caption: str = ""):
+    def __init__(self, b64_string: str, mime_type: str, caption: str | None = None):
         super().__init__(caption=caption)
         self._b64_string = b64_string
         self._mime_type = mime_type
@@ -118,13 +118,13 @@ def from_path(path: str) -> ImageBase64:
         )
 
 
-def from_url(url: str, caption: str = "") -> ImageURL:
+def from_url(url: str, caption: str | None = None) -> ImageURL:
     """Creates ImageContent from an image URL."""
     return ImageURL(url, caption=caption)
 
 
 def from_base64(
-    base64: str | bytes, format: str = "jpeg", caption: str = ""
+    base64: str | bytes, format: str = "jpeg", caption: str | None = None
 ) -> ImageBase64:
     """Creates ImageContent directly from a base64 string."""
     if isinstance(base64, bytes):
