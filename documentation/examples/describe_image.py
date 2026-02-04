@@ -14,75 +14,119 @@
 
 # %% [markdown]
 # ---
-# ## Vision-Capable Tasks for Gemini
+# ## How to Send Images to LLM
 #
-# Here we add two tasks to test the vision capabilities of the Gemini model using the genai api.
-# The first task takes a pre-converted base64 image string, and the second
-# handles a direct image URL.
+# You can send images using a direct URL or a Base64 string. We also provide helper function to load a local image to base64.
+# - When using URL, the image image format is automatically guessed.
+# - When using Base64, you need specify the image format if it's different from default jpeg.
+# - Use `from_path`` to load from local images.
 # %%
-from kaggle_benchmarks import assertions, content_types, task
-from kaggle_benchmarks.kaggle import load_model
-
-llm = load_model(
-    model_name="google/gemini-2.5-pro",
-    api="genai",
-)
-
-# ---
-# ### 1. Task for Image with Base64 Input
-# ---
+import kaggle_benchmarks as kbench
+from kaggle_benchmarks.content_types import images
+import httpx
 
 
-@task("Describe Image (Base64)")
-def describe_image_base64(llm, image_base64: str, question: str, answer: str):
-    """Sends a base64 image string and a question to a vision model."""
-    image = content_types.images.from_base64(image_base64, caption=question)
-    response = llm.prompt(image)
-    assertions.assert_contains_regex(
-        f"(?i){answer}",
-        response,
-        expectation="LLM should identify the object correctly.",
-    )
-
-
-dog_image_url = (
-    "https://upload.wikimedia.org/wikipedia/commons/4/47/American_Eskimo_Dog.jpg"
-)
-dog_image_base64 = content_types.images.image_url_to_base64(dog_image_url)
-
-describe_image_base64.run(
-    llm=llm,
-    image_base64=dog_image_base64,
-    question="What is in the picture?",
-    answer="dog",
-)
 # %%
+import kaggle_benchmarks as kbench
+from kaggle_benchmarks.content_types import images
+
+# %% [markdown]
 # ---
-# ### 2. Task for Image with URL Input
+# ### Example 1. Sending LLM image from URL
 # ---
 
+# %%
+@kbench.task("Describe Image (URL)")
+def describe_image_url(llm):
+    """Sends an image URL directly to the model."""
+    # Kaggle logo
+    image_url = "https://www.kaggle.com/static/images/site-logo.png"
 
-@task("Describe Image (URL)")
-def describe_image_url(llm, image_url: str, question: str, answer: str):
-    """Sends an image URL and a question to a vision model."""
-    image = content_types.images.from_base64(
-        content_types.images.image_url_to_base64(image_url),
-        caption=question,
-    )
+    # Create Image object from URL.
+    # It will guess image type from URL.
+    image = images.from_url(image_url, caption="a logo")
 
-    response = llm.prompt(image)
-    assertions.assert_contains_regex(
-        f"(?i){answer}",
+    response = llm.prompt("What does this logo say?", image=image)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)kaggle",
         response,
-        expectation="LLM should identify the object correctly.",
+        expectation="LLM should identify the Kaggle logo.",
     )
 
+describe_image_url.run(kbench.llm)
 
-describe_image_url.run(
-    llm=llm,
-    image_url=dog_image_url,
-    question="Describe the main subject in this image.",
-    answer="dog",
-)
+# %% [markdown]
+# ---
+# ### Example 2. Sending LLM image from Base64 (specifying format parameter)
+# ---
+
+# %%
+@kbench.task("Describe Image (Base64)")
+def describe_image_base64(llm):
+    """Sends a base64 encoded image with explicit format specification."""
+    # Example: A small red dot (PNG)
+    # This is a 1x1 red pixel in PNG format
+    red_dot_b64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+
+    # Create Image object from Base64, specifying the format as 'png'
+    # The 'format' parameter is important when the image is not a JPEG (default)
+    image = images.from_base64(red_dot_b64, format="png", caption="a colorful dot")
+
+    response = llm.prompt("What color is this image?", image=image)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)red",
+        response,
+        expectation="LLM should identify the color red.",
+    )
+
+describe_image_base64.run(kbench.llm)
+
+# %% [markdown]
+# ---
+# ### Example 3. Sending LLM image from local image file
+# ---
+
+# %%
+
+# Download the file to local file first
+
+def download_image(url, filename):
+    try:
+        with httpx.Client() as client:
+            response = client.get(url)
+            response.raise_for_status() # Raise error for 4xx/5xx responses
+
+            with open(filename, 'wb') as file:
+                file.write(response.content)
+
+        print(f"Successfully downloaded: {filename}")
+
+    except httpx.HTTPError as e:
+        print(f"Error downloading image: {e}")
+
+download_image("https://www.kaggle.com/static/images/site-logo.png", "kaggle_logo.png")
+
+# Benchmark task using local file
+@kbench.task("Describe Image (Local File)")
+def describe_local_image(llm):
+    """Sends a local image with explicit format specification."""
+
+    # Load a local image from an attached Kaggle dataset
+    image = images.from_path("kaggle_logo.png")
+    prompt = "How many letters are there in the image?"
+
+    response = llm.prompt(prompt, image=image, schema=int)
+
+    kbench.assertions.assert_equal(
+        6,
+        response,
+        expectation="LLM should recognize the logo.",
+    )
+
+describe_local_image.run(kbench.llm)
 
 # %%
