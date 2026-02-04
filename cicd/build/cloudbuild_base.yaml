@@ -13,31 +13,24 @@
 # limitations under the License.
 
 steps:
-  - id: "build-image"
+  - id: "build-base"
     name: "gcr.io/cloud-builders/docker"
-    args:
-      [
-        "build",
-        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}",
-        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest",
-        "--file=${_DOCKERFILE_PATH}",
-        ".",
-      ]
+    args: ["build", "-t", "${_REPO}/${_NAME}:latest", "-f", "cicd/Dockerfile.base", "."]
     waitFor: ["-"]
     env:
       - "DOCKER_BUILDKIT=1"
 
-  - id: "push-image"
+  - id: "push-base"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}", "--all-tags"]
-    waitFor: ["build-image"]
+    args: ["push", "${_REPO}/${_NAME}:latest"]
+    waitFor: ["build-base"]
+
 
 images:
-  - "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}"
+  - "${_REPO}/${_NAME}"
 
-timeout: 3600s # 1 hour
+timeout: 3600s
 
 substitutions:
-  _IMAGE_REPO_NAME: gcr.io/kaggle-private-byod
-  _IMAGE_NAME: personal-benchmarks-new
-  _DOCKERFILE_PATH: cicd/Dockerfile
+  _REPO: gcr.io/kaggle-private-byod
+  _NAME: personal-benchmarks-base

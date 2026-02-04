@@ -13,31 +13,30 @@
 # limitations under the License.
 
 steps:
-  - id: "build-image"
+  - id: "build-base-pr"
     name: "gcr.io/cloud-builders/docker"
     args:
       [
         "build",
-        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}",
-        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest",
-        "--file=${_DOCKERFILE_PATH}",
+        "-t", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}",
+        "-f", "cicd/Dockerfile.base",
         ".",
       ]
     waitFor: ["-"]
     env:
       - "DOCKER_BUILDKIT=1"
 
-  - id: "push-image"
+  - id: "push-base-pr"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}", "--all-tags"]
-    waitFor: ["build-image"]
+    args: ["push", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}"]
+    waitFor: ["build-base-pr"]
 
 images:
-  - "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}"
+  - "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}"
 
 timeout: 3600s # 1 hour
 
 substitutions:
-  _IMAGE_REPO_NAME: gcr.io/kaggle-private-byod
-  _IMAGE_NAME: personal-benchmarks-new
-  _DOCKERFILE_PATH: cicd/Dockerfile
+  _BASE_IMAGE_REPO: gcr.io/kaggle-private-byod
+  # Renamed to keep PR bases separate from the prod base repo
+  _BASE_IMAGE_NAME: personal-benchmarks-base-pr

@@ -20,7 +20,7 @@
 # The first task takes a pre-converted base64 image string, and the second
 # handles a direct image URL.
 # %%
-from kaggle_benchmarks import actors, assertions, content_types, task
+from kaggle_benchmarks import assertions, content_types, task
 from kaggle_benchmarks.kaggle import load_model
 
 llm = load_model(
@@ -36,10 +36,8 @@ llm = load_model(
 @task("Describe Image (Base64)")
 def describe_image_base64(llm, image_base64: str, question: str, answer: str):
     """Sends a base64 image string and a question to a vision model."""
-    image = content_types.images.from_base64(image_base64)
-
-    actors.user.send(image)
-    response = llm.prompt(question)
+    image = content_types.images.from_base64(image_base64, caption=question)
+    response = llm.prompt(image)
     assertions.assert_contains_regex(
         f"(?i){answer}",
         response,
@@ -68,11 +66,11 @@ describe_image_base64.run(
 def describe_image_url(llm, image_url: str, question: str, answer: str):
     """Sends an image URL and a question to a vision model."""
     image = content_types.images.from_base64(
-        content_types.images.image_url_to_base64(image_url)
+        content_types.images.image_url_to_base64(image_url),
+        caption=question,
     )
 
-    actors.user.send(image)
-    response = llm.prompt(question)
+    response = llm.prompt(image)
     assertions.assert_contains_regex(
         f"(?i){answer}",
         response,

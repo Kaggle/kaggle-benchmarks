@@ -36,7 +36,7 @@ steps:
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
     dir: /benchmarks
     entrypoint: uv
-    args: ["run", "--group", "test",  "pytest", "tests"]
+    args: ["run", "--group", "test", "pytest", "tests"]
     waitFor: ["push-image"]
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"

@@ -14,6 +14,7 @@
 
 import abc
 import base64
+import functools
 import io
 import mimetypes
 
@@ -23,9 +24,20 @@ import panel as pn
 
 
 class ImageContent(abc.ABC):
+    def __init__(self, caption: str | None = None):
+        self.caption = caption
+
     @property
     @abc.abstractmethod
     def url(self) -> str: ...
+
+    @property
+    @abc.abstractmethod
+    def b64_string(self) -> str: ...
+
+    @property
+    @abc.abstractmethod
+    def mime_type(self) -> str: ...
 
     @abc.abstractmethod
     def to_mime(self) -> dict[str, str]:
@@ -38,11 +50,12 @@ class ImageContent(abc.ABC):
 
     def _repr_markdown_(self) -> str:
         """Returns a Markdown representation of the image."""
-        return f"![image]({self.url})"
+        return f"![image]({self.url})\n\n{self.caption}"
 
 
 class ImageURL(ImageContent):
-    def __init__(self, url: str):
+    def __init__(self, url: str, caption: str | None = None):
+        super().__init__(caption=caption)
         self._url = url
 
     @property
@@ -53,22 +66,38 @@ class ImageURL(ImageContent):
         """Renders the image using a Panel Image pane."""
         return pn.pane.image.Image(self.url)
 
+    @property
+    def mime_type(self) -> str:
+        return mimetypes.guess_type(self.url)[0]
+
     def to_mime(self) -> dict[str, str]:
         """Returns a MIME dictionary pointing to the image location."""
         return {
-            "mime_type": mimetypes.guess_type(self.url)[0],
+            "mime_type": self.mime_type,
             "location": self.url,
         }
 
+    @functools.cached_property
+    def b64_string(self) -> str:
+        return image_url_to_base64(self.url)
+
 
 class ImageBase64(ImageContent):
-    def __init__(self, b64_string: str, mime_type: str):
-        self.b64_string = b64_string
-        self.mime_type = mime_type
+    def __init__(self, b64_string: str, mime_type: str, caption: str | None = None):
+        super().__init__(caption=caption)
+        self._b64_string = b64_string
+        self._mime_type = mime_type
+
+    @property
+    def b64_string(self) -> str:
+        return self._b64_string
+
+    @property
+    def mime_type(self) -> str:
+        return self._mime_type
 
     @property
     def url(self) -> str:
-        """Generates a data URL from the internal array on demand."""
         return f"data:{self.mime_type};base64,{self.b64_string}"
 
     def to_mime(self) -> dict[str, str]:
@@ -88,17 +117,19 @@ def from_path(path: str) -> ImageBase64:
         )
 
 
-def from_base64(base64: str | bytes, format: str = "jpeg") -> ImageBase64:
+def from_url(url: str, caption: str | None = None) -> ImageURL:
+    """Creates ImageContent from an image URL."""
+    return ImageURL(url, caption=caption)
+
+
+def from_base64(
+    base64: str | bytes, format: str = "jpeg", caption: str | None = None
+) -> ImageBase64:
     """Creates ImageContent directly from a base64 string."""
     if isinstance(base64, bytes):
         base64 = base64.decode("utf-8")
 
-    return ImageBase64(base64, mime_type=f"image/{format}")
-
-
-def from_url(url: str) -> ImageURL:
-    """Creates ImageContent from an image URL."""
-    return ImageURL(url)
+    return ImageBase64(base64, mime_type=f"image/{format}", caption=caption)
 
 
 def from_array(array: np.ndarray) -> ImageBase64:
@@ -115,14 +146,9 @@ def from_array(array: np.ndarray) -> ImageBase64:
 
 def from_image_url(image_url: ImageURL) -> ImageBase64:
     """Creates ImageBase64 from an ImageURL, downloading and encoding it."""
-    url_str = image_url.url
-    full_mime_type = image_url.to_mime().get("mime_type")
-    if full_mime_type:
-        image_format = full_mime_type.split("/")[-1]
-    else:
-        image_format = "jpeg"
-    b64_data = image_url_to_base64(url_str)
-    return from_base64(b64_data, image_format)
+    return ImageBase64(
+        image_url.b64_string, image_url.mime_type, caption=image_url.caption
+    )
 
 
 def image_url_to_base64(url: str) -> str:
