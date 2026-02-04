@@ -98,7 +98,6 @@ class ImageBase64(ImageContent):
 
     @property
     def url(self) -> str:
-        """Generates a data URL from the internal array on demand."""
         return f"data:{self.mime_type};base64,{self.b64_string}"
 
     def to_mime(self) -> dict[str, str]:
@@ -147,14 +146,9 @@ def from_array(array: np.ndarray) -> ImageBase64:
 
 def from_image_url(image_url: ImageURL) -> ImageBase64:
     """Creates ImageBase64 from an ImageURL, downloading and encoding it."""
-    url_str = image_url.url
-    full_mime_type = image_url.to_mime().get("mime_type")
-    if full_mime_type:
-        image_format = full_mime_type.split("/")[-1]
-    else:
-        image_format = "jpeg"
-    b64_data = image_url_to_base64(url_str)
-    return from_base64(b64_data, image_format)
+    return ImageBase64(
+        image_url.b64_string, image_url.mime_type, caption=image_url.caption
+    )
 
 
 def image_url_to_base64(url: str) -> str:

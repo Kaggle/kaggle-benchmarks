@@ -105,11 +105,6 @@ def test_from_image_url(mocker):
     assert img_base64.b64_string == B64_STRING
     assert img_base64.mime_type == "image/png"
 
-    # Test with a URL without a clear mime type
-    image_url_no_ext = images.ImageURL("https://example.com/image")
-    img_base64_no_ext = images.from_image_url(image_url_no_ext)
-    assert img_base64_no_ext.mime_type == "image/jpeg"
-
 
 def test_image_url_to_base64_success(mocker):
     """Tests successful fetching and base64 encoding of an image from a URL."""
