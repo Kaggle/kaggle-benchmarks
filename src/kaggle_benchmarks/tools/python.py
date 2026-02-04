@@ -37,12 +37,11 @@ def extract_code(text: str, all_blocks: bool = False) -> str:
     Returns:
         Extracted Python code, or the original text if no code blocks found.
     """
-    if "```python" in text:  
-        return utils.extract_code_block(  
-                text, name="python", greedy=False, all_blocks=all_blocks  
-            ).strip()  
-    return text  
-
+    if "```python" in text:
+        return utils.extract_code_block(
+            text, name="python", greedy=False, all_blocks=all_blocks
+        ).strip()
+    return text
 
 
 def markdown_code(string: str | None, kind: str = "", header: str = "") -> str:
