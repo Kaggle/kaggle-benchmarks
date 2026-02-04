@@ -92,21 +92,13 @@ def describe_tools(tools: list[Callable]) -> str:
     if not descriptions:
         return "No tools available."
 
-    return "You can use the following tools:\n" + "\n".join(descriptions)
+    return "\n".join(descriptions)
 
 
 def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationResult:
     """Invokes a tool and returns the result."""
-    try:
-        tool = next(t for t in tools if t.__name__ == call.name)
-        output = tool(**call.arguments)
-        return ToolInvocationResult(
-            name=call.name,
-            arguments=call.arguments,
-            output=output,
-            call_id=call.call_id,
-        )
-    except StopIteration:
+    tool = next((t for t in tools if t.__name__ == call.name), None)
+    if tool is None:
         error_message = f"Error: Tool '{call.name}' not found."
         return ToolInvocationResult(
             name=call.name,
@@ -114,6 +106,16 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
             output=error_message,
             call_id=call.call_id,
         )
+    try:
+        output = tool(**call.arguments)
+        return ToolInvocationResult(
+            name=call.name,
+            arguments=call.arguments,
+            output=output,
+            call_id=call.call_id,
+        )
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
         error_message = f"Error invoking tool '{call.name}': {e}"
         return ToolInvocationResult(

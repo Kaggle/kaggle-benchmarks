@@ -15,8 +15,12 @@
 import inspect
 from typing import Any, Callable, Union
 
+import pydantic
 from google.genai import types
-from pydantic import create_model
+
+
+class ToolSchemaError(Exception):
+    """Raised when a function schema cannot be generated."""
 
 
 def get_function_schema(func: Callable) -> dict:
@@ -32,9 +36,13 @@ def get_function_schema(func: Callable) -> dict:
 
         fields[name] = (annotation, default)
 
-    DynamicModel = create_model(f"{func.__name__}", **fields)
-
-    return DynamicModel.model_json_schema()
+    try:
+        DynamicModel = pydantic.create_model(f"{func.__name__}", **fields)
+        return DynamicModel.model_json_schema()
+    except pydantic.PydanticSchemaGenerationError as e:
+        raise ToolSchemaError(
+            "Unable to generate json schema for function {func.__name__} arugments", e
+        )
 
 
 def function_to_openai_tool(func: Callable) -> dict:
@@ -46,6 +54,8 @@ def function_to_openai_tool(func: Callable) -> dict:
         "properties": schema.get("properties", {}),
         "required": schema.get("required", []),
     }
+    if "$defs" in schema:
+        parameters["$defs"] = schema["$defs"]
 
     return {
         "type": "function",

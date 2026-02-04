@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+from pydantic import BaseModel
+
 from kaggle_benchmarks.tools.functions import (
+    ToolSchemaError,
     function_to_genai_tool,
     function_to_openai_tool,
     get_function_schema,
@@ -63,3 +67,31 @@ def test_function_to_genai_tool_from_dict():
     assert tool.name == "sample_function"
     assert tool.description == "This is a sample function."
     assert tool.parameters.properties["a"].type.name == "INTEGER"
+
+
+def test_get_function_schema_with_unserializable_arg():
+    class Unserializable:
+        pass
+
+    def func_with_unserializable_arg(a: Unserializable):
+        return a
+
+    with pytest.raises(ToolSchemaError):
+        get_function_schema(func_with_unserializable_arg)
+
+
+def test_function_to_openai_pydantic():
+    class Args(BaseModel):
+        a: int
+        b: str
+
+    def sample_function_pydantic(args: Args):
+        """This is a sample function."""
+        return args.a
+
+    tool = function_to_openai_tool(sample_function_pydantic)
+    assert tool["name"] == "sample_function_pydantic"
+    assert tool["parameters"]["properties"]["args"]["$ref"] == "#/$defs/Args"
+    defs = tool["parameters"]["$defs"]
+    assert defs["Args"]["properties"]["a"]["type"] == "integer"
+    assert defs["Args"]["properties"]["b"]["type"] == "string"
