@@ -110,6 +110,10 @@ class LLMResponse:
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
+class SchemaProcessingError(TypeError):
+    pass
+
+
 class LLMChat(actors.Actor):
     """A chat agent that interacts with a Large Language Model (LLM)."""
 
@@ -223,10 +227,10 @@ class LLMChat(actors.Actor):
 
         try:
             h.send(answer)  # must raise StopIteration by returning the parsed value
-            raise prompting.SchemaProcessingError(
+            raise SchemaProcessingError(
                 f"Generator for {schema!r} yielded multiple values, expected only one."
             )
-        except prompting.ResponseParsingError as e:
+        except ValueError as e:
             chat.append(
                 messages.Message(
                     f"Error processing response {answer}:\n{e}",

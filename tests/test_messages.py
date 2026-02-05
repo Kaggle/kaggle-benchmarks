@@ -35,12 +35,11 @@ class Parrot(actors.LLMChat):
 def test_raw_payload():
     p = Parrot()
     with chats.new() as chat:
-        raw_response = '{"value": 0.01}'
-        m = p.prompt(raw_response, schema=float)
+        m = p.prompt("1e-2", schema=float)
         assert m == 0.01
-        assert chat.messages[-1].payload == raw_response
+        assert chat.messages[-1].payload == "1e-2"
 
-    r = p.prompt('{"value": true}', schema=bool)
+    r = p.prompt("TRUE", schema=bool)
     assert r
 
 
