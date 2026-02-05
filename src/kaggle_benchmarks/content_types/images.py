@@ -154,7 +154,9 @@ def from_image_url(image_url: ImageURL) -> ImageBase64:
 def image_url_to_base64(url: str) -> str:
     """Load an image from its url to base64."""
     # Explicit User-Agent: https://meta.wikimedia.org/wiki/User-Agent_policy
-    headers = {"User-Agent": "test"}
+    headers = {
+        "User-Agent": "MyImageDownloader/1.0 (myemail@example.com)"
+    }
     client = httpx.Client()
     response = client.get(url, headers=headers)
     response.raise_for_status()
