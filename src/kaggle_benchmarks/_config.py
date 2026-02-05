@@ -87,9 +87,7 @@ class Config:
         )
     )
     render_subruns: bool = dataclasses.field(
-        default_factory=lambda: (
-            string_to_bool(os.environ.get("RENDER_SUBRUNS", "True"))
-        )
+        default_factory=lambda: string_to_bool(os.environ.get("RENDER_SUBRUNS", "True"))
     )
 
     show_message_details: bool = False

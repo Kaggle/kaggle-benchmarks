@@ -14,75 +14,175 @@
 
 # %% [markdown]
 # ---
-# ## Vision-Capable Tasks for Gemini
+# ## How to Send Images to LLM
 #
-# Here we add two tasks to test the vision capabilities of the Gemini model using the genai api.
-# The first task takes a pre-converted base64 image string, and the second
-# handles a direct image URL.
+# You can send images using a direct URL or a Base64 string. We also provide helper function to load a local image to base64.
+# - When using URL, the image image format is automatically guessed.
+# - When using Base64, you need specify the image format if it's different from default jpeg.
+# - Use `from_path`` to load from local images.
 # %%
-from kaggle_benchmarks import assertions, content_types, task
-from kaggle_benchmarks.kaggle import load_model
+import httpx
 
-llm = load_model(
-    model_name="google/gemini-2.5-pro",
-    api="genai",
-)
+import kaggle_benchmarks as kbench
+from kaggle_benchmarks.content_types import images
 
-# ---
-# ### 1. Task for Image with Base64 Input
-# ---
-
-
-@task("Describe Image (Base64)")
-def describe_image_base64(llm, image_base64: str, question: str, answer: str):
-    """Sends a base64 image string and a question to a vision model."""
-    image = content_types.images.from_base64(image_base64, caption=question)
-    response = llm.prompt(image)
-    assertions.assert_contains_regex(
-        f"(?i){answer}",
-        response,
-        expectation="LLM should identify the object correctly.",
-    )
-
-
-dog_image_url = (
-    "https://upload.wikimedia.org/wikipedia/commons/4/47/American_Eskimo_Dog.jpg"
-)
-dog_image_base64 = content_types.images.image_url_to_base64(dog_image_url)
-
-describe_image_base64.run(
-    llm=llm,
-    image_base64=dog_image_base64,
-    question="What is in the picture?",
-    answer="dog",
-)
 # %%
+
+# %% [markdown]
 # ---
-# ### 2. Task for Image with URL Input
+# ### Example 1. Sending LLM image from URL
 # ---
 
 
-@task("Describe Image (URL)")
-def describe_image_url(llm, image_url: str, question: str, answer: str):
-    """Sends an image URL and a question to a vision model."""
-    image = content_types.images.from_base64(
-        content_types.images.image_url_to_base64(image_url),
-        caption=question,
-    )
+# %%
+@kbench.task("Describe Image (URL)")
+def describe_image_url(llm):
+    """Sends an image URL directly to the model."""
+    # Kaggle logo
+    image_url = "https://www.kaggle.com/static/images/site-logo.png"
 
-    response = llm.prompt(image)
-    assertions.assert_contains_regex(
-        f"(?i){answer}",
+    # Create Image object from URL.
+    # It will guess image type from URL.
+    image = images.from_url(image_url, caption="a logo")
+
+    response = llm.prompt("What does this logo say?", image=image)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)kaggle",
         response,
-        expectation="LLM should identify the object correctly.",
+        expectation="LLM should identify the Kaggle logo.",
     )
 
 
-describe_image_url.run(
-    llm=llm,
-    image_url=dog_image_url,
-    question="Describe the main subject in this image.",
-    answer="dog",
-)
+describe_image_url.run(kbench.llm)
+
+# %% [markdown]
+# ---
+# ### Example 2. Sending LLM image from Base64 (specifying format parameter)
+# ---
+
+
+# %%
+@kbench.task("Describe Image (Base64)")
+def describe_image_base64(llm):
+    """Sends a base64 encoded image with explicit format specification."""
+    # Example: A small red dot (PNG)
+    # This is a 1x1 red pixel in PNG format
+    red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+    # Create Image object from Base64, specifying the format as 'png'
+    # The 'format' parameter is important when the image is not a JPEG (default)
+    image = images.from_base64(red_dot_b64, format="png", caption="a colorful dot")
+
+    response = llm.prompt("What color is this image?", image=image)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)red",
+        response,
+        expectation="LLM should identify the color red.",
+    )
+
+
+describe_image_base64.run(kbench.llm)
+
+# %% [markdown]
+# ---
+# ### Example 3. Sending LLM image from local image file
+# ---
+
+# %%
+
+# Download the file to local file first
+
+
+def download_image(url, filename):
+    try:
+        with httpx.Client() as client:
+            response = client.get(url)
+            response.raise_for_status()  # Raise error for 4xx/5xx responses
+
+            with open(filename, "wb") as file:
+                file.write(response.content)
+
+        print(f"Successfully downloaded: {filename}")
+
+    except httpx.HTTPError as e:
+        print(f"Error downloading image: {e}")
+
+
+download_image("https://www.kaggle.com/static/images/site-logo.png", "kaggle_logo.png")
+
+
+# Benchmark task using local file
+@kbench.task("Describe Image (Local File)")
+def describe_local_image(llm):
+    """Sends a local image with explicit format specification."""
+
+    # Load a local image from an attached Kaggle dataset
+    image = images.from_path("kaggle_logo.png")
+    prompt = "How many letters are there in the image?"
+
+    response = llm.prompt(prompt, image=image, schema=int)
+
+    kbench.assertions.assert_equal(
+        6,
+        response,
+        expectation="LLM should recognize the logo.",
+    )
+
+
+describe_local_image.run(kbench.llm)
+
+# %% [markdown]
+# ---
+# ### Example 4. Comparing two images
+# ---
+# This example demonstrates sending multiple images to the model for comparison.
+
+
+# %%
+@kbench.task("Compare Logos")
+def compare_logos(llm):
+    """Sends two images and asks for differences."""
+
+    img1 = images.from_url(
+        "https://www.kaggle.com/static/images/logos/kaggle-logo-transparent-300.png",
+        caption="Logo 1",
+    )
+    img2 = images.from_url(
+        "https://www.kaggle.com/static/images/logos/kaggle-logo-gray-300.png",
+        caption="Logo 2",
+    )
+
+    # Use `send` to enable multi-image conversation.
+    # Since `send` doesn't auto-convert URLs, we explicitly encode images to base64
+    # so it will work with more models that don't directly accept an image URL.
+    kbench.user.send(images.from_image_url(img1))
+    kbench.user.send(images.from_image_url(img2))
+
+    # For models that directly work with image URL
+    # You can simply call
+    # kbench.user.send(img1)
+    # kbench.user.send(img2)
+
+    response = llm.prompt("What are the main differences of these two images.")
+
+    assessment = kbench.assertions.assess_response_with_judge(
+        response_text=response,
+        judge_llm=kbench.judge_llm,
+        criteria=[
+            "The answer should highlight the main difference is the background.",
+            "The answer should mention the font are the same",
+        ],
+    )
+
+    for result in assessment.results:
+        kbench.assertions.assert_true(
+            result.passed,
+            expectation=f"Judge Criterion '{result.criterion}' should pass: {result.reason}",
+        )
+
+
+compare_logos.run(kbench.llm)
 
 # %%
