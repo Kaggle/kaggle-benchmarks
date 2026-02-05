@@ -124,7 +124,9 @@ def test_image_url_to_base64_success(mocker):
     result = images.image_url_to_base64(url)
 
     # Verify that requests.get was called correctly
-    mock_get.assert_called_once_with(url, headers={"User-Agent": "test"})
+    mock_get.assert_called_once_with(
+        url, headers={"User-Agent": "MyImageDownloader/1.0 (myemail@example.com)"}
+    )
 
     # Verify the result is the expected base64 string
     assert result == B64_STRING
@@ -151,4 +153,6 @@ def test_image_url_to_base64_http_error(mocker):
         images.image_url_to_base64(url)
 
     # Verify that requests.get was still called
-    mock_get.assert_called_once_with(url, headers={"User-Agent": "test"})
+    mock_get.assert_called_once_with(
+        url, headers={"User-Agent": "MyImageDownloader/1.0 (myemail@example.com)"}
+    )
