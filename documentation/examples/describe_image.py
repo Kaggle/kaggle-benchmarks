@@ -139,18 +139,20 @@ describe_local_image.run(kbench.llm)
 # ---
 # This example demonstrates sending multiple images to the model for comparison.
 
+
 # %%
 @kbench.task("Compare Logos")
 def compare_logos(llm):
     """Sends two images and asks for differences."""
 
-    # Real mouse
-    img_url1 = "https://www.kaggle.com/static/images/logos/kaggle-logo-transparent-300.png"
-    # Computer mouse
-    img_url2 = "https://www.kaggle.com/static/images/logos/kaggle-logo-gray-300.png"
-
-    img1 = images.from_url(img_url1, caption="Logo 1")
-    img2 = images.from_url(img_url2, caption="Logo 2")
+    img1 = images.from_url(
+        "https://www.kaggle.com/static/images/logos/kaggle-logo-transparent-300.png",
+        caption="Logo 1",
+    )
+    img2 = images.from_url(
+        "https://www.kaggle.com/static/images/logos/kaggle-logo-gray-300.png",
+        caption="Logo 2",
+    )
 
     # Use `send` to enable multi-image conversation.
     # Since `send` doesn't auto-convert URLs, we explicitly encode images to base64
@@ -163,7 +165,6 @@ def compare_logos(llm):
     # kbench.user.send(img1)
     # kbench.user.send(img2)
 
-
     response = llm.prompt("What are the main differences of these two images.")
 
     assessment = kbench.assertions.assess_response_with_judge(
@@ -172,13 +173,13 @@ def compare_logos(llm):
         criteria=[
             "The answer should highlight the main difference is the background.",
             "The answer should mention the font are the same",
-        ]
+        ],
     )
 
     for result in assessment.results:
         kbench.assertions.assert_true(
             result.passed,
-            expectation=f"Judge Criterion '{result.criterion}' should pass: {result.reason}"
+            expectation=f"Judge Criterion '{result.criterion}' should pass: {result.reason}",
         )
 
 
