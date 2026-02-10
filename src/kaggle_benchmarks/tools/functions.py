@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable, Union
+from typing import Any, Callable
 
 import pydantic
 from google.genai import types
@@ -66,22 +66,7 @@ def function_to_openai_tool(func: Callable) -> dict:
 
 
 def function_to_genai_tool(
-    tool: Union[Callable, dict],
+    tool: Callable,
 ) -> types.FunctionDeclaration:
-    """Converts a Python function or an OpenAI-style tool dictionary into a Google GenAI FunctionDeclaration."""
-    if isinstance(tool, Callable):
-        return types.FunctionDeclaration(
-            name=tool.__name__,
-            description=tool.__doc__,
-            parameters=get_function_schema(tool),
-        )
-
-    elif isinstance(tool, dict):
-        # map from openai style
-        return types.FunctionDeclaration(
-            name=tool.get("name"),
-            description=tool.get("description"),
-            parameters=tool.get("parameters"),
-        )
-    else:
-        raise ValueError("Unknown tool type")
+    """Converts a Python function to a Google GenAI FunctionDeclaration."""
+    return types.FunctionDeclaration.from_callable_with_api_option(callable=tool)

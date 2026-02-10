@@ -37,38 +37,6 @@ def test_get_function_schema():
     assert "a" in schema["required"]
 
 
-def test_function_to_openai_tool():
-    tool = function_to_openai_tool(sample_function)
-    assert tool["type"] == "function"
-    assert tool["name"] == "sample_function"
-    assert tool["description"] == "This is a sample function."
-    assert tool["parameters"]["properties"]["a"]["type"] == "integer"
-    assert "a" in tool["parameters"]["required"]
-
-
-def test_function_to_genai_tool_from_func():
-    tool = function_to_genai_tool(sample_function)
-    assert tool.name == "sample_function"
-    assert tool.description == "This is a sample function."
-    assert tool.parameters.properties["a"].type.name == "INTEGER"
-
-
-def test_function_to_genai_tool_from_dict():
-    openai_tool = {
-        "name": "sample_function",
-        "description": "This is a sample function.",
-        "parameters": {
-            "type": "object",
-            "properties": {"a": {"type": "integer"}},
-            "required": ["a"],
-        },
-    }
-    tool = function_to_genai_tool(openai_tool)
-    assert tool.name == "sample_function"
-    assert tool.description == "This is a sample function."
-    assert tool.parameters.properties["a"].type.name == "INTEGER"
-
-
 def test_get_function_schema_with_unserializable_arg():
     class Unserializable:
         pass
@@ -78,6 +46,15 @@ def test_get_function_schema_with_unserializable_arg():
 
     with pytest.raises(ToolSchemaError):
         get_function_schema(func_with_unserializable_arg)
+
+
+def test_function_to_openai_tool():
+    tool = function_to_openai_tool(sample_function)
+    assert tool["type"] == "function"
+    assert tool["name"] == "sample_function"
+    assert tool["description"] == "This is a sample function."
+    assert tool["parameters"]["properties"]["a"]["type"] == "integer"
+    assert "a" in tool["parameters"]["required"]
 
 
 def test_function_to_openai_pydantic():
@@ -95,3 +72,25 @@ def test_function_to_openai_pydantic():
     defs = tool["parameters"]["$defs"]
     assert defs["Args"]["properties"]["a"]["type"] == "integer"
     assert defs["Args"]["properties"]["b"]["type"] == "string"
+
+
+def test_function_to_genai_tool():
+    tool = function_to_genai_tool(sample_function)
+    assert tool.name == "sample_function"
+    assert tool.description == "This is a sample function."
+    assert tool.parameters.properties["a"].type.name == "INTEGER"
+
+
+def test_function_to_genai_pydantic():
+    class Args(BaseModel):
+        a: int
+        b: str
+
+    def sample_function_pydantic(args: Args):
+        """This is a sample function."""
+        return args.a
+
+    tool = function_to_genai_tool(sample_function_pydantic)
+    assert tool.name == "sample_function_pydantic"
+    assert tool.description == "This is a sample function."
+    assert tool.parameters.properties["args"].type.name == "OBJECT"
