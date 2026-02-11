@@ -88,6 +88,7 @@ print(outer_t)
 import base64
 import dataclasses
 import enum
+import json
 import mimetypes
 import typing
 from typing import Any, Iterator, TypeVar
@@ -320,7 +321,22 @@ class OpenAI(LLMChat):
         self, messages: list[dict[str, str]], **kwargs
     ) -> LLMResponse | Iterator[LLMResponse]:
         if self.support_structured_outputs and "response_format" in kwargs:
-            method = self.client.beta.chat.completions.parse
+            # quickfix for nested models in ModelProxy API
+            if utils.has_nested_models(kwargs["response_format"]):
+                method = self.client.chat.completions.create
+                response_format = kwargs.pop("response_format")
+                json_schema = json.dumps(response_format.model_json_schema())
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "The output must be a valid JSON object that strictly adheres to the following JSON schema:\n"
+                            f"{json_schema}"
+                        ),
+                    }
+                )
+            else:
+                method = self.client.beta.chat.completions.parse
         else:
             if self.stream_responses:
                 kwargs["stream"] = True

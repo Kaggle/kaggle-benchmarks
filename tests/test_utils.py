@@ -16,6 +16,7 @@ import json
 from unittest.mock import patch
 
 import httpx
+import pydantic
 import pytest
 import respx
 
@@ -115,3 +116,31 @@ def test_client_respects_disable_config():
 
         assert isinstance(client, httpx.Client)
         assert not hasattr(client, "_controller")
+
+
+class NestedModel(pydantic.BaseModel):
+    a: int
+
+
+class MyModel(pydantic.BaseModel):
+    nested: NestedModel
+    b: str
+
+
+class SimpleModel(pydantic.BaseModel):
+    a: int
+    b: str
+
+
+@pytest.mark.parametrize(
+    "model, expected",
+    [
+        (MyModel, True),
+        (SimpleModel, False),
+        (None, False),
+        (int, False),
+        (str, False),
+    ],
+)
+def test_has_nested_models(model, expected):
+    assert utils.has_nested_models(model) is expected
