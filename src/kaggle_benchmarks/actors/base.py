@@ -70,6 +70,11 @@ class Actor:
         return f"{self.avatar} {self.name}"
 
 
+class Tool(Actor):
+    def __init__(self, name: str = "tool"):
+        super().__init__(name=name, role="tool")
+
+
 system = Actor(name="System", role="system", avatar="⚙️")
 assertion = Actor(name="Assertion", role="system", avatar="🚨️")
 user = Actor(name="User", role="user", avatar="👤")
