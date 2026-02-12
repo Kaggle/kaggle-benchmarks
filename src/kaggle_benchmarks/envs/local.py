@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import shlex
 import subprocess
 
 from kaggle_benchmarks.envs import environment, mixins
@@ -27,9 +28,12 @@ class LocalEnvironment(mixins.TemporalDirectoryMixin):
         self, command: str | list[str], input: str | None = None
     ) -> environment.RunResult:
         """Runs a shell command in the temporary directory."""
+        if isinstance(command, str):
+            command = shlex.split(command)
+
         result = subprocess.run(
             command,
-            shell=isinstance(command, str),
+            shell=False,
             input=input,
             cwd=self.temp_dir.name,
             capture_output=True,
