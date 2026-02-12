@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import uuid
 from unittest.mock import patch
 
 import httpx
@@ -90,21 +91,24 @@ def test_normalize_name(name, expected):
 
 
 @respx.mock
-def test_client_caches_despite_server_headers(tmp_path):
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_client_caches_despite_server_headers(tmp_path, method):
     with (
         patch("kaggle_benchmarks.config.cache_directory", tmp_path),
         patch("kaggle_benchmarks.config.disable_caching", False),
     ):
-        url = "https://test.com/api"
+        url = f"https://test.com/{uuid.uuid4()}"
         client = utils.build_httpx_client(filename="test")
-        route = respx.get(url).mock(return_value=httpx.Response(200))
+        route = respx.request(method, url).mock(
+            return_value=httpx.Response(200, content="")
+        )
 
-        resp1 = client.get(url, headers={"Cache-Control": "no-cache"})
+        resp1 = client.request(method, url, headers={"Cache-Control": "no-cache"})
         assert resp1.status_code == 200
         assert route.called
         assert not resp1.extensions.get("hishel_from_cache")
 
-        resp2 = client.get(url)
+        resp2 = client.request(method, url)
         assert resp2.status_code == 200
         assert route.call_count == 1
         assert resp2.extensions.get("hishel_from_cache") is True

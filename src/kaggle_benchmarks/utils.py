@@ -69,12 +69,15 @@ def build_httpx_client(filename: str = "cache") -> httpx.Client:
 
     if config.disable_caching:
         return httpx.Client()
-
+    policy = hishel.FilterPolicy()
+    policy.use_body_key = True
     return hishel.httpx.SyncCacheClient(
+        policy=policy,
         transport=hishel.httpx.SyncCacheTransport(
             next_transport=UnconditionalCacheTransport(
                 cache_timeout_seconds=config.cache_timeout_seconds
             ),
+            policy=policy,
         ),
         storage=hishel.SyncSqliteStorage(
             database_path=config.cache_directory / f"{filename}.sqlite",
