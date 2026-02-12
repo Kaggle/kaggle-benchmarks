@@ -71,9 +71,10 @@ ansi_styles = {
 }
 
 
-def replace_ansi_colors(text: str) -> str:
-    ansi_regex = re.compile(r"\x1b\[([0-9;]+)m")
+ansi_regex = re.compile(r"\x1b\[([0-9;]+)m")
 
+
+def replace_ansi_colors(text: str) -> str:
     def replace_ansi(match):
         codes = match.group(1).split(";")
         styles = " ".join(ansi_styles[code] for code in codes if code in ansi_styles)

@@ -157,3 +157,23 @@ print(y)
 
     assert out.status == "ok"
     assert out.stdout.strip() == "20"
+
+
+def test_replace_ansi_colors():
+    # Test basic color replacement
+    text = "\x1b[31mRed\x1b[0m"
+    # Note: Current implementation has a bug where \x1b[0m is matched by the regex
+    # and replaced with <span style=""> instead of closing the span.
+    # We test for exact behavior preservation here.
+    expected = '<span style="color: red;">Red<span style="">'
+    assert python.replace_ansi_colors(text) == expected
+
+    # Test multiple styles (one valid, one invalid/ignored)
+    text = "\x1b[31;1mRed\x1b[0m"
+    expected = '<span style="color: red;">Red<span style="">'
+    assert python.replace_ansi_colors(text) == expected
+
+    # Test background color
+    text = "\x1b[42mGreenBG\x1b[0m"
+    expected = '<span style="background-color: green;">GreenBG<span style="">'
+    assert python.replace_ansi_colors(text) == expected
