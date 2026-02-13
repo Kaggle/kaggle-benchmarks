@@ -35,6 +35,11 @@ class ModelProxy:
         resolved_api_key = api_key or os.getenv("MODEL_PROXY_API_KEY")
         resolved_base_url = base_url or os.getenv("MODEL_PROXY_URL")
         llm_instance = None
+        # Qwen and DeepSeek models support response_format, but the schema must be under 64 characters.
+        kwargs.setdefault(
+            "support_structured_outputs",
+            "meta" not in model and "qwen" not in model and "deepseek" not in model,
+        )
 
         if api == "genai":
             if not resolved_base_url:
@@ -58,7 +63,6 @@ class ModelProxy:
                 http_client=utils.build_httpx_client("model_proxy"),
             )
 
-            kwargs.setdefault("support_structured_outputs", "meta" not in model)
             # TODO (b/439876083): Disable temperature parameter till this is resolved.
             kwargs.setdefault("support_temperature", False)
             llm_instance = OpenAI(client, model, **kwargs)

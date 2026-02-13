@@ -17,14 +17,13 @@
 import dataclasses
 import functools
 import inspect
-import json
 import re
 import textwrap
 import uuid
 from typing import Any, Callable, Iterable, Type
 
 import panel as pn
-from pydantic import TypeAdapter
+import pydantic
 
 from kaggle_benchmarks import chats
 
@@ -422,8 +421,7 @@ def assert_raises_no_exceptions(
 # --- Assessment with a Judge LLM ---
 
 
-@dataclasses.dataclass
-class AssessResult:
+class AssessResult(pydantic.BaseModel):
     """Represents the outcome of a single criterion's evaluation by a judge LLM."""
 
     criterion: str
@@ -432,43 +430,19 @@ class AssessResult:
     confidence: int
 
 
-@dataclasses.dataclass
-class AssessReport:
-    """Represents the complete assessment report from a judge LLM.
+class AssessReport(pydantic.BaseModel):
+    """Represents the complete assessment report from a judge LLM."""
 
-    This dataclass is the default `output_schema` for the
-    `assess_response_with_judge` function. It holds a list of `AssessResult`
-    objects, each corresponding to one of the evaluation criteria.
+    # This class is the default `output_schema` for the
+    # `assess_response_with_judge` function. It holds a list of `AssessResult`
+    # objects, each corresponding to one of the evaluation criteria.
 
-    This class serves as an example for users who may want to
-    define their own report structure. When providing a custom `output_schema`
-    to `assess_response_with_judge`, it must contain a `results` field that
-    holds a list of the individual assessment outcomes.
-    """
+    # This class serves as an example for users who may want to
+    # define their own report structure. When providing a custom `output_schema`
+    # to `assess_response_with_judge`, it must contain a `results` field that
+    # holds a list of the individual assessment outcomes.
 
     results: list[AssessResult]
-
-    def __post_init__(self):
-        """
-        Automatically converts dictionary items to
-        AssessResult objects if the LLM library returns raw dicts.
-        """
-        cleaned_results = []
-        for item in self.results:
-            if isinstance(item, dict):
-                cleaned_results.append(AssessResult(**item))
-            elif isinstance(item, AssessResult):
-                cleaned_results.append(item)
-            else:
-                continue
-        self.results = cleaned_results
-
-
-def generate_schema_description(schema_cls: Type[Any]) -> str:
-    """Generates a pretty-printed JSON schema string from a class."""
-    adapter = TypeAdapter(schema_cls)
-    schema = adapter.json_schema()
-    return json.dumps(schema, indent=2)
 
 
 def assess_response_with_judge(
@@ -497,7 +471,6 @@ def assess_response_with_judge(
 
     if prompt_fn is None:
         formatted_criteria = "\n".join(f"{i + 1}. {c}" for i, c in enumerate(criteria))
-        schema_desc = generate_schema_description(output_schema)
 
         prompt_text = textwrap.dedent(f"""
         You are an impartial and strict technical evaluator.
@@ -516,12 +489,6 @@ def assess_response_with_judge(
         1. Analyze the response against the criteria.
         2. Be strict. If the text is ambiguous, the check fails.
         3. Output your assessment using the specific structure requested below.
-
-        ### Output Schema Requirements
-        You must return a JSON object containing the following fields:
-        {schema_desc}
-
-        *Ensure your JSON output strictly adheres to these types.*
         """)
     else:
         prompt_text = prompt_fn(criteria, response_text)

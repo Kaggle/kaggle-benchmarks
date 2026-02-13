@@ -16,8 +16,8 @@ import json
 
 import pytest
 
-from kaggle_benchmarks import actors, chats, utils
-from kaggle_benchmarks.actors.llms import LLMResponse, SchemaProcessingError
+from kaggle_benchmarks import actors, chats, prompting, utils
+from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.prompting import handler
 
 
@@ -112,13 +112,17 @@ def test_structured():
 
     @handler(types=F)
     def _(cls):
-        yield ""
-        raise ValueError("Bad response")
+        value = yield ""
+        raise prompting.ResponseParsingError(
+            error="Bad response", schema=cls, value=value
+        )
 
     with chats.new() as t:
-        with pytest.raises(ValueError):
-            llm.prompt("Test", schema=F)
+        with pytest.raises(prompting.ResponseParsingError):
+            llm.prompt("test_value", schema=F)
         assert "Bad response" in t.messages[-1].text
+        assert "test_value" in t.messages[-1].text
+        assert "F" in t.messages[-1].text
 
     @handler(types=F)
     def _(cls):
@@ -126,7 +130,7 @@ def test_structured():
         yield "nonesense"
         return F()
 
-    with pytest.raises(SchemaProcessingError):
+    with pytest.raises(prompting.SchemaError):
         llm.prompt("Test", schema=F)
 
 
