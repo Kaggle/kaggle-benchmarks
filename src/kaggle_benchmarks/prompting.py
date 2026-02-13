@@ -55,14 +55,12 @@ class RenderablePydanticModel(pydantic.BaseModel):
         return self.model_dump_json()
 
 
+# A generic shortcut for wrapping a typed response.
+# For example:
+# - `TypedResponse[int]` will expect a JSON object like `{"value": 123}`.
+# - `TypedResponse[list[int]]` will expect `{"value": [1, 2, 3]}`.
+# - `TypedResponse[tuple[int, str]]` will expect `{"value": [1, "hello"]}`.
 class TypedResponse(RenderablePydanticModel, Generic[T]):
-    """A generic shortcut for wrapping a typed response.
-    For example:
-    - `TypedResponse[int]` will expect a JSON object like `{"value": 123}`.
-    - `TypedResponse[list[int]]` will expect `{"value": [1, 2, 3]}`.
-    - `TypedResponse[tuple[int, str]]` will expect `{"value": [1, "hello"]}`.
-    """
-
     value: T
 
 
