@@ -14,6 +14,7 @@
 
 import difflib
 import enum
+import inspect
 import json
 import os
 import re
@@ -22,6 +23,7 @@ from pathlib import Path
 import hishel
 import hishel.httpx
 import httpx
+import pydantic
 from openai import OpenAI, OpenAIError
 
 
@@ -104,6 +106,14 @@ def extract_code_block(
             return "\n\n".join(m.strip() for m in matches)
         return matches[0]
     return text
+
+
+def has_nested_models(model: type[pydantic.BaseModel]) -> bool:
+    """Checks if a Pydantic model's schema contains nested definitions."""
+    if not inspect.isclass(model) or not issubclass(model, pydantic.BaseModel):
+        return False
+    schema = model.model_json_schema()
+    return bool(schema.get("$defs"))
 
 
 def string_diff_as_markdown(str1: str, str2: str, sep: str = "\n") -> str:
