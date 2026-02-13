@@ -121,6 +121,26 @@ def test_client_respects_disable_config():
         assert isinstance(client, httpx.Client)
         assert not hasattr(client, "_controller")
 
+@respx.mock
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_client_does_not_cache_error_responses(tmp_path, method):
+    with (
+        patch("kaggle_benchmarks.config.cache_directory", tmp_path),
+        patch("kaggle_benchmarks.config.disable_caching", False),
+    ):
+        url = f"https://test.com/{uuid.uuid4()}"
+        client = utils.build_httpx_client(filename="test")
+        route = respx.request(method, url).mock(return_value=httpx.Response(400))
+
+        resp1 = client.request(method, url)
+        assert resp1.status_code == 400
+        assert route.called
+        assert not resp1.extensions.get("hishel_from_cache")
+
+        resp2 = client.request(method, url)
+        assert resp2.status_code == 400
+        assert route.call_count == 2
+        assert not resp2.extensions.get("hishel_from_cache")
 
 class NestedModel(pydantic.BaseModel):
     a: int
