@@ -21,13 +21,13 @@ name = "aiohttp"
 version = "3.13.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiohappyeyeballs", marker = "python_full_version >= '3.12'" },
-    { name = "aiosignal", marker = "python_full_version >= '3.12'" },
-    { name = "attrs", marker = "python_full_version >= '3.12'" },
-    { name = "frozenlist", marker = "python_full_version >= '3.12'" },
-    { name = "multidict", marker = "python_full_version >= '3.12'" },
-    { name = "propcache", marker = "python_full_version >= '3.12'" },
-    { name = "yarl", marker = "python_full_version >= '3.12'" },
+    { name = "aiohappyeyeballs", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "aiosignal", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "attrs", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "frozenlist", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "multidict", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "propcache", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "yarl", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/ce/3b83ebba6b3207a7135e5fcaba49706f8a4b6008153b4e30540c982fae26/aiohttp-3.13.2.tar.gz", hash = "sha256:40176a52c186aefef6eb3cad2cdd30cd06e3afbe88fe8ab2af9c0b90f228daca", size = 7837994, upload-time = "2025-10-28T20:59:39.937Z" }
 wheels = [
@@ -123,7 +123,7 @@ name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "frozenlist", marker = "python_full_version >= '3.12'" },
+    { name = "frozenlist", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
     { name = "typing-extensions", marker = "python_full_version == '3.12.*'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
@@ -1104,15 +1104,15 @@ wheels = [
 
 [[package]]
 name = "hishel"
-version = "1.1.7"
+version = "1.1.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "msgpack" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/45/cf/4e1d09cc81c48ff7498398fd82c87fb21800c85e631d03831703d8594506/hishel-1.1.7.tar.gz", hash = "sha256:32c625be581e94dc50b773a8cfb9a65cba487660561950fe976ae49945455179", size = 61473, upload-time = "2025-12-03T09:32:28.524Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/75/2b/11bd033664620a9b193dd41b427247f7447432f3b146b17a1358386fbdfc/hishel-1.1.9.tar.gz", hash = "sha256:47248a50e4cff4fbaa141832782d8c07b2169914916f4bd792f37449176dfa23", size = 61898, upload-time = "2026-02-05T15:13:52.884Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/2a/8134de761e4fd9d0a3b301b897b8c5ce9ccb17af7f846d66c676d8c03fd8/hishel-1.1.7-py3-none-any.whl", hash = "sha256:436c2a5a62d705528e581cbeba85b10d130c47c861906b21262a07ac02463a9f", size = 70569, upload-time = "2025-12-03T09:32:27.144Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/11/bd36aa79932c4b24373cc5243a7630659f608af825418f4e195c021f5d5e/hishel-1.1.9-py3-none-any.whl", hash = "sha256:6b6f294cb7593f170a9bf874849cc85330ff81f5e35d2ca189548498fed10806", size = 70956, upload-time = "2026-02-05T15:13:51.314Z" },
 ]
 
 [package.optional-dependencies]
@@ -1811,7 +1811,7 @@ test = [
 requires-dist = [
     { name = "docker", specifier = ">=7.1.0" },
     { name = "google-genai", specifier = ">=1.38.0" },
-    { name = "hishel", extras = ["httpx"], specifier = ">1.0" },
+    { name = "hishel", extras = ["httpx"], specifier = ">1.1.8" },
     { name = "joblib" },
     { name = "jupyter" },
     { name = "nest-asyncio", specifier = ">=1.6.0" },
@@ -4809,9 +4809,9 @@ name = "yarl"
 version = "1.22.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "idna", marker = "python_full_version >= '3.12'" },
-    { name = "multidict", marker = "python_full_version >= '3.12'" },
-    { name = "propcache", marker = "python_full_version >= '3.12'" },
+    { name = "idna", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "multidict", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
+    { name = "propcache", marker = "python_full_version >= '3.12' and python_full_version < '3.14'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/57/63/0c6ebca57330cd313f6102b16dd57ffaf3ec4c83403dcb45dbd15c6f3ea1/yarl-1.22.0.tar.gz", hash = "sha256:bebf8557577d4401ba8bd9ff33906f1376c877aa78d1fe216ad01b4d6745af71", size = 187169, upload-time = "2025-10-06T14:12:55.963Z" }
 wheels = [
