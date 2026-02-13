@@ -112,13 +112,17 @@ def test_structured():
 
     @handler(types=F)
     def _(cls):
-        yield ""
-        raise prompting.ResponseParsingError("Bad response")
+        value = yield ""
+        raise prompting.ResponseParsingError(
+            error="Bad response", schema=cls, value=value
+        )
 
     with chats.new() as t:
         with pytest.raises(prompting.ResponseParsingError):
-            llm.prompt("Test", schema=F)
+            llm.prompt("test_value", schema=F)
         assert "Bad response" in t.messages[-1].text
+        assert "test_value" in t.messages[-1].text
+        assert "F" in t.messages[-1].text
 
     @handler(types=F)
     def _(cls):
@@ -126,7 +130,7 @@ def test_structured():
         yield "nonesense"
         return F()
 
-    with pytest.raises(prompting.SchemaProcessingError):
+    with pytest.raises(prompting.SchemaError):
         llm.prompt("Test", schema=F)
 
 

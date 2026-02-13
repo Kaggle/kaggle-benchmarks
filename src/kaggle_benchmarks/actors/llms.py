@@ -224,13 +224,13 @@ class LLMChat(actors.Actor):
 
         try:
             h.send(answer)  # must raise StopIteration by returning the parsed value
-            raise prompting.SchemaProcessingError(
+            raise prompting.SchemaError(
                 f"Generator for {schema!r} yielded multiple values, expected only one."
             )
         except prompting.ResponseParsingError as e:
             chat.append(
                 messages.Message(
-                    f"Error processing response {answer}:\n{e}",
+                    str(e),
                     sender=actors.system,
                 )
             )

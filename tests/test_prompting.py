@@ -116,3 +116,51 @@ def test_nested_pydantic():
     expected_output = Outer(a="hello", b=Inner(c=123))
     output = prompting.parse_response(prompting.process_schema(Outer), json_input)
     assert output == expected_output
+
+
+def test_pydantic_validation_error_str():
+    """Tests that the string representation of ResponseParsingError has key info."""
+
+    class Model(pydantic.BaseModel):
+        a: int
+
+    input_val = '{"a": "not an int"}'
+    with pytest.raises(ResponseParsingError) as excinfo:
+        prompting.parse_response(prompting.process_schema(Model), input_val)
+
+    error_str = str(excinfo.value)
+    pydantic_error_detail = str(excinfo.value.error)
+
+    assert "Response parsing failed" in error_str
+    assert input_val in error_str
+    assert "Target Schema" in error_str
+    assert '"title": "Model"' in error_str
+    assert "Parsing Error" in error_str
+    # Check for key info in the pydantic error, not the exact message
+    assert "a" in pydantic_error_detail
+    assert "not an int" in pydantic_error_detail
+
+
+def test_dataclass_json_decode_error_str():
+    """Tests ResponseParsingError for a dataclass with invalid JSON has key info."""
+
+    @dataclass
+    class MyData:
+        name: str
+        value: int
+
+    input_val = '{"name": "test", "value": 123,}'  # Malformed JSON with trailing comma
+    with pytest.raises(ResponseParsingError) as excinfo:
+        prompting.parse_response(prompting.process_schema(MyData), input_val)
+
+    error_str = str(excinfo.value)
+    json_error_detail = str(excinfo.value.error)
+
+    assert "Response parsing failed" in error_str
+    assert input_val in error_str
+    assert "Target Schema" in error_str
+    assert '"title": "MyData"' in error_str
+    assert "Parsing Error" in error_str
+    # Check that the error is a JSON decoding error with position info
+    assert "line 1" in json_error_detail
+    assert "column" in json_error_detail

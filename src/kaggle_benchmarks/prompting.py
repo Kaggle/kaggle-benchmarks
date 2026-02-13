@@ -51,38 +51,46 @@ class RenderablePydanticModel(pydantic.BaseModel):
             for key, value in self.model_dump().items()
         )
 
+    def get_payload(self):
+        return self.model_dump_json()
+
 
 class TypedResponse(RenderablePydanticModel, Generic[T]):
-    """
-        A generic container for wrapping a typed value.
-
-        This is particularly useful for APIs that require a JSON object as the
-        root of a response schema. It allows for defining a response format
-    for
-        primitive or generic types on the fly.
-
-        For example:
-        - `TypedResponse[int]` will expect a JSON object like `{"value": 123}`.
-        - `TypedResponse[list[int]]` will expect `{"value": [1, 2, 3]}`.
-        - `TypedResponse[tuple[int, str]]` will expect `{"value": [1, "hello"]}`.
+    """A generic shortcut for wrapping a typed response.
+    For example:
+    - `TypedResponse[int]` will expect a JSON object like `{"value": 123}`.
+    - `TypedResponse[list[int]]` will expect `{"value": [1, 2, 3]}`.
+    - `TypedResponse[tuple[int, str]]` will expect `{"value": [1, "hello"]}`.
     """
 
     value: T
 
 
 class ResponseParsingError(ValueError):
-    def __init__(self, value=None, message=None, schema=None, *args: object) -> None:
+    """Error raised when a model response cannot be parsed into the desired schema."""
+
+    def __init__(self, *args: object, value, error, schema) -> None:
         self.value = value
-        self.message = message
+        self.error = error
         self.schema = schema
-        super().__init__(*args)
+        super().__init__("Failed to parse model response.", *args)
 
     def __str__(self) -> str:
-        return f"ResponseParsingError(value={self.value}, message={self.message}, schema={self.schema})"
+        if issubclass(self.schema, pydantic.BaseModel):
+            schema_str = json.dumps(self.schema.model_json_schema(), indent=2)
+        else:
+            schema_str = str(self.schema)
+
+        return (
+            f"Response parsing failed.\n"
+            f"Input Value:\n---\n{self.value}\n---\n"
+            f"Target Schema:\n---\n{schema_str}\n---\n"
+            f"Parsing Error:\n---\n{self.error}\n---"
+        )
 
 
-class SchemaProcessingError(TypeError):
-    pass
+class SchemaError(TypeError):
+    """Covers errors related to wrong schema or handler."""
 
 
 def parse_response(handler: Generator[str | tuple[str, T], str, T], value: str) -> T:
@@ -136,7 +144,9 @@ def pyndantic_like(model: pydantic.BaseModel):
             utils.extract_code_block(response, name="json")
         )
     except pydantic.ValidationError as e:
-        raise ResponseParsingError(response, str(e), model) from e
+        raise ResponseParsingError(
+            value=response, error=e.errors(), schema=model
+        ) from e
 
 
 @handler(criterion=dataclasses.is_dataclass)
@@ -156,8 +166,15 @@ def root_model_handler(cls):
     try:
         value = json.loads(utils.extract_code_block(response, name="json"))
         return cls(**value)
-    except (json.JSONDecodeError, pydantic.ValidationError) as e:
-        raise ResponseParsingError(response, str(e), model_cls) from e
+    except json.JSONDecodeError as e:
+        raise ResponseParsingError(
+            value=response, error=f"Invalid JSON {e}", schema=model_cls
+        ) from e
+
+    except pydantic.ValidationError as e:
+        raise ResponseParsingError(
+            value=response, error=e.errors(), schema=model_cls
+        ) from e
 
 
 @handler(types=(float, int, datetime.datetime, bool))
@@ -172,7 +189,9 @@ def primitive_type_handler(cls):
             utils.extract_code_block(response, name="json")
         ).value
     except pydantic.ValidationError as e:
-        raise ResponseParsingError(response, str(e), model) from e
+        raise ResponseParsingError(
+            value=response, error=e.errors(), schema=model
+        ) from e
 
 
 @handler(types=str)
