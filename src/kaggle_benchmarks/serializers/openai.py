@@ -107,6 +107,23 @@ class OpenAICompletionSerializer(BaseSerializer):
             }
 
 
+class OpenAIResponsesSerializer(OpenAICompletionSerializer):
+    """Serializer mapping generic messages to the OpenAI Responses API format."""
+
+    def dump_image(self, message: messages.Message[images.ImageContent]):
+        """Serializes an image content object into the API's input_image format."""
+        image = message.content
+        yield {
+            "role": self.get_role(message.sender),
+            "content": [{"type": "input_text", "text": image.caption}]
+            if image.caption
+            else []
+            + [
+                {"type": "input_image", "image_url": image.url},
+            ],
+        }
+
+
 class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
     """Specialized OpenAI serializer that maps constructs like videos and images
     specifically for the Kaggle Model Proxy format.

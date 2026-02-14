@@ -163,7 +163,6 @@ def root_model_handler(cls):
         __base__=(RenderablePydanticModel, cls),
         **{field.name: (field.type, ...) for field in dataclasses.fields(cls)},
     )
-
     response = yield (
         f"Output JSON using this schema: {json.dumps(schema)}",
         model_cls,

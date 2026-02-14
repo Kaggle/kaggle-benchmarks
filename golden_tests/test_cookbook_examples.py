@@ -173,9 +173,10 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 # We fix the test LLM to one reliable model to focus on testing the judges.
 @pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
-def test_assess_with_judge(llm_name, judge_llm_name):
-    llm = kbench.llms[llm_name]
-    judge_llm = kbench.llms[judge_llm_name]
+@pytest.mark.parametrize("api", ["openai", "genai"])
+def test_assess_with_judge(llm_name, judge_llm_name, api):
+    llm = kbench.kaggle.load_model(llm_name, api=api)
+    judge_llm = kbench.kaggle.load_model(judge_llm_name, api=api)
     run = assess_with_judge_task.run(llm, judge_llm)
     assert run.passed
 
@@ -381,13 +382,12 @@ def assert_multi_qa_result(run):
 @benchmark_test(df=df, verify_fn=assert_multi_qa_result)
 @kbench.task()
 def test_dataset_eval(llm, df) -> tuple[float, float]:
-    with kbench.client.enable_cache():
-        runs = single_qa_task.evaluate(
-            llm=[llm],
-            evaluation_data=df,
-            n_jobs=2,
-            remove_run_files=True,
-        )
+    runs = single_qa_task.evaluate(
+        llm=[llm],
+        evaluation_data=df,
+        n_jobs=2,
+        remove_run_files=True,
+    )
 
     eval_df = runs.as_dataframe()
 
@@ -401,18 +401,12 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
 # --- Test Case: Image inputs (URL) ---
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_image_url(llm):
     """Sends an image URL directly to the model."""
+    if not llm.support_vision:
+        pytest.skip("Model does not support vision")
     # Kaggle logo
     image_url = "https://www.kaggle.com/static/images/site-logo.png"
 
@@ -431,19 +425,12 @@ def test_image_url(llm):
 # --- Test Case: Image inputs (Base64) ---
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-        "anthropic/claude-sonnet-4-5@20250929",
-        "zai/glm-5",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_image_base64(llm):
     """Sends a base64 encoded image with explicit format specification."""
+    if not llm.support_vision:
+        pytest.skip("Model does not support vision")
     # Example: A small red dot (PNG)
     # This is a 1x1 red pixel in PNG format
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
@@ -463,17 +450,11 @@ def test_image_base64(llm):
 # --- Test Case: Image inputs (local file) ---
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_image_local_file(llm):
+    if not llm.support_vision:
+        pytest.skip("Model does not support vision")
     # Kaggle logo
     image_url = "https://www.kaggle.com/static/images/site-logo.png"
 
@@ -592,9 +573,6 @@ def test_audio_url(llm):
 
 # %%
 # --- Test Case: Tool Use ---
-# This doesn't work with "genai" API for now
-# So test it with `-k "openai"` only.
-# TODO: Rewrite this test after tool refactoring.
 
 
 def run_simple_calculator(a: float, b: float, operator: str) -> float:
@@ -612,7 +590,7 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
 
 @benchmark_test()
 @kbench.task()
-def test_simple_tool_use(llm):
+def test_tool_use(llm):
     problem = "What is 50 plus 25?"
     expected_answer = 75.0
 

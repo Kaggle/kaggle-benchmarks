@@ -48,7 +48,7 @@ class MockedChat(actors.LLMChat):
             **kwargs,
         )
 
-    def invoke(self, messages, **kwargs):
+    def _invoke(self, messages, **kwargs):
         self.invocations.append((messages, kwargs))
         try:
             response = next(self.response)

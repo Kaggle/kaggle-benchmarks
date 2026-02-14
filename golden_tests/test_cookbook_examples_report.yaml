@@ -1,6 +1,8 @@
 genai://anthropic/claude-haiku-4-5@20251001:
   config:
-    structured_output: true
+    structured_output: false
+    tools: false
+    vision: true
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -12,9 +14,12 @@ genai://anthropic/claude-haiku-4-5@20251001:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 genai://anthropic/claude-opus-4-5@20251101:
   config:
-    structured_output: true
+    structured_output: false
+    tools: false
+    vision: true
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -26,9 +31,12 @@ genai://anthropic/claude-opus-4-5@20251101:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 genai://anthropic/claude-sonnet-4-5@20250929:
   config:
-    structured_output: true
+    structured_output: false
+    tools: false
+    vision: true
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -37,11 +45,15 @@ genai://anthropic/claude-sonnet-4-5@20250929:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
+    test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 genai://deepseek-ai/deepseek-r1-0528:
   config:
     structured_output: false
+    tools: false
+    vision: false
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -50,9 +62,15 @@ genai://deepseek-ai/deepseek-r1-0528:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 genai://deepseek-ai/deepseek-v3.2:
   config:
     structured_output: false
+    tools: false
+    vision: true
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -61,9 +79,15 @@ genai://deepseek-ai/deepseek-v3.2:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
+    test_image_base64: failed
+    test_image_local_file: failed
+    test_image_url: failed
+    test_tool_use: passed
 genai://google/gemini-2.0-flash:
   config:
     structured_output: true
+    tools: true
+    vision: true
   tests:
     test_audio_base64: passed
     test_audio_local_file: passed
@@ -78,10 +102,12 @@ genai://google/gemini-2.0-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_manual_tool_use: failed
+    test_tool_use: passed
 genai://google/gemini-2.5-flash:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
     test_audio_base64: passed
     test_audio_local_file: passed
@@ -101,6 +127,8 @@ genai://google/gemini-2.5-flash:
 genai://google/gemini-2.5-pro:
   config:
     structured_output: true
+    tools: true
+    vision: true
   tests:
     test_audio_base64: passed
     test_audio_local_file: passed
@@ -120,6 +148,8 @@ genai://google/gemini-2.5-pro:
 genai://google/gemini-3-flash-preview:
   config:
     structured_output: true
+    tools: true
+    vision: true
   tests:
     test_audio_base64: passed
     test_audio_local_file: passed
@@ -139,6 +169,8 @@ genai://google/gemini-3-flash-preview:
 genai://google/gemini-3.1-flash-lite-preview:
   config:
     structured_output: true
+    tools: true
+    vision: true
   tests:
     test_audio_base64: passed
     test_audio_local_file: passed
@@ -153,17 +185,23 @@ genai://google/gemini-3.1-flash-lite-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: failed
 genai://google/gemma-3-12b:
   config:
     structured_output: true
+    tools: false
+    vision: false
   tests:
     test_dataset_eval: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: failed
 genai://qwen/qwen3-235b-a22b-instruct-2507:
   config:
     structured_output: false
+    tools: false
+    vision: false
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -172,10 +210,15 @@ genai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_manual_tool_use: failed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 genai://qwen/qwen3-next-80b-a3b-instruct:
   config:
     structured_output: false
+    tools: false
+    vision: false
   tests:
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -184,10 +227,15 @@ genai://qwen/qwen3-next-80b-a3b-instruct:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_manual_tool_use: failed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 genai://zai/glm-5:
   config:
     structured_output: true
+    tools: false
+    vision: false
   tests:
     test_dataset_eval: passed
     test_extract_bool: failed
@@ -196,12 +244,17 @@ genai://zai/glm-5:
     test_extract_dict: failed
     test_extract_int: failed
     test_extract_pydantic: failed
-    test_manual_tool_use: failed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: failed
 openai://anthropic/claude-haiku-4-5@20251001:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -211,11 +264,14 @@ openai://anthropic/claude-haiku-4-5@20251001:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 openai://anthropic/claude-opus-4-5@20251101:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -225,49 +281,65 @@ openai://anthropic/claude-opus-4-5@20251101:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 openai://anthropic/claude-sonnet-4-5@20250929:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
+    test_image_base64: failed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 openai://deepseek-ai/deepseek-r1-0528:
   config:
-    structured_output: false
+    structured_output: true
+    tools: false
+    vision: false
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 openai://deepseek-ai/deepseek-v3.2:
   config:
-    structured_output: false
+    structured_output: true
+    tools: false
+    vision: false
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
-    test_extract_composite_pydantic: passed
+    test_extract_composite_pydantic: failed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 openai://google/gemini-2.0-flash:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -277,16 +349,16 @@ openai://google/gemini-2.0-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_manual_tool_use: passed
+    test_tool_use: passed
 openai://google/gemini-2.5-flash:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
+    test_extract_composite_pydantic: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
@@ -300,11 +372,10 @@ openai://google/gemini-2.5-flash:
 openai://google/gemini-2.5-pro:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -319,11 +390,10 @@ openai://google/gemini-2.5-pro:
 openai://google/gemini-3-flash-preview:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -338,11 +408,10 @@ openai://google/gemini-3-flash-preview:
 openai://google/gemini-3.1-flash-lite-preview:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -352,47 +421,66 @@ openai://google/gemini-3.1-flash-lite-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_tool_use: passed
 openai://google/gemma-3-12b:
   config:
-    structured_output: true
+    structured_output: false
+    tools: false
+    vision: false
   tests:
-    test_dataset_eval: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
+    test_dataset_eval: failed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 openai://qwen/qwen3-235b-a22b-instruct-2507:
   config:
     structured_output: false
+    tools: false
+    vision: false
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_manual_tool_use: passed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 openai://qwen/qwen3-next-80b-a3b-instruct:
   config:
     structured_output: false
+    tools: false
+    vision: false
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_manual_tool_use: passed
+    test_image_base64: skipped
+    test_image_local_file: skipped
+    test_image_url: skipped
+    test_tool_use: passed
 openai://zai/glm-5:
   config:
     structured_output: true
+    tools: false
+    vision: true
   tests:
-    test_dataset_eval: passed
+    test_dataset_eval: failed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_manual_tool_use: passed
+    test_image_base64: failed
+    test_image_local_file: failed
+    test_image_url: failed
+    test_tool_use: passed

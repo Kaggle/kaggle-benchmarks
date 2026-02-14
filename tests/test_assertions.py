@@ -249,7 +249,7 @@ def test_a_task_with_nested_assertion(duck):
         },
     )
 
-    assert len(run.chat.history) == 4
+    assert len(run.chat.messages) == 4
 
     # Check payload of the first (inner) assertion result
     inner_payload_dict = json.loads(run.chat.history[-2].payload)
