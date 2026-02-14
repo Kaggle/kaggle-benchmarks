@@ -64,12 +64,7 @@ def render_message_content(content: Any) -> pn.viewable.Viewable:
     return pn.pane.Markdown(str(content), hard_line_break=True)
 
 
-def render_message(message: messages.Message) -> pn.chat.ChatMessage:
-    footer = []
-
-    if message._meta and config.show_message_details:
-        footer.append(json_pane(message._meta, "Details:", depth=0))
-
+def render_message(message: messages.Message, **kwargs) -> pn.chat.ChatMessage:
     return pn.chat.ChatMessage(
         render_message_content(message.content),
         user=message.sender.name,
@@ -80,7 +75,41 @@ def render_message(message: messages.Message) -> pn.chat.ChatMessage:
         show_copy_icon=False,
         show_edit_icon=False,
         show_timestamp=False,
-        footer_objects=footer,
+        **kwargs,
+    )
+
+
+def render_thinking(thinking):
+    return pn.pane.Markdown(thinking)
+
+
+def render_usage(usage):
+    if usage and usage.input_tokens is not None and usage.output_tokens is not None:
+        return pn.panel(
+            f"Input token: {usage.input_tokens}, Output token: {usage.output_tokens}"
+        )
+    return pn.panel("")
+
+
+def render_llm_message(message, **kwargs) -> pn.chat.ChatMessage:
+    if message.chat and message.chat.history:
+        history = [
+            # disable it for now to avoid confusion
+            # pn.Card(
+            #     render_chat(message.chat), title="Intermediate steps", collapsed=True
+            # )
+        ]
+    else:
+        history = []
+    return render_message(
+        message,
+        footer_objects=[
+            pn.Column(*(render_tool_call(call) for call in message.tool_calls or [])),
+            render_usage(message.usage),
+            render_thinking(message.thinking or ""),
+        ]
+        + history,
+        **kwargs,
     )
 
 
@@ -101,7 +130,7 @@ def render_chat(chat: chats.Chat, with_header: bool = False) -> pn.chat.ChatFeed
     )
 
 
-def render_chat_as_step(chat: chats.Chat) -> pn.chat.ChatStep:
+def render_chat_as_step(chat: chats.Chat, **kwargs) -> pn.chat.ChatStep | None:
     return pn.chat.ChatStep(
         title=chat.name,
         status=chat._status,
@@ -109,6 +138,7 @@ def render_chat_as_step(chat: chats.Chat) -> pn.chat.ChatStep:
         objects=chat.history,
         collapsed=chat.status != utils.Status.RUNNING,
         collapsed_on_success=True,
+        **kwargs,
     )
 
 
@@ -221,6 +251,42 @@ def render_groups(groups):
     )
 
 
+def render_tool_call(tool_call):
+    from kaggle_benchmarks import tools
+
+    if isinstance(tool_call, tools.ToolInvocationResult):
+        content = [
+            json_pane(
+                tool_call.arguments,
+                "Arguments",
+                sizing_mode="stretch_width",
+                depth=-1,
+            ),
+            pn.pane.Markdown("Output:"),
+            render_message_content(tool_call.output),
+        ]
+        title = f"🛠️ {tool_call.name} -> {str(tool_call.output)[:30]}"
+    elif isinstance(tool_call, tools.ToolInvocation):
+        content = json_pane(
+            tool_call.arguments, "Arguments", sizing_mode="stretch_width", depth=-1
+        )
+        title = f"🛠️ {tool_call.name}"
+    else:
+        raise ValueError(f"Unknown tool call type {tool_call}")
+
+    return pn.Card(
+        *content if isinstance(content, list) else content,
+        title=title,
+        collapsed=True,
+        sizing_mode="stretch_width",
+    )
+
+
+def render_tool_calls(tool_calls):
+    cards = [render_tool_call(tool_call) for tool_call in tool_calls]
+    return pn.Column(*cards, sizing_mode="stretch_width")
+
+
 SVG = """
 <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#e3e3e3">
   <path d="M0 0h24v24H0z" fill="none"/>
@@ -325,7 +391,7 @@ class PanelUI:
                 self[chat].append(msg)
             return
 
-        self[message] = pane = render_message(message)
+        self[message] = pane = message.__panel__()
 
         if chat in self:
             if getattr(self[chat], "awaiting", False):
@@ -399,3 +465,6 @@ class PanelUI:
             ),
         ):
             self._feed[-1].collapsed = True
+
+    def new_tool_call(self, message, call):
+        self[message].footer_objects[0].append(render_tool_call(call))
