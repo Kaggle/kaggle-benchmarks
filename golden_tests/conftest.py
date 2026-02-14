@@ -54,7 +54,11 @@ def module_report_fixture(request):
             model_report = report.setdefault(
                 f"{api}://{llm.name}",
                 {
-                    "config": {"structured_output": llm.support_structured_outputs},
+                    "config": {
+                        "structured_output": llm.support_structured_outputs,
+                        "tools": llm.support_tool_calling,
+                        "vision": llm.support_vision,
+                    },
                     "tests": {},
                 },
             )

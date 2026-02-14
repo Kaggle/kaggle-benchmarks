@@ -17,17 +17,11 @@
 # title: Anagrams Task with Genai/ OpenAI Api
 # ---
 # %%
-from kaggle_benchmarks import assertions, chats, task
-from kaggle_benchmarks.kaggle import model_proxy
 
-llm_with_openai_api = model_proxy.ModelProxy(
-    model="google/gemini-2.5-flash",
-    api="openai",
-)
-llm_with_genai_api = model_proxy.ModelProxy(
-    model="google/gemini-2.5-pro",
-    api="genai",
-)
+from kaggle_benchmarks import assertions, chats, kaggle, task
+
+llm_with_openai_api = kaggle.load_model("google/gemini-2.5-flash", api="openai")
+llm_with_genai_api = kaggle.load_model("google/gemini-2.5-flash", api="genai")
 
 
 def is_anagram(x: str, y: str) -> bool:
@@ -54,23 +48,11 @@ llm_response_message = next(
     for msg in reversed(non_streaming_result.chat.messages)
     if msg.sender is llm_with_genai_api
 )
-metadata = llm_response_message._meta
+usage = llm_response_message.usage
 
-assert "input_tokens" in metadata, "Metadata is missing 'input_tokens' key"
-assert "output_tokens" in metadata, "Metadata is missing 'output_tokens' key"
-# %%
-llm_with_genai_api.stream_responses = True
-
-streaming_result = write_anagrams.run(llm_with_genai_api, "creative")
-
-llm_response_message_stream = next(
-    msg
-    for msg in reversed(streaming_result.chat.messages)
-    if msg.sender is llm_with_genai_api
-)
-metadata_stream = llm_response_message_stream._meta
-assert "input_tokens" in metadata_stream
-assert "output_tokens" in metadata_stream
+assert usage, "Metadata is missing 'usage' attribute"
+assert usage.input_tokens > 0, "usage is missing 'input_tokens' key"
+assert usage.output_tokens > 0, "usage is missing 'output_tokens' key"
 
 
 # %%
