@@ -41,7 +41,7 @@ def get_function_schema(func: Callable) -> dict:
         return DynamicModel.model_json_schema()
     except pydantic.PydanticSchemaGenerationError as e:
         raise ToolSchemaError(
-            "Unable to generate json schema for function {func.__name__} arugments", e
+            "Unable to generate json schema for function {func.__name__} arguments", e
         )
 
 

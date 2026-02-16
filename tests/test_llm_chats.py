@@ -127,7 +127,7 @@ def test_structured():
     @handler(types=F)
     def _(cls):
         yield ""
-        yield "nonesense"
+        yield "nonsense"
         return F()
 
     with pytest.raises(prompting.SchemaError):
