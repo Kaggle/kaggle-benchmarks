@@ -47,9 +47,9 @@ class Config:
         default_factory=lambda: ExecutionMode[os.getenv("BENCHMARK_MODE", "NOTEBOOK")]
     )
 
-    disable_caching: bool = dataclasses.field(
+    enable_caching: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(
-            os.environ.get("DISABLE_LOCAL_CACHE", "True")
+            os.environ.get("ENABLE_LOCAL_CACHING", "False")
         )
     )
 

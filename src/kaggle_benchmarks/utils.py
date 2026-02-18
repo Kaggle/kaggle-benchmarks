@@ -64,17 +64,32 @@ class UnconditionalCacheTransport(httpx.HTTPTransport):
         return response
 
 
+class _StatusFilter(hishel.BaseFilter[hishel.Response]):
+    def __init__(self, allowed_codes: list[int]):
+        self.allowed_codes = allowed_codes
+
+    def needs_body(self) -> bool:
+        return False
+
+    def apply(self, item: hishel.Response, body: bytes | None) -> bool:
+        # Only cache successful responses
+        return item.status_code in self.allowed_codes
+
+
 def build_httpx_client(filename: str = "cache") -> httpx.Client:
     from kaggle_benchmarks._config import config
 
-    if config.disable_caching:
+    if not config.enable_caching:
         return httpx.Client()
-
+    policy = hishel.FilterPolicy(response_filters=[_StatusFilter([200])])
+    policy.use_body_key = True
     return hishel.httpx.SyncCacheClient(
+        policy=policy,
         transport=hishel.httpx.SyncCacheTransport(
             next_transport=UnconditionalCacheTransport(
                 cache_timeout_seconds=config.cache_timeout_seconds
             ),
+            policy=policy,
         ),
         storage=hishel.SyncSqliteStorage(
             database_path=config.cache_directory / f"{filename}.sqlite",
