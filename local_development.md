@@ -43,3 +43,11 @@ Local Development is for internal team (kaggle) only. For local development, you
     - `LLMS_AVAILABLE`: A comma-separated list of models authorized for use by your proxy token.
 
     **Note**: The `LLM_DEFAULT`, `LLM_DEFAULT_EVAL`, and `LLMS_AVAILABLE` variables depend on the models authorized by your proxy token.
+
+**Caching**:
+
+To speed up development and reduce costs, the framework uses [hishel](https://hishel.com/) to cache HTTP responses. Caching is disabled by default. To enable it, set the `ENABLE_LOCAL_CACHING` environment variable to `true`:
+
+```bash
+export ENABLE_LOCAL_CACHING=true
+```

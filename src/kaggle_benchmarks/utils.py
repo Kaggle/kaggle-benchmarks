@@ -79,7 +79,7 @@ class _StatusFilter(hishel.BaseFilter[hishel.Response]):
 def build_httpx_client(filename: str = "cache") -> httpx.Client:
     from kaggle_benchmarks._config import config
 
-    if config.disable_caching:
+    if not config.enable_caching:
         return httpx.Client()
     policy = hishel.FilterPolicy(response_filters=[_StatusFilter([200])])
     policy.use_body_key = True

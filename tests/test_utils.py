@@ -95,7 +95,7 @@ def test_normalize_name(name, expected):
 def test_client_caches_despite_server_headers(tmp_path, method):
     with (
         patch("kaggle_benchmarks.config.cache_directory", tmp_path),
-        patch("kaggle_benchmarks.config.disable_caching", False),
+        patch("kaggle_benchmarks.config.enable_caching", True),
     ):
         url = f"https://test.com/{uuid.uuid4()}"
         client = utils.build_httpx_client(filename="test")
@@ -115,18 +115,19 @@ def test_client_caches_despite_server_headers(tmp_path, method):
 
 
 def test_client_respects_disable_config():
-    with patch("kaggle_benchmarks.config.disable_caching", True):
+    with patch("kaggle_benchmarks.config.enable_caching", False):
         client = utils.build_httpx_client()
 
         assert isinstance(client, httpx.Client)
         assert not hasattr(client, "_controller")
+
 
 @respx.mock
 @pytest.mark.parametrize("method", ["get", "post"])
 def test_client_does_not_cache_error_responses(tmp_path, method):
     with (
         patch("kaggle_benchmarks.config.cache_directory", tmp_path),
-        patch("kaggle_benchmarks.config.disable_caching", False),
+        patch("kaggle_benchmarks.config.enable_caching", True),
     ):
         url = f"https://test.com/{uuid.uuid4()}"
         client = utils.build_httpx_client(filename="test")
@@ -141,6 +142,7 @@ def test_client_does_not_cache_error_responses(tmp_path, method):
         assert resp2.status_code == 400
         assert route.call_count == 2
         assert not resp2.extensions.get("hishel_from_cache")
+
 
 class NestedModel(pydantic.BaseModel):
     a: int
