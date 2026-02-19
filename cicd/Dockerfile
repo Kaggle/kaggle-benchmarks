@@ -7,6 +7,12 @@ WORKDIR /benchmarks
 # Copy the actual benchmark source code into the image.
 COPY . /benchmarks
 
+# Pull kaggle_secrets from docker-python image
+ADD https://raw.githubusercontent.com/Kaggle/docker-python/main/patches/kaggle_secrets.py \
+    /benchmarks/src/kaggle_secrets.py
+ADD https://raw.githubusercontent.com/Kaggle/docker-python/main/patches/kaggle_web_client.py \
+    /benchmarks/src/kaggle_web_client.py
+
 # Manually move the kaggle logic to the expected system path.
 RUN cp -r /benchmarks/src/opt/kaggle /opt
 

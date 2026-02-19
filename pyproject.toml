@@ -94,7 +94,7 @@ disable_error_code = ["import-untyped"]
 exclude = ["src/benchmarks/protos/utils"]
 
 [tool.ruff]
-extend-exclude = ["**/*_pb2.py"]
+extend-exclude = ["**/*_pb2.py", "src/kaggle_secrets.py", "src/kaggle_web_client.py"]
 
 [tool.ruff.lint]
 extend-select = ["I"]
