@@ -30,7 +30,9 @@ class Chat:
 
     history: list[Message | Self] = dataclasses.field(default_factory=list)
     name: str = "chat"
-    _id_suffix: str = dataclasses.field(default_factory=lambda: uuid.uuid4().hex[:8], init=False)
+    _id_suffix: str = dataclasses.field(
+        default_factory=lambda: uuid.uuid4().hex[:8], init=False
+    )
     sender: actors.Actor = actors.system  # added to mach Message's structural type
 
     _status: utils.Status = utils.Status.PENDING
