@@ -177,7 +177,7 @@ class TestUserSecrets(unittest.TestCase):
             creds = client.get_gcloud_credential()
             client.set_tensorflow_credential(creds)
 
-            expected_creds_file = '/root/gcloud_credential.json'
+            expected_creds_file = os.path.join(os.environ['HOME'], 'gcloud_credential.json')
             self.assertEqual(expected_creds_file, os.environ['GOOGLE_APPLICATION_CREDENTIALS'])
 
             with open(expected_creds_file, 'r') as f:
