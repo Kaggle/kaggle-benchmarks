@@ -30,15 +30,14 @@ class Chat:
 
     history: list[Message | Self] = dataclasses.field(default_factory=list)
     name: str = "chat"
-    id: str = ""
+    _id_suffix: str = dataclasses.field(default_factory=lambda: uuid.uuid4().hex[:8], init=False)
     sender: actors.Actor = actors.system  # added to mach Message's structural type
 
     _status: utils.Status = utils.Status.PENDING
 
-    def __post_init__(self):
-        if not self.id:
-            # Generate a unique ID based on the name and a UUID
-            self.id = f"{self.name}-{uuid.uuid4().hex[:8]}"
+    @property
+    def id(self) -> str:
+        return f"{self.name}-{self._id_suffix}"
 
     @property
     def messages(self) -> list[Message]:
