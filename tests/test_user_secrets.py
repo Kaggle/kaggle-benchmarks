@@ -17,17 +17,19 @@ import json
 import os
 import threading
 import unittest
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from unittest.mock import Mock, patch
 from unittest.mock import patch as _patch
 from urllib.parse import urlparse
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
 
-from kaggle_secrets import (GcpTarget, UserSecretsClient,
-                            NotFoundError, ValidationError)
-from kaggle_web_client import (_KAGGLE_URL_BASE_ENV_VAR_NAME,
-                            _KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME,
-                            CredentialError, BackendError)
+from kaggle_secrets import GcpTarget, NotFoundError, UserSecretsClient, ValidationError
+from kaggle_web_client import (
+    _KAGGLE_URL_BASE_ENV_VAR_NAME,
+    _KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME,
+    BackendError,
+    CredentialError,
+)
 
 _TEST_JWT = 'test-secrets-key'
 
@@ -58,7 +60,6 @@ class TestUserSecrets(unittest.TestCase):
         _request = {}
 
         class AccessTokenHandler(UserSecretsHTTPHandler):
-
             def set_request(self):
                 _request['path'] = self.path
                 content_len = int(self.headers.get('Content-Length'))
@@ -80,7 +81,7 @@ class TestUserSecrets(unittest.TestCase):
                 finally:
                     httpd.shutdown()
 
-                path, headers, body = _request['path'], _request['headers'], _request['body']
+                path, body = _request['path'], _request['body']
                 self.assertEqual(
                     path,
                     expected_path,
@@ -95,11 +96,10 @@ class TestUserSecrets(unittest.TestCase):
         env.pop(_KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME, None)
         with _patch.dict(os.environ, env, clear=True):
             with self.assertRaises(CredentialError):
-                client = UserSecretsClient()
+                UserSecretsClient()
 
     def test_get_secret_succeeds(self):
         secret = '12345'
-
         def call_get_secret():
             client = UserSecretsClient()
             secret_response = client.get_secret("secret_label")
@@ -112,7 +112,7 @@ class TestUserSecrets(unittest.TestCase):
         def call_get_secret():
             client = UserSecretsClient()
             with self.assertRaises(BackendError):
-                secret_response = client.get_secret("secret_label")
+                client.get_secret("secret_label")
         self._test_client(call_get_secret,
                           '/requests/GetUserSecretByLabelRequest', {'Label': "secret_label"},
                           success=False)
@@ -121,11 +121,10 @@ class TestUserSecrets(unittest.TestCase):
         with _patch.dict(os.environ, {_KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME: _TEST_JWT}):
             client = UserSecretsClient()
             with self.assertRaises(ValidationError):
-                secret_response = client.get_secret("")
+                client.get_secret("")
 
     def test_get_gcloud_secret_succeeds(self):
         secret = '{"client_id":"gcloud","type":"authorized_user"}'
-
         def call_get_secret():
             client = UserSecretsClient()
             secret_response = client.get_gcloud_credential()
@@ -138,7 +137,7 @@ class TestUserSecrets(unittest.TestCase):
         def call_get_secret():
             client = UserSecretsClient()
             with self.assertRaises(NotFoundError):
-              secret_response = client.get_gcloud_credential()
+                client.get_gcloud_credential()
         self._test_client(call_get_secret,
                           '/requests/GetUserSecretByLabelRequest', {'Label': "__gcloud_sdk_auth__"},
                           success=False)
