@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from kaggle_benchmarks import actors, chats, prompting, utils
+from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.prompting import handler
 
@@ -149,3 +149,18 @@ def test_streaming_prompt():
         assert last_message.sender is llm
         assert last_message._meta["input_tokens"] == 10
         assert last_message._meta["output_tokens"] == 2
+
+
+def test_nested_chat_id():
+    llm = Ferret()
+    with chats.new("root") as root:
+        sub = chats.Chat(name="sub")
+        chats.get_current_chat().append(sub)
+        with contexts.enter(chat=sub):
+            llm.prompt("Hi")
+
+        sub.name += " - analysis"
+
+    assert root.history[0] is sub
+    assert sub.id.startswith("sub - analysis-")
+    assert len(sub.history) == 2
