@@ -1,5 +1,7 @@
 # Kaggle Benchmarks
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Kaggle/kaggle-benchmarks)
+
 `kaggle-benchmarks` is a Python library designed to help you rigorously evaluate AI models on tasks that matter to you. It provides a structured framework for defining tasks, interacting with models, and asserting the correctness of their outputs.
 
 This is especially useful for:
