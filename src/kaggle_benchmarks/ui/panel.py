@@ -94,7 +94,7 @@ def render_usage(usage):
 def render_llm_message(message, **kwargs) -> pn.chat.ChatMessage:
     if message.chat and message.chat.history:
         history = [
-            # disable it for now to avoid confusion
+            # TODO: find a better way to render tool calling history
             # pn.Card(
             #     render_chat(message.chat), title="Intermediate steps", collapsed=True
             # )
@@ -467,4 +467,5 @@ class PanelUI:
             self._feed[-1].collapsed = True
 
     def new_tool_call(self, message, call):
-        self[message].footer_objects[0].append(render_tool_call(call))
+        if self[message].footer_objects:
+            self[message].footer_objects[0].append(render_tool_call(call))
