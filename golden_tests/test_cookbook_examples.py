@@ -184,11 +184,7 @@ def test_assess_with_judge(llm_name, judge_llm_name):
 
 @benchmark_test(
     exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
         "google/gemma-3-12b",
-        "anthropic/claude-opus-4-5@20251101",
-        "anthropic/claude-sonnet-4-5@20250929",
     }
 )
 @kbench.task()
@@ -207,7 +203,6 @@ def test_extract_int(llm):
 
 @benchmark_test(
     exclude={
-        "deepseek-ai/deepseek-r1-0528",
         "google/gemma-3-12b",
     }
 )
@@ -297,7 +292,6 @@ class Planet(BaseModel):
 
 @benchmark_test(
     exclude={
-        "qwen/qwen3-235b-a22b-instruct-2507",
         "google/gemma-3-12b",
     }
 )
@@ -332,7 +326,6 @@ class Casting(BaseModel):
 
 @benchmark_test(
     exclude={
-        "qwen/qwen3-235b-a22b-instruct-2507",
         "google/gemma-3-12b",
     }
 )
@@ -442,8 +435,6 @@ def test_image_url(llm):
         "deepseek-ai/deepseek-v3.2",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "anthropic/claude-haiku-4-5@20251001",
-        "anthropic/claude-opus-4-5@20251101",
         "anthropic/claude-sonnet-4-5@20250929",
     }
 )
