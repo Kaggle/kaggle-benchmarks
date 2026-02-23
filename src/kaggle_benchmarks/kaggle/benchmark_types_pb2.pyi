@@ -1150,7 +1150,7 @@ class FileData(google.protobuf.message.Message):
     FILE_URI_FIELD_NUMBER: builtins.int
     MIME_TYPE_FIELD_NUMBER: builtins.int
     display_name: builtins.str
-    """Display name of the file data. Used to provide a label or filename to distinguish file datas.
+    """Display name of the file data. Used to provide a label or filename to distinguish file data.
     It is not currently used in the Gemini GenerateContent calls.
     """
     file_uri: builtins.str

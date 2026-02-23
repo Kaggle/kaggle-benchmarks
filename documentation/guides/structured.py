@@ -39,7 +39,7 @@ config.show_message_details = True
 
 # This avoids manual parsing of textual "yes"/"no" or "true"/"false" responses, making your code cleaner and less error-prone.
 
-# In detail section you can see that extra message was automatically added to prompt LLM to produce response in a particular format and the respose was autmatically parsed into boolean value.
+# In detail section you can see that extra message was automatically added to prompt LLM to produce response in a particular format and the response was automatically parsed into boolean value.
 # %%
 
 with chats.new("Prime number check") as t:

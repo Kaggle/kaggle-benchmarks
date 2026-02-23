@@ -25,7 +25,7 @@ data structures or specific formatting requirements.
 
 Handlers are processed in reverse registration order, so later registered handlers can take precedence.
 
-Supported types currently include several build-in types, Pydantic models, and dataclasses.
+Supported types currently include several built-in types, Pydantic models, and dataclasses.
 """
 
 import dataclasses

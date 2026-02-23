@@ -225,7 +225,7 @@ Follow these rules:
 4.  The script must be complete and runnable. End the script with a call to run the task, like `your_task_name.run(kbench.llm)`.
 5.  Do not include any placeholders for the user to fill in; the script should be final.
 6.  Only output the raw Python code, without any surrounding text, explanations, or markdown fences like ````python.
-7.  Add a comment at the beginning of the task definition indicating this auto-generated code. User should use wth cautions.
+7.  Add a comment at the beginning of the task definition indicating this auto-generated code. User should use with cautions.
 
 ========== Here is a quick start guide of the library: ==========
 {quick_start_prompt}

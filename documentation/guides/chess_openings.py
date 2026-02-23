@@ -92,7 +92,7 @@ def fen_understanding_opening(llm, name, moves):
     fen = chess_board.make_moves(moves).fen()
 
     answer = llm.prompt(
-        f"Here is chess board position written in Forsyth-Edwards notation: {fen}. Can you name the oppening?"
+        f"Here is chess board position written in Forsyth-Edwards notation: {fen}. Can you name the opening?"
     )
     assert name in answer, f"It's {name}"
 

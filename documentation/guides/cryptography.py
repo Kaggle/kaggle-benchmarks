@@ -87,7 +87,7 @@ def string_diff(x, y):
 def ceasar_decryption(llm, plaintext, shift) -> int:
     encrypted = caesar_cipher(plaintext, shift)
     decrypted = llm.prompt(
-        f"The text was encyrpted using ceaser cypher with shift {shift}. Can you decypher it? `{encrypted}`.\nOutput the plaintext only."
+        f"The text was encyrpted using caesar cypher with shift {shift}. Can you decipher it? `{encrypted}`.\nOutput the plaintext only."
     ).strip()
     return string_diff(plaintext, decrypted)
 

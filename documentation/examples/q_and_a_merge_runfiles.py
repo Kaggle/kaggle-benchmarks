@@ -44,7 +44,7 @@ def q_and_a(llm, question, answer) -> float:
             f"""My question: {question}
             My expected answer: {answer}
             LLM answer: {response}
-            Given the above information, give a single score from 0 to 10 on how similiar the LLM answer is to my expected answer.
+            Given the above information, give a single score from 0 to 10 on how similar the LLM answer is to my expected answer.
             Just output the single score but nothing else.
             """
         )
