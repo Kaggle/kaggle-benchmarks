@@ -65,6 +65,11 @@ def render_message_content(content: Any) -> pn.viewable.Viewable:
 
 
 def render_message(message: messages.Message, **kwargs) -> pn.chat.ChatMessage:
+    footer = kwargs.pop("footer_objects", [])
+
+    if message._meta and config.show_message_details:
+        footer.append(json_pane(message._meta, "Details:", depth=0))
+
     return pn.chat.ChatMessage(
         render_message_content(message.content),
         user=message.sender.name,
@@ -75,6 +80,7 @@ def render_message(message: messages.Message, **kwargs) -> pn.chat.ChatMessage:
         show_copy_icon=False,
         show_edit_icon=False,
         show_timestamp=False,
+        footer_objects=footer,
         **kwargs,
     )
 
