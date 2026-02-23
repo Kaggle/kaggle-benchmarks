@@ -14,12 +14,15 @@
 
 FROM mcr.microsoft.com/devcontainers/python:1-3.11-bullseye
 
-RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v32.1/protoc-32.1-linux-x86_64.zip && \
-    unzip protoc-32.1-linux-x86_64.zip -d /usr && \
-    rm protoc-32.1-linux-x86_64.zip
+ARG PROTOBUF_VERSION="29.6"
 
+RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-linux-x86_64.zip && \
+    unzip protoc-${PROTOBUF_VERSION}-linux-x86_64.zip -d /usr && \
+    rm protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+RUN rm -f /etc/apt/sources.list.d/yarn.list
 
 
 RUN pip install playwright && \
