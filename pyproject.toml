@@ -82,7 +82,7 @@ dev = [
   "types-tqdm>=4.67.0.20241221",
   "pandas-stubs>=2.2.3.241126",
   "docker-stubs>=0.1.0",
-  "types-protobuf>=5.29.1.20241207",
+  "types-protobuf<6.0",
   "pre-commit>=4.2.0",
   "mypy-protobuf>=3.6.0",
 ]

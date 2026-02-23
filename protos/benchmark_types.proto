@@ -260,7 +260,7 @@ message Blob {
 }
 
 message FileData {
-    // Display name of the file data. Used to provide a label or filename to distinguish file datas.
+    // Display name of the file data. Used to provide a label or filename to distinguish file data.
     // It is not currently used in the Gemini GenerateContent calls.
     optional string display_name = 1;
     // The URI of the file. This can be a general http/https URI or a GCS path.
