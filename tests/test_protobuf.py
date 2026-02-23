@@ -108,6 +108,17 @@ def chatty_task():
 
 
 @task()
+def multi_model_task():
+    """A task with multiple LLMs in the same conversation (PvP scenario)."""
+    llm1 = MockLLM(name="google/gemini-2.5-flash")
+    llm2 = MockLLM(name="anthropic/claude-opus-4")
+    # Simulate a PvP game where two models alternate turns
+    user.send("You are playing a game.")
+    llm1.respond()
+    llm2.respond()
+
+
+@task()
 def task_with_subchat():
     """A task with a sub-chat."""
     llm = MockLLM()
@@ -266,6 +277,35 @@ def test_chat_serialization():
     assert convo_ref["conversationId"] == run.chat.id
     # The assertion happens after the second request, so it should be linked to it.
     assert convo_ref["requestId"] == conversation["requests"][1]["id"]
+
+
+def test_multi_model_sender_name_serialization():
+    """Test that senderName correctly identifies each model in a multi-model conversation.
+
+    This validates the PvP (player vs player) benchmark scenario where multiple
+    LLM actors interact in the same conversation. Each content message must carry
+    the correct senderName so the frontend can display the right model icon.
+    """
+    run = multi_model_task.run()
+    message = serialization.dump_run(run)
+    result = json_format.MessageToDict(message)
+
+    assert "conversations" in result
+    assert len(result["conversations"]) == 1
+    conversation = result["conversations"][0]
+    assert "requests" in conversation
+
+    # The first request has user + llm1, the second has llm2
+    # llm1's response ends the first request, llm2's response ends the second
+    request1 = conversation["requests"][0]
+    assert request1["contents"][0]["senderName"] == "User"
+    assert request1["contents"][0]["role"] == "CONTENT_ROLE_USER"
+    assert request1["contents"][1]["senderName"] == "google/gemini-2.5-flash"
+    assert request1["contents"][1]["role"] == "CONTENT_ROLE_ASSISTANT"
+
+    request2 = conversation["requests"][1]
+    assert request2["contents"][0]["senderName"] == "anthropic/claude-opus-4"
+    assert request2["contents"][0]["role"] == "CONTENT_ROLE_ASSISTANT"
 
 
 def test_subchat_serialization():

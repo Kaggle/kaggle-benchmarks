@@ -1,0 +1,39 @@
+{
+  "task_id": "limagoog-20260223190529-46bb4607",
+  "agent_type": "claude",
+  "session_id": "70c533b3-c4a8-40e3-b0b6-4861bc2434ff",
+  "updated_at": "2026-02-23T19:17:59Z",
+  "resume_command": "claude --resume 70c533b3-c4a8-40e3-b0b6-4861bc2434ff",
+  "usage": {
+    "total_cost_usd": 2.863627449999999,
+    "input_tokens": 40814,
+    "output_tokens": 25514,
+    "cache_read_input_tokens": 4105995,
+    "cache_creation_input_tokens": 245603,
+    "duration_ms": 496268,
+    "duration_api_ms": 475382,
+    "num_turns": 49,
+    "model_usage": {
+      "claude-opus-4-6@default": {
+        "inputTokens": 51,
+        "outputTokens": 12455,
+        "cacheReadInputTokens": 2871103,
+        "cacheCreationInputTokens": 115979,
+        "webSearchRequests": 0,
+        "costUSD": 2.4720502499999997,
+        "contextWindow": 200000,
+        "maxOutputTokens": 32000
+      },
+      "claude-haiku-4-5@20251001": {
+        "inputTokens": 40763,
+        "outputTokens": 13059,
+        "cacheReadInputTokens": 1234892,
+        "cacheCreationInputTokens": 129624,
+        "webSearchRequests": 0,
+        "costUSD": 0.3915772000000003,
+        "contextWindow": 200000,
+        "maxOutputTokens": 32000
+      }
+    }
+  }
+}
