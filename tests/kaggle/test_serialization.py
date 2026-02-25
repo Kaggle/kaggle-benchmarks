@@ -308,3 +308,32 @@ def test_find_subtask_names_with_non_task_run():
     """Tests that _find_subtask_names ignores .run() calls on non-Task objects."""
     names = serialization._find_subtask_names(task_with_non_task_run_call)
     assert names == ["Subtask For Test"]
+
+
+def test_request_metrics_include_cost_fields():
+    """Tests that request metrics include token cost fields from _meta."""
+    from kaggle_benchmarks import actors, chats, messages
+
+    chat = chats.Chat(name="test")
+    chat.append(messages.Message(sender=actors.user, content="hello"))
+
+    response = messages.Message(sender=actors.system, content="response")
+    response.sender = actors.Actor(name="assistant", role="assistant")
+    response._meta["input_tokens"] = 100
+    response._meta["output_tokens"] = 50
+    response._meta["input_tokens_cost_nanodollars"] = 1000
+    response._meta["output_tokens_cost_nanodollars"] = 2000
+    chat.append(response)
+
+    conversations, _ = serialization._prepare_conversations_data(chat)
+    metrics = conversations[0]["requests"][0]["metrics"]
+
+    assert metrics["input_tokens"] == 100
+    assert metrics["output_tokens"] == 50
+    assert metrics["input_tokens_cost_nanodollars"] == 1000
+    assert metrics["output_tokens_cost_nanodollars"] == 2000
+
+    # Verify conversation-level aggregation includes cost fields
+    conv_metrics = conversations[0]["metrics"]
+    assert conv_metrics["input_tokens_cost_nanodollars"] == 1000
+    assert conv_metrics["output_tokens_cost_nanodollars"] == 2000

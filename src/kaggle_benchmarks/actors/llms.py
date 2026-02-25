@@ -263,9 +263,20 @@ class OpenAI(LLMChat):
         """Extracts token usage metadata from an OpenAI response object."""
         if usage is None:
             return {}
+
+        # Model Proxy augments responses to include extra cost information
+        cost = getattr(usage, "cost", None) or {}
+
         return {
             "input_tokens": usage.prompt_tokens,
             "output_tokens": usage.completion_tokens,
+            # Fields outside of the standard ChatCompletions API
+            "input_tokens_cost_nanodollars": cost.get(
+                "input_tokens_cost_nanodollars", None
+            ),
+            "output_tokens_cost_nanodollars": cost.get(
+                "output_tokens_cost_nanodollars", None
+            ),
         }
 
     def invoke(
@@ -367,9 +378,20 @@ class GoogleGenAI(LLMChat):
     def _get_usage_meta(self, usage: types.UsageMetadata | None) -> dict[str, Any]:
         if usage is None:
             return {}
+
+        # Model Proxy augments responses to include extra cost information
+        cost = getattr(usage, "cost", None) or {}
+
         return {
             "input_tokens": usage.prompt_token_count,
             "output_tokens": usage.candidates_token_count,
+            # Fields outside of the standard ChatCompletions API
+            "input_tokens_cost_nanodollars": cost.get(
+                "input_tokens_cost_nanodollars", None
+            ),
+            "output_tokens_cost_nanodollars": cost.get(
+                "output_tokens_cost_nanodollars", None
+            ),
         }
 
     def _get_raw_messages(self, messages: list[messages.Message]):

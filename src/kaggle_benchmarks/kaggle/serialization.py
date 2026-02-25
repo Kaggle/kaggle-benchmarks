@@ -326,6 +326,12 @@ def _prepare_conversations_data(
                     request_metrics = {
                         "input_tokens": item._meta.get("input_tokens"),
                         "output_tokens": item._meta.get("output_tokens"),
+                        "input_tokens_cost_nanodollars": item._meta.get(
+                            "input_tokens_cost_nanodollars"
+                        ),
+                        "output_tokens_cost_nanodollars": item._meta.get(
+                            "output_tokens_cost_nanodollars"
+                        ),
                     }
                     request_counter += 1
                     current_conversation_requests.append(
@@ -352,11 +358,19 @@ def _prepare_conversations_data(
     conversation_metrics = {
         "input_tokens": 0,
         "output_tokens": 0,
+        "input_tokens_cost_nanodollars": 0,
+        "output_tokens_cost_nanodollars": 0,
     }
     for request in current_conversation_requests:
         if metrics := request.get("metrics"):
             conversation_metrics["input_tokens"] += metrics.get("input_tokens") or 0
             conversation_metrics["output_tokens"] += metrics.get("output_tokens") or 0
+            conversation_metrics["input_tokens_cost_nanodollars"] += (
+                metrics.get("input_tokens_cost_nanodollars") or 0
+            )
+            conversation_metrics["output_tokens_cost_nanodollars"] += (
+                metrics.get("output_tokens_cost_nanodollars") or 0
+            )
 
     current_conversation_entry = {
         "id": chat.id,
