@@ -736,10 +736,14 @@ class ModelUsageMetrics(google.protobuf.message.Message):
     OUTPUT_TOKENS_FIELD_NUMBER: builtins.int
     THINKING_TOKENS_FIELD_NUMBER: builtins.int
     DURATION_MS_FIELD_NUMBER: builtins.int
+    INPUT_TOKENS_COST_NANODOLLARS_FIELD_NUMBER: builtins.int
+    OUTPUT_TOKENS_COST_NANODOLLARS_FIELD_NUMBER: builtins.int
     input_tokens: builtins.int
     output_tokens: builtins.int
     thinking_tokens: builtins.int
     duration_ms: builtins.int
+    input_tokens_cost_nanodollars: builtins.int
+    output_tokens_cost_nanodollars: builtins.int
     def __init__(
         self,
         *,
@@ -747,12 +751,22 @@ class ModelUsageMetrics(google.protobuf.message.Message):
         output_tokens: builtins.int = ...,
         thinking_tokens: builtins.int | None = ...,
         duration_ms: builtins.int = ...,
+        input_tokens_cost_nanodollars: builtins.int | None = ...,
+        output_tokens_cost_nanodollars: builtins.int | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
+            "_input_tokens_cost_nanodollars",
+            b"_input_tokens_cost_nanodollars",
+            "_output_tokens_cost_nanodollars",
+            b"_output_tokens_cost_nanodollars",
             "_thinking_tokens",
             b"_thinking_tokens",
+            "input_tokens_cost_nanodollars",
+            b"input_tokens_cost_nanodollars",
+            "output_tokens_cost_nanodollars",
+            b"output_tokens_cost_nanodollars",
             "thinking_tokens",
             b"thinking_tokens",
         ],
@@ -760,18 +774,41 @@ class ModelUsageMetrics(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing.Literal[
+            "_input_tokens_cost_nanodollars",
+            b"_input_tokens_cost_nanodollars",
+            "_output_tokens_cost_nanodollars",
+            b"_output_tokens_cost_nanodollars",
             "_thinking_tokens",
             b"_thinking_tokens",
             "duration_ms",
             b"duration_ms",
             "input_tokens",
             b"input_tokens",
+            "input_tokens_cost_nanodollars",
+            b"input_tokens_cost_nanodollars",
             "output_tokens",
             b"output_tokens",
+            "output_tokens_cost_nanodollars",
+            b"output_tokens_cost_nanodollars",
             "thinking_tokens",
             b"thinking_tokens",
         ],
     ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing.Literal[
+            "_input_tokens_cost_nanodollars", b"_input_tokens_cost_nanodollars"
+        ],
+    ) -> typing.Literal["input_tokens_cost_nanodollars"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing.Literal[
+            "_output_tokens_cost_nanodollars", b"_output_tokens_cost_nanodollars"
+        ],
+    ) -> typing.Literal["output_tokens_cost_nanodollars"] | None: ...
+    @typing.overload
     def WhichOneof(
         self, oneof_group: typing.Literal["_thinking_tokens", b"_thinking_tokens"]
     ) -> typing.Literal["thinking_tokens"] | None: ...
