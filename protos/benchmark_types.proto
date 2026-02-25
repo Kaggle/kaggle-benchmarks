@@ -1,4 +1,4 @@
-// Copyright 2025 Kaggle Inc.
+// Copyright 2026 Kaggle Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -160,6 +160,8 @@ message ModelUsageMetrics {
   int32 output_tokens = 2;
   optional int32 thinking_tokens = 3;
   int32 duration_ms = 4;
+  optional int64 input_tokens_cost_nanodollars = 5;
+  optional int64 output_tokens_cost_nanodollars = 6;
 }
 
 message ConversationRequestIdentifier {
