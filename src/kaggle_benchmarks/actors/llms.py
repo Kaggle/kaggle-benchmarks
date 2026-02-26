@@ -104,6 +104,16 @@ from kaggle_benchmarks.content_types import images
 T = TypeVar("T")
 
 
+# TODO: Figure out a more robust way to handle extra fields.
+def _extract_cost(usage: Any) -> dict[str, Any]:
+    """Extracts cost metadata from a usage object augmented by Model Proxy."""
+    cost = getattr(usage, "cost", None) or {}
+    return {
+        "input_tokens_cost_nanodollars": cost.get("input_tokens_cost_nanodollars"),
+        "output_tokens_cost_nanodollars": cost.get("output_tokens_cost_nanodollars"),
+    }
+
+
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str
@@ -266,6 +276,7 @@ class OpenAI(LLMChat):
         return {
             "input_tokens": usage.prompt_tokens,
             "output_tokens": usage.completion_tokens,
+            **_extract_cost(usage),
         }
 
     def invoke(
@@ -370,6 +381,7 @@ class GoogleGenAI(LLMChat):
         return {
             "input_tokens": usage.prompt_token_count,
             "output_tokens": usage.candidates_token_count,
+            **_extract_cost(usage),
         }
 
     def _get_raw_messages(self, messages: list[messages.Message]):
