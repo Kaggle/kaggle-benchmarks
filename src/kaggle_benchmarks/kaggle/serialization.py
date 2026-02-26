@@ -39,6 +39,11 @@ from kaggle_benchmarks.kaggle import benchmark_types_pb2 as types
 TASK_FILE_SUFFIX = ".task.json"
 RUN_FILE_SUFFIX = ".run.json"
 TASK_RUN_FILENAME_DELIMITER = "-"
+_OPTIONAL_AGGREGATED_METRICS = (
+    "input_tokens_cost_nanodollars",
+    "output_tokens_cost_nanodollars",
+    "total_backend_latency_ms",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -369,18 +374,11 @@ def _prepare_conversations_data(
         if metrics := request.get("metrics"):
             conversation_metrics["input_tokens"] += metrics.get("input_tokens") or 0
             conversation_metrics["output_tokens"] += metrics.get("output_tokens") or 0
-            if (cost := metrics.get("input_tokens_cost_nanodollars")) is not None:
-                conversation_metrics["input_tokens_cost_nanodollars"] = (
-                    conversation_metrics["input_tokens_cost_nanodollars"] or 0
-                ) + cost
-            if (cost := metrics.get("output_tokens_cost_nanodollars")) is not None:
-                conversation_metrics["output_tokens_cost_nanodollars"] = (
-                    conversation_metrics["output_tokens_cost_nanodollars"] or 0
-                ) + cost
-            if (latency := metrics.get("total_backend_latency_ms")) is not None:
-                conversation_metrics["total_backend_latency_ms"] = (
-                    conversation_metrics["total_backend_latency_ms"] or 0
-                ) + latency
+            for field in _OPTIONAL_AGGREGATED_METRICS:
+                if (value := metrics.get(field)) is not None:
+                    conversation_metrics[field] = (
+                        conversation_metrics[field] or 0
+                    ) + value
     current_conversation_entry = {
         "id": chat.id,
         "requests": current_conversation_requests,
