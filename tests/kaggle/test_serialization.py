@@ -337,3 +337,145 @@ def test_request_metrics_include_cost_fields():
     conv_metrics = conversations[0]["metrics"]
     assert conv_metrics["input_tokens_cost_nanodollars"] == 1000
     assert conv_metrics["output_tokens_cost_nanodollars"] == 2000
+
+
+def test_conversation_metrics_cost_none_when_missing():
+    """Tests that conversation metrics keep cost as None when not provided."""
+    from kaggle_benchmarks import actors, chats, messages
+
+    chat = chats.Chat(name="test")
+    chat.append(messages.Message(sender=actors.user, content="hello"))
+
+    response = messages.Message(sender=actors.system, content="response")
+    response.sender = actors.Actor(name="assistant", role="assistant")
+    response._meta["input_tokens"] = 100
+    response._meta["output_tokens"] = 50
+    # No cost fields set
+    chat.append(response)
+
+    conversations, _ = serialization._prepare_conversations_data(chat)
+    conv_metrics = conversations[0]["metrics"]
+
+    assert conv_metrics["input_tokens"] == 100
+    assert conv_metrics["output_tokens"] == 50
+    assert conv_metrics["input_tokens_cost_nanodollars"] is None
+    assert conv_metrics["output_tokens_cost_nanodollars"] is None
+
+
+def test_int64_cost_fields_serialized_as_strings_in_json():
+    """
+    Documents that int64 fields (cost_nanodollars) are serialized as strings in JSON.
+
+    Protocol Buffers serialize int64 values as strings to avoid precision loss in
+    JavaScript (which uses 64-bit floats). This doesn't affect SDK dump/parse but
+    FE consumers reading raw JSON should be aware of this.
+    """
+    from kaggle_benchmarks import actors, chats, messages
+    from kaggle_benchmarks.kaggle import benchmark_types_pb2 as types
+
+    chat = chats.Chat(name="test")
+    chat.append(messages.Message(sender=actors.user, content="hello"))
+
+    response = messages.Message(sender=actors.system, content="response")
+    response.sender = actors.Actor(name="assistant", role="assistant")
+    response._meta["input_tokens"] = 100
+    response._meta["output_tokens"] = 50
+    response._meta["input_tokens_cost_nanodollars"] = 123456789012345
+    response._meta["output_tokens_cost_nanodollars"] = 987654321098765
+    chat.append(response)
+
+    conversations, _ = serialization._prepare_conversations_data(chat)
+
+    # Create a Conversation proto and serialize to JSON
+    conv_proto = json_format.ParseDict(
+        conversations[0], types.Conversation(), ignore_unknown_fields=True
+    )
+    json_str = json_format.MessageToJson(conv_proto)
+    raw_json = json.loads(json_str)
+
+    # Verify int64 fields are serialized as strings in the raw JSON
+    request_metrics = raw_json["requests"][0]["metrics"]
+    assert request_metrics["inputTokensCostNanodollars"] == "123456789012345"
+    assert request_metrics["outputTokensCostNanodollars"] == "987654321098765"
+    assert isinstance(request_metrics["inputTokensCostNanodollars"], str)
+    assert isinstance(request_metrics["outputTokensCostNanodollars"], str)
+
+    # Conversation-level metrics also serialized as strings
+    conv_metrics = raw_json["metrics"]
+    assert conv_metrics["inputTokensCostNanodollars"] == "123456789012345"
+    assert conv_metrics["outputTokensCostNanodollars"] == "987654321098765"
+
+
+def test_int64_cost_fields_file_roundtrip():
+    """
+    Tests that int64 cost fields survive a file write/read cycle correctly.
+
+    Writes a run.json file, reads it back as raw JSON (simulating FE read),
+    and verifies the SDK can parse it back to proto with correct values.
+    """
+    from kaggle_benchmarks.kaggle import benchmark_types_pb2 as types
+
+    # Create a BenchmarkTaskRun proto directly with large int64 cost values
+    # Values > 2^53 would lose precision if stored as JS floats
+    large_input_cost = 9007199254740993  # > 2^53
+    large_output_cost = 9007199254740994  # > 2^53
+
+    run_proto = types.BenchmarkTaskRun(
+        py_run_id="test-cost-run",
+        conversations=[
+            types.Conversation(
+                id="conv-1",
+                requests=[
+                    types.ModelRequest(
+                        id="req-1",
+                        metrics=types.ModelUsageMetrics(
+                            input_tokens=100,
+                            output_tokens=50,
+                            input_tokens_cost_nanodollars=large_input_cost,
+                            output_tokens_cost_nanodollars=large_output_cost,
+                        ),
+                    )
+                ],
+                metrics=types.ModelUsageMetrics(
+                    input_tokens=100,
+                    output_tokens=50,
+                    input_tokens_cost_nanodollars=large_input_cost,
+                    output_tokens_cost_nanodollars=large_output_cost,
+                ),
+            )
+        ],
+    )
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        filepath = Path(tmp_dir) / "test_cost.run.json"
+
+        # Write to file
+        with open(filepath, "w") as f:
+            f.write(json_format.MessageToJson(run_proto))
+
+        # Read back as raw JSON (simulating FE read)
+        with open(filepath, "r") as f:
+            raw_json = json.load(f)
+
+        # Verify int64 fields are strings in raw JSON
+        conv = raw_json["conversations"][0]
+        request_metrics = conv["requests"][0]["metrics"]
+        assert isinstance(request_metrics["inputTokensCostNanodollars"], str)
+        assert isinstance(request_metrics["outputTokensCostNanodollars"], str)
+        assert request_metrics["inputTokensCostNanodollars"] == "9007199254740993"
+        assert request_metrics["outputTokensCostNanodollars"] == "9007199254740994"
+
+        # Conversation-level metrics also strings
+        conv_metrics = conv["metrics"]
+        assert isinstance(conv_metrics["inputTokensCostNanodollars"], str)
+        assert conv_metrics["inputTokensCostNanodollars"] == "9007199254740993"
+
+        # Parse back to proto (simulating SDK read)
+        with open(filepath, "r") as f:
+            json_str = f.read()
+        parsed_proto = json_format.Parse(json_str, types.BenchmarkTaskRun())
+
+        # Verify values are correctly restored as integers in proto
+        parsed_metrics = parsed_proto.conversations[0].requests[0].metrics
+        assert parsed_metrics.input_tokens_cost_nanodollars == 9007199254740993
+        assert parsed_metrics.output_tokens_cost_nanodollars == 9007199254740994
