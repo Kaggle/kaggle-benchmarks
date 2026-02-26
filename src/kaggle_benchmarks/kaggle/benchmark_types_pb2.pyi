@@ -738,12 +738,14 @@ class ModelUsageMetrics(google.protobuf.message.Message):
     DURATION_MS_FIELD_NUMBER: builtins.int
     INPUT_TOKENS_COST_NANODOLLARS_FIELD_NUMBER: builtins.int
     OUTPUT_TOKENS_COST_NANODOLLARS_FIELD_NUMBER: builtins.int
+    TOTAL_BACKEND_LATENCY_MS_FIELD_NUMBER: builtins.int
     input_tokens: builtins.int
     output_tokens: builtins.int
     thinking_tokens: builtins.int
     duration_ms: builtins.int
     input_tokens_cost_nanodollars: builtins.int
     output_tokens_cost_nanodollars: builtins.int
+    total_backend_latency_ms: builtins.int
     def __init__(
         self,
         *,
@@ -753,6 +755,7 @@ class ModelUsageMetrics(google.protobuf.message.Message):
         duration_ms: builtins.int = ...,
         input_tokens_cost_nanodollars: builtins.int | None = ...,
         output_tokens_cost_nanodollars: builtins.int | None = ...,
+        total_backend_latency_ms: builtins.int | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -763,12 +766,16 @@ class ModelUsageMetrics(google.protobuf.message.Message):
             b"_output_tokens_cost_nanodollars",
             "_thinking_tokens",
             b"_thinking_tokens",
+            "_total_backend_latency_ms",
+            b"_total_backend_latency_ms",
             "input_tokens_cost_nanodollars",
             b"input_tokens_cost_nanodollars",
             "output_tokens_cost_nanodollars",
             b"output_tokens_cost_nanodollars",
             "thinking_tokens",
             b"thinking_tokens",
+            "total_backend_latency_ms",
+            b"total_backend_latency_ms",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -780,6 +787,8 @@ class ModelUsageMetrics(google.protobuf.message.Message):
             b"_output_tokens_cost_nanodollars",
             "_thinking_tokens",
             b"_thinking_tokens",
+            "_total_backend_latency_ms",
+            b"_total_backend_latency_ms",
             "duration_ms",
             b"duration_ms",
             "input_tokens",
@@ -792,6 +801,8 @@ class ModelUsageMetrics(google.protobuf.message.Message):
             b"output_tokens_cost_nanodollars",
             "thinking_tokens",
             b"thinking_tokens",
+            "total_backend_latency_ms",
+            b"total_backend_latency_ms",
         ],
     ) -> None: ...
     @typing.overload
@@ -812,6 +823,13 @@ class ModelUsageMetrics(google.protobuf.message.Message):
     def WhichOneof(
         self, oneof_group: typing.Literal["_thinking_tokens", b"_thinking_tokens"]
     ) -> typing.Literal["thinking_tokens"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing.Literal[
+            "_total_backend_latency_ms", b"_total_backend_latency_ms"
+        ],
+    ) -> typing.Literal["total_backend_latency_ms"] | None: ...
 
 Global___ModelUsageMetrics: typing_extensions.TypeAlias = ModelUsageMetrics
 

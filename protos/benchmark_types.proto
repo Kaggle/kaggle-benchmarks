@@ -162,6 +162,7 @@ message ModelUsageMetrics {
   int32 duration_ms = 4;
   optional int64 input_tokens_cost_nanodollars = 5;
   optional int64 output_tokens_cost_nanodollars = 6;
+  optional int64 total_backend_latency_ms = 7;
 }
 
 message ConversationRequestIdentifier {

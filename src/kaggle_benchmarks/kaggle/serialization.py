@@ -332,6 +332,9 @@ def _prepare_conversations_data(
                         "output_tokens_cost_nanodollars": item._meta.get(
                             "output_tokens_cost_nanodollars"
                         ),
+                        "total_backend_latency_ms": item._meta.get(
+                            "total_backend_latency_ms"
+                        ),
                     }
                     request_counter += 1
                     current_conversation_requests.append(
@@ -360,6 +363,7 @@ def _prepare_conversations_data(
         "output_tokens": 0,
         "input_tokens_cost_nanodollars": None,
         "output_tokens_cost_nanodollars": None,
+        "total_backend_latency_ms": None,
     }
     for request in current_conversation_requests:
         if metrics := request.get("metrics"):
@@ -373,7 +377,10 @@ def _prepare_conversations_data(
                 conversation_metrics["output_tokens_cost_nanodollars"] = (
                     conversation_metrics["output_tokens_cost_nanodollars"] or 0
                 ) + cost
-
+            if (latency := metrics.get("total_backend_latency_ms")) is not None:
+                conversation_metrics["total_backend_latency_ms"] = (
+                    conversation_metrics["total_backend_latency_ms"] or 0
+                ) + latency
     current_conversation_entry = {
         "id": chat.id,
         "requests": current_conversation_requests,
