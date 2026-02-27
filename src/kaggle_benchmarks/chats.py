@@ -46,6 +46,57 @@ class Chat:
         return [m for m in self.history if isinstance(m, Message)]
 
     @property
+    def total_input_tokens(self) -> int:
+        """Total input tokens across all assistant messages in this chat."""
+        return sum(
+            msg.input_tokens or 0
+            for msg in self.messages
+            if msg.sender.role == "assistant"
+        )
+
+    @property
+    def total_output_tokens(self) -> int:
+        """Total output tokens across all assistant messages in this chat."""
+        return sum(
+            msg.output_tokens or 0
+            for msg in self.messages
+            if msg.sender.role == "assistant"
+        )
+
+    @property
+    def total_input_tokens_cost_nanodollars(self) -> int | None:
+        """Total input token cost across all assistant messages in this chat."""
+        costs = [
+            msg.input_tokens_cost_nanodollars
+            for msg in self.messages
+            if msg.sender.role == "assistant"
+            and msg.input_tokens_cost_nanodollars is not None
+        ]
+        return sum(costs) if costs else None
+
+    @property
+    def total_output_tokens_cost_nanodollars(self) -> int | None:
+        """Total output token cost across all assistant messages in this chat."""
+        costs = [
+            msg.output_tokens_cost_nanodollars
+            for msg in self.messages
+            if msg.sender.role == "assistant"
+            and msg.output_tokens_cost_nanodollars is not None
+        ]
+        return sum(costs) if costs else None
+
+    @property
+    def total_backend_latency_ms(self) -> int | None:
+        """Total backend latency across all assistant messages in this chat."""
+        latencies = [
+            msg.total_backend_latency_ms
+            for msg in self.messages
+            if msg.sender.role == "assistant"
+            and msg.total_backend_latency_ms is not None
+        ]
+        return sum(latencies) if latencies else None
+
+    @property
     def status(self):
         return self._status
 

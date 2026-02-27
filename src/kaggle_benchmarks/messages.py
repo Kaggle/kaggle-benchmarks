@@ -55,6 +55,26 @@ class Message(Generic[T]):
         return self._meta.get("tool_calls")
 
     @property
+    def input_tokens(self) -> int | None:
+        return self._meta.get("input_tokens")
+
+    @property
+    def output_tokens(self) -> int | None:
+        return self._meta.get("output_tokens")
+
+    @property
+    def input_tokens_cost_nanodollars(self) -> int | None:
+        return self._meta.get("input_tokens_cost_nanodollars")
+
+    @property
+    def output_tokens_cost_nanodollars(self) -> int | None:
+        return self._meta.get("output_tokens_cost_nanodollars")
+
+    @property
+    def total_backend_latency_ms(self) -> int | None:
+        return self._meta.get("total_backend_latency_ms")
+
+    @property
     def payload(self) -> str | list[dict]:
         if hasattr(self.content, "get_payload"):
             return self.content.get_payload()
