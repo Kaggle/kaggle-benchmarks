@@ -323,6 +323,7 @@ def test_request_metrics_include_cost_fields():
     response._meta["output_tokens"] = 50
     response._meta["input_tokens_cost_nanodollars"] = 1000
     response._meta["output_tokens_cost_nanodollars"] = 2000
+    response._meta["total_backend_latency_ms"] = 150
     chat.append(response)
 
     conversations, _ = serialization._prepare_conversations_data(chat)
@@ -332,11 +333,13 @@ def test_request_metrics_include_cost_fields():
     assert metrics["output_tokens"] == 50
     assert metrics["input_tokens_cost_nanodollars"] == 1000
     assert metrics["output_tokens_cost_nanodollars"] == 2000
+    assert metrics["total_backend_latency_ms"] == 150
 
     # Verify conversation-level aggregation includes cost fields
     conv_metrics = conversations[0]["metrics"]
     assert conv_metrics["input_tokens_cost_nanodollars"] == 1000
     assert conv_metrics["output_tokens_cost_nanodollars"] == 2000
+    assert conv_metrics["total_backend_latency_ms"] == 150
 
 
 def test_conversation_metrics_cost_none_when_missing():
@@ -360,6 +363,7 @@ def test_conversation_metrics_cost_none_when_missing():
     assert conv_metrics["output_tokens"] == 50
     assert conv_metrics["input_tokens_cost_nanodollars"] is None
     assert conv_metrics["output_tokens_cost_nanodollars"] is None
+    assert conv_metrics["total_backend_latency_ms"] is None
 
 
 def test_int64_cost_fields_serialized_as_strings_in_json():
@@ -382,6 +386,7 @@ def test_int64_cost_fields_serialized_as_strings_in_json():
     response._meta["output_tokens"] = 50
     response._meta["input_tokens_cost_nanodollars"] = 123456789012345
     response._meta["output_tokens_cost_nanodollars"] = 987654321098765
+    response._meta["total_backend_latency_ms"] = 9007199254740992
     chat.append(response)
 
     conversations, _ = serialization._prepare_conversations_data(chat)
@@ -397,13 +402,16 @@ def test_int64_cost_fields_serialized_as_strings_in_json():
     request_metrics = raw_json["requests"][0]["metrics"]
     assert request_metrics["inputTokensCostNanodollars"] == "123456789012345"
     assert request_metrics["outputTokensCostNanodollars"] == "987654321098765"
+    assert request_metrics["totalBackendLatencyMs"] == "9007199254740992"
     assert isinstance(request_metrics["inputTokensCostNanodollars"], str)
     assert isinstance(request_metrics["outputTokensCostNanodollars"], str)
+    assert isinstance(request_metrics["totalBackendLatencyMs"], str)
 
     # Conversation-level metrics also serialized as strings
     conv_metrics = raw_json["metrics"]
     assert conv_metrics["inputTokensCostNanodollars"] == "123456789012345"
     assert conv_metrics["outputTokensCostNanodollars"] == "987654321098765"
+    assert conv_metrics["totalBackendLatencyMs"] == "9007199254740992"
 
 
 def test_int64_cost_fields_file_roundtrip():
@@ -420,6 +428,8 @@ def test_int64_cost_fields_file_roundtrip():
     large_input_cost = 9007199254740993  # > 2^53
     large_output_cost = 9007199254740994  # > 2^53
 
+    large_latency = 9007199254740995  # > 2^53
+
     run_proto = types.BenchmarkTaskRun(
         py_run_id="test-cost-run",
         conversations=[
@@ -433,6 +443,7 @@ def test_int64_cost_fields_file_roundtrip():
                             output_tokens=50,
                             input_tokens_cost_nanodollars=large_input_cost,
                             output_tokens_cost_nanodollars=large_output_cost,
+                            total_backend_latency_ms=large_latency,
                         ),
                     )
                 ],
@@ -441,6 +452,7 @@ def test_int64_cost_fields_file_roundtrip():
                     output_tokens=50,
                     input_tokens_cost_nanodollars=large_input_cost,
                     output_tokens_cost_nanodollars=large_output_cost,
+                    total_backend_latency_ms=large_latency,
                 ),
             )
         ],
@@ -462,13 +474,17 @@ def test_int64_cost_fields_file_roundtrip():
         request_metrics = conv["requests"][0]["metrics"]
         assert isinstance(request_metrics["inputTokensCostNanodollars"], str)
         assert isinstance(request_metrics["outputTokensCostNanodollars"], str)
+        assert isinstance(request_metrics["totalBackendLatencyMs"], str)
         assert request_metrics["inputTokensCostNanodollars"] == "9007199254740993"
         assert request_metrics["outputTokensCostNanodollars"] == "9007199254740994"
+        assert request_metrics["totalBackendLatencyMs"] == "9007199254740995"
 
         # Conversation-level metrics also strings
         conv_metrics = conv["metrics"]
         assert isinstance(conv_metrics["inputTokensCostNanodollars"], str)
         assert conv_metrics["inputTokensCostNanodollars"] == "9007199254740993"
+        assert isinstance(conv_metrics["totalBackendLatencyMs"], str)
+        assert conv_metrics["totalBackendLatencyMs"] == "9007199254740995"
 
         # Parse back to proto (simulating SDK read)
         with open(filepath, "r") as f:
@@ -479,3 +495,4 @@ def test_int64_cost_fields_file_roundtrip():
         parsed_metrics = parsed_proto.conversations[0].requests[0].metrics
         assert parsed_metrics.input_tokens_cost_nanodollars == 9007199254740993
         assert parsed_metrics.output_tokens_cost_nanodollars == 9007199254740994
+        assert parsed_metrics.total_backend_latency_ms == 9007199254740995
