@@ -1,4 +1,4 @@
-# Copyright 2025 Kaggle Inc.
+# Copyright 2026 Kaggle Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,22 +29,24 @@ def usage_tracking(llm, question: str) -> dict:
         # Access usage from individual messages
         for msg in chat.messages:
             if msg.sender.role == "assistant":
-                print(f"Input tokens: {msg.input_tokens}")
-                print(f"Output tokens: {msg.output_tokens}")
-                print(f"Input cost (nanodollars): {msg.input_tokens_cost_nanodollars}")
+                print(f"Input tokens: {msg.usage.input_tokens}")
+                print(f"Output tokens: {msg.usage.output_tokens}")
                 print(
-                    f"Output cost (nanodollars): {msg.output_tokens_cost_nanodollars}"
+                    f"Input cost (nanodollars): {msg.usage.input_tokens_cost_nanodollars}"
                 )
-                print(f"Backend latency (ms): {msg.total_backend_latency_ms}")
+                print(
+                    f"Output cost (nanodollars): {msg.usage.output_tokens_cost_nanodollars}"
+                )
+                print(f"Backend latency (ms): {msg.usage.total_backend_latency_ms}")
 
         # Access aggregated usage from chat
         return {
             "answer": answer,
-            "total_input_tokens": chat.total_input_tokens,
-            "total_output_tokens": chat.total_output_tokens,
-            "total_input_cost_nanodollars": chat.total_input_tokens_cost_nanodollars,
-            "total_output_cost_nanodollars": chat.total_output_tokens_cost_nanodollars,
-            "total_latency_ms": chat.total_backend_latency_ms,
+            "total_input_tokens": chat.usage.input_tokens,
+            "total_output_tokens": chat.usage.output_tokens,
+            "total_input_cost_nanodollars": chat.usage.input_tokens_cost_nanodollars,
+            "total_output_cost_nanodollars": chat.usage.output_tokens_cost_nanodollars,
+            "total_latency_ms": chat.usage.total_backend_latency_ms,
         }
 
 

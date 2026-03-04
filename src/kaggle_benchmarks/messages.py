@@ -28,6 +28,17 @@ Chunk = TypeVar("Chunk")
 
 
 @dataclasses.dataclass
+class UsageMetadata:
+    """Token usage and cost metadata for LLM interactions."""
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    input_tokens_cost_nanodollars: int | None = None
+    output_tokens_cost_nanodollars: int | None = None
+    total_backend_latency_ms: int | None = None
+
+
+@dataclasses.dataclass
 class Message(Generic[T]):
     content: T
     sender: "actors.Actor"
@@ -55,24 +66,19 @@ class Message(Generic[T]):
         return self._meta.get("tool_calls")
 
     @property
-    def input_tokens(self) -> int | None:
-        return self._meta.get("input_tokens")
-
-    @property
-    def output_tokens(self) -> int | None:
-        return self._meta.get("output_tokens")
-
-    @property
-    def input_tokens_cost_nanodollars(self) -> int | None:
-        return self._meta.get("input_tokens_cost_nanodollars")
-
-    @property
-    def output_tokens_cost_nanodollars(self) -> int | None:
-        return self._meta.get("output_tokens_cost_nanodollars")
-
-    @property
-    def total_backend_latency_ms(self) -> int | None:
-        return self._meta.get("total_backend_latency_ms")
+    def usage(self) -> UsageMetadata:
+        """Token usage and cost metadata for this message."""
+        return UsageMetadata(
+            input_tokens=self._meta.get("input_tokens"),
+            output_tokens=self._meta.get("output_tokens"),
+            input_tokens_cost_nanodollars=self._meta.get(
+                "input_tokens_cost_nanodollars"
+            ),
+            output_tokens_cost_nanodollars=self._meta.get(
+                "output_tokens_cost_nanodollars"
+            ),
+            total_backend_latency_ms=self._meta.get("total_backend_latency_ms"),
+        )
 
     @property
     def payload(self) -> str | list[dict]:

@@ -21,7 +21,7 @@ import uuid
 from typing import Any, Iterator, Self
 
 from kaggle_benchmarks import actors, events, utils
-from kaggle_benchmarks.messages import Message
+from kaggle_benchmarks.messages import Message, UsageMetadata
 
 
 @dataclasses.dataclass
@@ -46,55 +46,33 @@ class Chat:
         return [m for m in self.history if isinstance(m, Message)]
 
     @property
-    def total_input_tokens(self) -> int:
-        """Total input tokens across all assistant messages in this chat."""
-        return sum(
-            msg.input_tokens or 0
-            for msg in self.messages
-            if msg.sender.role == "assistant"
-        )
+    def usage(self) -> UsageMetadata:
+        """Aggregated token usage and cost metadata across all assistant messages."""
+        assistant_msgs = [m for m in self.messages if m.sender.role == "assistant"]
 
-    @property
-    def total_output_tokens(self) -> int:
-        """Total output tokens across all assistant messages in this chat."""
-        return sum(
-            msg.output_tokens or 0
-            for msg in self.messages
-            if msg.sender.role == "assistant"
-        )
-
-    @property
-    def total_input_tokens_cost_nanodollars(self) -> int | None:
-        """Total input token cost across all assistant messages in this chat."""
-        costs = [
-            msg.input_tokens_cost_nanodollars
-            for msg in self.messages
-            if msg.sender.role == "assistant"
-            and msg.input_tokens_cost_nanodollars is not None
+        input_costs = [
+            m.usage.input_tokens_cost_nanodollars
+            for m in assistant_msgs
+            if m.usage.input_tokens_cost_nanodollars is not None
         ]
-        return sum(costs) if costs else None
-
-    @property
-    def total_output_tokens_cost_nanodollars(self) -> int | None:
-        """Total output token cost across all assistant messages in this chat."""
-        costs = [
-            msg.output_tokens_cost_nanodollars
-            for msg in self.messages
-            if msg.sender.role == "assistant"
-            and msg.output_tokens_cost_nanodollars is not None
+        output_costs = [
+            m.usage.output_tokens_cost_nanodollars
+            for m in assistant_msgs
+            if m.usage.output_tokens_cost_nanodollars is not None
         ]
-        return sum(costs) if costs else None
-
-    @property
-    def total_backend_latency_ms(self) -> int | None:
-        """Total backend latency across all assistant messages in this chat."""
         latencies = [
-            msg.total_backend_latency_ms
-            for msg in self.messages
-            if msg.sender.role == "assistant"
-            and msg.total_backend_latency_ms is not None
+            m.usage.total_backend_latency_ms
+            for m in assistant_msgs
+            if m.usage.total_backend_latency_ms is not None
         ]
-        return sum(latencies) if latencies else None
+
+        return UsageMetadata(
+            input_tokens=sum(m.usage.input_tokens or 0 for m in assistant_msgs),
+            output_tokens=sum(m.usage.output_tokens or 0 for m in assistant_msgs),
+            input_tokens_cost_nanodollars=sum(input_costs) if input_costs else None,
+            output_tokens_cost_nanodollars=sum(output_costs) if output_costs else None,
+            total_backend_latency_ms=sum(latencies) if latencies else None,
+        )
 
     @property
     def status(self):

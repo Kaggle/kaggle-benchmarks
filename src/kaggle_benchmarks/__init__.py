@@ -29,6 +29,7 @@ from kaggle_benchmarks import (
 )
 from kaggle_benchmarks._config import ExecutionMode, config
 from kaggle_benchmarks.actors import Actor, LLMChat, system, user
+from kaggle_benchmarks.messages import UsageMetadata
 from kaggle_benchmarks.runs import Run, Runs
 from kaggle_benchmarks.tasks import benchmark, task
 

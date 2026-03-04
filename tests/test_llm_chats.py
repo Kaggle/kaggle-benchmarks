@@ -177,15 +177,15 @@ def test_chat_usage_aggregation():
 
         # Each streaming response yields: input_tokens=10, output_tokens=2
         # Two prompts = 2 * 10 = 20 input tokens, 2 * 2 = 4 output tokens
-        assert t.total_input_tokens == 20
-        assert t.total_output_tokens == 4
+        assert t.usage.input_tokens == 20
+        assert t.usage.output_tokens == 4
 
 
 def test_chat_usage_empty():
     """Test that chat usage properties return zero/None for empty chat."""
     with chats.new("Empty") as t:
-        assert t.total_input_tokens == 0
-        assert t.total_output_tokens == 0
-        assert t.total_input_tokens_cost_nanodollars is None
-        assert t.total_output_tokens_cost_nanodollars is None
-        assert t.total_backend_latency_ms is None
+        assert t.usage.input_tokens == 0
+        assert t.usage.output_tokens == 0
+        assert t.usage.input_tokens_cost_nanodollars is None
+        assert t.usage.output_tokens_cost_nanodollars is None
+        assert t.usage.total_backend_latency_ms is None
