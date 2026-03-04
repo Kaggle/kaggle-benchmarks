@@ -17,37 +17,42 @@
 # title: Usage Tracking
 # ---
 # %%
-from kaggle_benchmarks import chats, llm, task
+from kaggle_benchmarks import assert_true, chats, llm, task
 
 
 @task(name="Usage tracking")
-def usage_tracking(llm, question: str) -> dict:
+def usage_tracking(llm, question: str) -> str:
     """Demonstrates accessing token usage, costs, and latency metrics."""
     with chats.new("Conversation") as chat:
         answer = llm.prompt(question)
 
         # Access usage from individual messages
         for msg in chat.messages:
-            if msg.sender.role == "assistant":
-                print(f"Input tokens: {msg.usage.input_tokens}")
-                print(f"Output tokens: {msg.usage.output_tokens}")
-                print(
-                    f"Input cost (nanodollars): {msg.usage.input_tokens_cost_nanodollars}"
-                )
-                print(
-                    f"Output cost (nanodollars): {msg.usage.output_tokens_cost_nanodollars}"
-                )
-                print(f"Backend latency (ms): {msg.usage.total_backend_latency_ms}")
+            print(f"Input tokens: {msg.usage.input_tokens}")
+            print(f"Output tokens: {msg.usage.output_tokens}")
+            print(
+                f"Input cost (nanodollars): {msg.usage.input_tokens_cost_nanodollars}"
+            )
+            print(
+                f"Output cost (nanodollars): {msg.usage.output_tokens_cost_nanodollars}"
+            )
+            print(f"Backend latency (ms): {msg.usage.total_backend_latency_ms}")
+
+        # Assert total cost is within a reasonable range ($0 to $100)
+        assert_true(
+            0 <= chat.usage.total_cost_nanodollars <= 100 * 1e9,
+            "Cost is between $0 and $100",
+        )
 
         # Access aggregated usage from chat
-        return {
-            "answer": answer,
-            "total_input_tokens": chat.usage.input_tokens,
-            "total_output_tokens": chat.usage.output_tokens,
-            "total_input_cost_nanodollars": chat.usage.input_tokens_cost_nanodollars,
-            "total_output_cost_nanodollars": chat.usage.output_tokens_cost_nanodollars,
-            "total_latency_ms": chat.usage.total_backend_latency_ms,
-        }
+        return (
+            f"Answer: {answer}\n"
+            f"Total input tokens: {chat.usage.input_tokens}\n"
+            f"Total output tokens: {chat.usage.output_tokens}\n"
+            f"Total input cost (nanodollars): {chat.usage.input_tokens_cost_nanodollars}\n"
+            f"Total output cost (nanodollars): {chat.usage.output_tokens_cost_nanodollars}\n"
+            f"Total latency (ms): {chat.usage.total_backend_latency_ms}"
+        )
 
 
 result = usage_tracking.run(llm, "What is machine learning?")

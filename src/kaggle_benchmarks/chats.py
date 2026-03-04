@@ -48,30 +48,33 @@ class Chat:
     @property
     def usage(self) -> UsageMetadata:
         """Aggregated token usage and cost metadata across all assistant messages."""
-        assistant_msgs = [m for m in self.messages if m.sender.role == "assistant"]
+        input_tokens = 0
+        output_tokens = 0
+        input_cost: int | None = None
+        output_cost: int | None = None
+        latency: int | None = None
 
-        input_costs = [
-            m.usage.input_tokens_cost_nanodollars
-            for m in assistant_msgs
-            if m.usage.input_tokens_cost_nanodollars is not None
-        ]
-        output_costs = [
-            m.usage.output_tokens_cost_nanodollars
-            for m in assistant_msgs
-            if m.usage.output_tokens_cost_nanodollars is not None
-        ]
-        latencies = [
-            m.usage.total_backend_latency_ms
-            for m in assistant_msgs
-            if m.usage.total_backend_latency_ms is not None
-        ]
+        for m in self.messages:
+            if m.sender.role != "assistant":
+                continue
+
+            input_tokens += m.usage.input_tokens or 0
+            output_tokens += m.usage.output_tokens or 0
+            if m.usage.input_tokens_cost_nanodollars is not None:
+                input_cost = (input_cost or 0) + m.usage.input_tokens_cost_nanodollars
+            if m.usage.output_tokens_cost_nanodollars is not None:
+                output_cost = (
+                    output_cost or 0
+                ) + m.usage.output_tokens_cost_nanodollars
+            if m.usage.total_backend_latency_ms is not None:
+                latency = (latency or 0) + m.usage.total_backend_latency_ms
 
         return UsageMetadata(
-            input_tokens=sum(m.usage.input_tokens or 0 for m in assistant_msgs),
-            output_tokens=sum(m.usage.output_tokens or 0 for m in assistant_msgs),
-            input_tokens_cost_nanodollars=sum(input_costs) if input_costs else None,
-            output_tokens_cost_nanodollars=sum(output_costs) if output_costs else None,
-            total_backend_latency_ms=sum(latencies) if latencies else None,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            input_tokens_cost_nanodollars=input_cost,
+            output_tokens_cost_nanodollars=output_cost,
+            total_backend_latency_ms=latency,
         )
 
     @property

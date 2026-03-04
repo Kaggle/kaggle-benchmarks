@@ -27,7 +27,7 @@ T = TypeVar("T")
 Chunk = TypeVar("Chunk")
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class UsageMetadata:
     """Token usage and cost metadata for LLM interactions."""
 
