@@ -67,6 +67,9 @@ def render_message_content(content: Any) -> pn.viewable.Viewable:
 def render_message(message: messages.Message, **kwargs) -> pn.chat.ChatMessage:
     footer = kwargs.pop("footer_objects", [])
 
+    if hasattr(message, "usage") and message.usage:
+        footer.append(render_usage(message.usage))
+
     if message._meta and config.show_message_details:
         footer.append(json_pane(message._meta, "Details:", depth=0))
 
@@ -90,11 +93,25 @@ def render_thinking(thinking):
 
 
 def render_usage(usage):
-    if usage and usage.input_tokens is not None and usage.output_tokens is not None:
-        return pn.panel(
-            f"Input token: {usage.input_tokens}, Output token: {usage.output_tokens}"
-        )
-    return pn.panel("")
+    if usage is None:
+        return pn.panel("")
+
+    parts = []
+    if usage.input_tokens is not None:
+        parts.append(f"Input Tokens: {usage.input_tokens}")
+    if usage.output_tokens is not None:
+        parts.append(f"Output Tokens: {usage.output_tokens}")
+    if usage.total_cost_nanodollars is not None:
+        cost_dollars = usage.total_cost_nanodollars / 1e9
+        parts.append(f"Cost: ${cost_dollars:.6f}")
+    if usage.total_backend_latency_ms is not None:
+        parts.append(f"Latency: {usage.total_backend_latency_ms}ms")
+
+    if not parts:
+        return pn.panel("")
+    return pn.pane.Markdown(
+        f"*{' · '.join(parts)}*", styles={"font-size": "0.8em", "color": "gray"}
+    )
 
 
 def render_llm_message(message, **kwargs) -> pn.chat.ChatMessage:

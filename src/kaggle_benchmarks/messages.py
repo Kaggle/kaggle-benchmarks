@@ -57,7 +57,7 @@ class Message(Generic[T]):
     @property
     def usage(self):
         """Token usage and cost metadata for this message."""
-        from kaggle_benchmarks.llm_messages import Usage
+        from kaggle_benchmarks.usage import Usage
 
         return Usage(
             input_tokens=self._meta.get("input_tokens"),

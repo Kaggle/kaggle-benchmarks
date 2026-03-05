@@ -16,56 +16,9 @@ from typing import Iterable, Self, TypeVar
 
 from kaggle_benchmarks import chats, messages, utils
 from kaggle_benchmarks import tools as tool_utils
+from kaggle_benchmarks.usage import Usage
 
 T = TypeVar("T")
-
-
-@dataclasses.dataclass(frozen=True)
-class Usage:
-    """Represents the token usage, cost, and latency of an LLM invocation."""
-
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    input_tokens_cost_nanodollars: int | None = None
-    output_tokens_cost_nanodollars: int | None = None
-    total_backend_latency_ms: int | None = None
-
-    @property
-    def total_cost_nanodollars(self) -> int | None:
-        """Total cost in nanodollars (input + output)."""
-        if (
-            self.input_tokens_cost_nanodollars is None
-            and self.output_tokens_cost_nanodollars is None
-        ):
-            return None
-        return (self.input_tokens_cost_nanodollars or 0) + (
-            self.output_tokens_cost_nanodollars or 0
-        )
-
-    def __add__(self, other: Self | None) -> Self:
-        if other is None:
-            return self
-
-        def add_optional(a: int | None, b: int | None) -> int | None:
-            if a is None and b is None:
-                return None
-            return (a or 0) + (b or 0)
-
-        return Usage(
-            input_tokens=add_optional(self.input_tokens, other.input_tokens),
-            output_tokens=add_optional(self.output_tokens, other.output_tokens),
-            input_tokens_cost_nanodollars=add_optional(
-                self.input_tokens_cost_nanodollars,
-                other.input_tokens_cost_nanodollars,
-            ),
-            output_tokens_cost_nanodollars=add_optional(
-                self.output_tokens_cost_nanodollars,
-                other.output_tokens_cost_nanodollars,
-            ),
-            total_backend_latency_ms=add_optional(
-                self.total_backend_latency_ms, other.total_backend_latency_ms
-            ),
-        )
 
 
 @dataclasses.dataclass

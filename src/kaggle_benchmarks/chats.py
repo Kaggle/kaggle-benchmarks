@@ -21,8 +21,8 @@ import uuid
 from typing import Any, Iterator, Self
 
 from kaggle_benchmarks import actors, events, utils
-from kaggle_benchmarks.llm_messages import Usage
 from kaggle_benchmarks.messages import Message
+from kaggle_benchmarks.usage import Usage
 
 
 @dataclasses.dataclass
