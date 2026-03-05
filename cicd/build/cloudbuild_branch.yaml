@@ -32,11 +32,20 @@ steps:
     args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}", "--all-tags"]
     waitFor: ["build-image"]
 
-  - id: test
+  - id: test-3.11
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
     dir: /benchmarks
     entrypoint: uv
-    args: ["run", "--group", "test", "pytest", "tests"]
+    args: ["run", "--python", "3.11", "--group", "test", "pytest", "tests"]
+    waitFor: ["push-image"]
+    env:
+      - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
+
+  - id: test-3.12
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    dir: /benchmarks
+    entrypoint: uv
+    args: ["run", "--python", "3.12", "--group", "test", "pytest", "tests"]
     waitFor: ["push-image"]
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
