@@ -21,7 +21,8 @@ import uuid
 from typing import Any, Iterator, Self
 
 from kaggle_benchmarks import actors, events, utils
-from kaggle_benchmarks.messages import Message, UsageMetadata
+from kaggle_benchmarks.llm_messages import Usage
+from kaggle_benchmarks.messages import Message
 
 
 @dataclasses.dataclass
@@ -46,36 +47,13 @@ class Chat:
         return [m for m in self.history if isinstance(m, Message)]
 
     @property
-    def usage(self) -> UsageMetadata:
+    def usage(self) -> Usage:
         """Aggregated token usage and cost metadata across all assistant messages."""
-        input_tokens = 0
-        output_tokens = 0
-        input_cost: int | None = None
-        output_cost: int | None = None
-        latency: int | None = None
-
+        total = Usage()
         for m in self.messages:
-            if m.sender.role != "assistant":
-                continue
-
-            input_tokens += m.usage.input_tokens or 0
-            output_tokens += m.usage.output_tokens or 0
-            if m.usage.input_tokens_cost_nanodollars is not None:
-                input_cost = (input_cost or 0) + m.usage.input_tokens_cost_nanodollars
-            if m.usage.output_tokens_cost_nanodollars is not None:
-                output_cost = (
-                    output_cost or 0
-                ) + m.usage.output_tokens_cost_nanodollars
-            if m.usage.total_backend_latency_ms is not None:
-                latency = (latency or 0) + m.usage.total_backend_latency_ms
-
-        return UsageMetadata(
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            input_tokens_cost_nanodollars=input_cost,
-            output_tokens_cost_nanodollars=output_cost,
-            total_backend_latency_ms=latency,
-        )
+            if m.sender.role == "assistant":
+                total = total + m.usage
+        return total
 
     @property
     def status(self):

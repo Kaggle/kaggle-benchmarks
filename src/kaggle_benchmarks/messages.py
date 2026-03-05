@@ -27,17 +27,6 @@ T = TypeVar("T")
 Chunk = TypeVar("Chunk")
 
 
-@dataclasses.dataclass(frozen=True)
-class UsageMetadata:
-    """Token usage and cost metadata for LLM interactions."""
-
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    input_tokens_cost_nanodollars: int | None = None
-    output_tokens_cost_nanodollars: int | None = None
-    total_backend_latency_ms: int | None = None
-
-
 @dataclasses.dataclass
 class Message(Generic[T]):
     content: T
@@ -66,9 +55,11 @@ class Message(Generic[T]):
         return self._meta.get("tool_calls")
 
     @property
-    def usage(self) -> UsageMetadata:
+    def usage(self):
         """Token usage and cost metadata for this message."""
-        return UsageMetadata(
+        from kaggle_benchmarks.llm_messages import Usage
+
+        return Usage(
             input_tokens=self._meta.get("input_tokens"),
             output_tokens=self._meta.get("output_tokens"),
             input_tokens_cost_nanodollars=self._meta.get(
