@@ -17,7 +17,8 @@
 # title: Usage Tracking
 # ---
 # %%
-from kaggle_benchmarks import assert_true, chats, llm, task
+from kaggle_benchmarks import chats, llm, task
+from kaggle_benchmarks.assertions import assert_true
 
 
 @task(name="Usage tracking")
@@ -39,8 +40,9 @@ def usage_tracking(llm, question: str) -> str:
             print(f"Backend latency (ms): {msg.usage.total_backend_latency_ms}")
 
         # Assert total cost is within a reasonable range ($0 to $100)
+        total_cost = chat.usage.total_cost_nanodollars or 0
         assert_true(
-            0 <= chat.usage.total_cost_nanodollars <= 100 * 1e9,
+            0 <= total_cost <= 100 * 1e9,
             "Cost is between $0 and $100",
         )
 
