@@ -1,5 +1,5 @@
 """
-Golden tests for code generation to ensure backward compatibility and end-to-end validation.
+Golden tests for simulated code generation to ensure backward compatibility and end-to-end validation.
 
 Excluded from standard CI/CD due to manual configuration requirements (e.g., API keys).
 
@@ -33,7 +33,7 @@ NUM_RUNS = int(os.environ.get("CODE_GEN_NUM_RUNS", "3"))
 # System prompt instructing the LLM on writing benchmark code.
 # Update this to experiment with generation strategies or output constraints.
 TASK_GENERATOR_PROMPT = """
-You are a specialized code-generation model. Your sole purpose is to output executable Python code using the `kaggle_benchmarks` library.
+You are a specialized code-generation model. Your sole purpose is to output executable valid Python code using the `kaggle_benchmarks` library.
 
 **Global Constraints (STRICT):**
 1.  **NO MARKDOWN:** Do not use code fences (```). Do not use bold/italic text.
@@ -48,14 +48,16 @@ ${doc_prompt}
 <<<< DOCUMENTATION END >>>>
 
 **Coding Standards:**
-1.  **Task Definition:** Define a task using the `@kbench.task()` decorator. The task name should be a short, descriptive string in quotes, derived from the user's request (e.g., "count 'r's in strawberry").
-2.  **Signature:** The function signature for the task should be simple, usually just `def your_task_name(llm):`. If it returns value, specify the return type.
-3.  **Structured Response:** Use a schema for LLM response if it helps with evaluations and assertions. Also try to be specific about the expected type of the response in the prompt to the LLM.
-3.  **Assertions:**
+1.  *Follow Examples* Try to follow the examples in the documentation as closely as possible.
+2.  **Task Definition:** Define a task using the `@kbench.task()` decorator. The task name should be a short, descriptive string in quotes, derived from the user's request (e.g., "count 'r's in strawberry").
+3.  **Signature:** The function signature for the task should be simple, usually just `def your_task_name(llm):`. If it returns value, specify the return type.
+4.  **Structured Response:** Use a schema for LLM response if it helps with evaluations and assertions. Also try to be specific about the expected type of the response in the prompt to the LLM.
+5.  **Assertions:**
     * Assertions should be general and flexible, e.g., if the expected is 4, the assertion should be able to handle 4.0, 4.00, four etc.
     * Prioritize `assertions.assess_response_with_judge` for qualitative checks.
     * Use other assertions only if the criteria are rigid (e.g., exact string match).
-4.  **Execution:** The script must end with a call to run the task, like `your_task_name.run(kbench.llm)`.
+5.  **Execution:** The script must end with a call to run the task, like `your_task_name.run(kbench.llm)`.
+6.  **Always generate valid python code.** Specially regular expression, use of dataclass and pydantic should be correct.
 
 **The Request:**
 Generate a Python script for the following task.
@@ -150,13 +152,6 @@ TEST_DESCRIPTIONS = [
         "The answer is 3 hours",
     ),
 ]
-
-# TEST_DESCRIPTIONS = [
-#     (
-#         "List the planets in our solar system as json",
-#         "The output is valid json and includes Earth",
-#     ),
-# ]
 
 def _initialize_models(api: str):
     """Limits model loading and configures stringent SDK testing parameters."""

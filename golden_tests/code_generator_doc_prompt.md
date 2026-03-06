@@ -8,7 +8,7 @@ get the most out of the library.
 
 The most fundamental task type is one that asserts a condition and
 returns nothing. If all assertions pass, the task succeeds; otherwise,
-it fails. This is perfect for simple Q&A checks.
+it fails. This is perfect for simple Q&A checks. By default, assertions are non-halting, meaning all assertions in the task will run and record their results, and the task fails if any assertion failed.
 
 ``` python
 import kaggle_benchmarks as kbench
@@ -20,7 +20,7 @@ def check_capital(llm):
 
     # 2. Assert the correctness of the response
     # We use a regex for robust, case-insensitive matching.
-    # For other supported assertions please see the Assertion Notebook linked below.
+    # Signature: assert_contains_regex(pattern: str | re.Pattern, text: str, expectation: str | None)
     kbench.assertions.assert_contains_regex(
         r"(?i)Paris", response, expectation="Model should answer Paris."
     )
@@ -30,14 +30,20 @@ check_capital.run(kbench.llm)
 
 ## Recipe: Using different types of assertions
 
-Assertions are the core of the evaluation logic in kaggle-benchmarks. They allow you to validate the output of your Language Models (LLMs) against expected criteria. Each assertion returns an AssertionResult which tracks pass/fail status and provides detailed feedback.
+Assertions are the core of the evaluation logic in kaggle-benchmarks. They allow you to validate the output of your Language Models (LLMs) against expected criteria. Each assertion returns an `AssertionResult` dataclass (containing `passed`, `expectation`, `actual`, and `expected` fields).
 
-- `assert_equal`: Checks if two values are exactly equal.
-- `assert_true / assert_false`: Validates boolean conditions.
-- `assert_in / assert_not_in`: Checks for membership in a container (string, list, dict, etc.). Great for keyword spotting or ensuring forbidden words are avoided.
-- `assert_empty / assert_not_empty`: Checks if a container is empty or not. Useful for validating lists of errors or extracted entities.
-- `assert_contains_regex / assert_not_contains_regex`: Uses regular expressions to search for patterns. Essential for validating structured formats like dates, emails, or specific code patterns.
-- `assert_fail`: Use assert_fail to unconditionally signal a failure when a specific code path is reached, such as within exception handlers or the else block of complex logic checks.
+**Built-in Assertion Signatures:**
+- `assert_true(expr: bool, expectation: str | None = None)`
+- `assert_false(expr: bool, expectation: str | None = None)`
+- `assert_equal(expected: Any, actual: Any, expectation: str | None = None)`
+- `assert_in(member: Any, container: Any, expectation: str | None = None)`
+- `assert_not_in(member: Any, container: Any, expectation: str | None = None)`
+- `assert_empty(container: Any, expectation: str | None = None)`
+- `assert_not_empty(container: Any, expectation: str | None = None)`
+- `assert_contains_regex(pattern: str | re.Pattern[str], text: str, expectation: str | None = None)`
+- `assert_not_contains_regex(pattern: str | re.Pattern[str], text: str, expectation: str | None = None)`
+- `assert_raises_no_exceptions(callable_obj: Callable, expectation: str | None = None, *args, **kwargs)`
+- `assert_fail(expectation: str | None = None)`: Unconditionally record a failure.
 
 Examples of assertions:
 ```python
@@ -63,13 +69,7 @@ def code_validation_task(llm):
         expectation="The function should be named 'add'."
     )
 
-    # 3. Check for a docstring
-    assertions.assert_true(
-        '"""' in generated_code or "'''" in generated_code,
-        expectation="The function should include a docstring."
-    )
-
-    # 4. Ensure no dangerous keywords are present
+    # 3. Ensure no dangerous keywords are present
     forbidden_words = ["exec", "eval"]
     for word in forbidden_words:
         assertions.assert_not_in(
@@ -78,9 +78,8 @@ def code_validation_task(llm):
             expectation=f"The output should not contain the dangerous keyword: {word}"
         )
 
-    # 5. Check if the function correctly adds two numbers
+    # 4. Safely test logic execution wrapper
     try:
-        # A safe way to test the function's logic without using exec
         assertions.assert_contains_regex(
             r"return.*?\+.*?",
             generated_code,
@@ -88,7 +87,6 @@ def code_validation_task(llm):
         )
     except Exception as e:
         assertions.assert_fail(f"Could not validate the function's logic: {e}")
-
 
 code_validation_task.run(llm)
 ```
@@ -99,8 +97,7 @@ For complex, open-ended, or subjective tasks, simple assertions may not
 suffice. You can leverage a “Judge” LLM to evaluate responses against a
 list of criteria using `assess_response_with_judge`.
 
-Note that unlike deterministic assertions, judge evaluations can be
-subjective and may vary between runs.
+**Note:** Any exception during the judge invocation causes the function to return `None`. You must check for `None` before iterating over the results. The default return type is an `AssessReport` containing a list of `AssessResult` objects (with fields: `criterion`, `passed`, `reason`, `confidence`).
 
 ``` python
 import kaggle_benchmarks as kbench
@@ -109,7 +106,8 @@ import kaggle_benchmarks as kbench
 def haiku_evaluation(llm, topic):
     response = llm.prompt(f"Write a haiku about {topic}.")
 
-    # Assess the response using a judge (can be the same LLM or a stronger one)
+    # Assess the response using a judge
+    # Signature: assess_response_with_judge(criteria: Iterable[str], response_text: str, judge_llm: Any, prompt_fn=None, output_schema=AssessReport)
     assessment = kbench.assertions.assess_response_with_judge(
         criteria=[
             "The poem must have exactly 3 lines.",
@@ -117,8 +115,13 @@ def haiku_evaluation(llm, topic):
             f"The poem must be about {topic}.",
         ],
         response_text=response,
-        judge_llm=llm
+        judge_llm=kbench.judge_llm
     )
+
+    # Handle judge failure gracefully
+    if assessment is None:
+        kbench.assertions.assert_fail(expectation="Judge LLM failed to return a valid assessment.")
+        return
 
     # Convert judge results into formal assertions
     for result in assessment.results:
@@ -130,24 +133,21 @@ def haiku_evaluation(llm, topic):
 haiku_evaluation.run(kbench.judge_llm, topic="AGI")
 ```
 
-You can provide a custom prompt and output schema to tailor the judge’s
-evaluation to your specific needs.
+You can provide a custom prompt function and output schema to tailor the judge’s
+evaluation to your specific needs. The custom prompt function must accept `(criteria: Iterable[str], response_text: str) -> str`.
 
 ``` python
 import dataclasses
 import textwrap
 from typing import Iterable
-
 import kaggle_benchmarks as kbench
 
 @dataclasses.dataclass
 class StoryCritique:
     """A custom schema for receiving a story critique from the judge."""
-
     overall_rating: int  # A rating from 1 (poor) to 5 (excellent).
     feedback: str  # General feedback on the story.
     passed_checks: list[str]  # A list of criteria that the story successfully met.
-
 
 def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
     """A custom prompt function that instructs the judge to use the StoryCritique schema."""
@@ -160,27 +160,16 @@ def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
 
         **Evaluation Criteria:**
         {formatted_criteria}
-
-        Provide your assessment in a JSON format with three fields:
-        1. `overall_rating`: An integer from 1 to 5.
-        2. `feedback`: A short paragraph of constructive feedback.
-        3. `passed_checks`: A list of strings containing the criteria that were fully met.
     """)
-
 
 @kbench.task()
 def critique_short_story(llm):
-    """This task demonstrates using a custom prompt and schema for the judge."""
-    story = llm.prompt(
-        "Write a one-paragraph short story about a robot who discovers music."
-    )
+    story = llm.prompt("Write a one-paragraph short story about a robot who discovers music.")
 
     critique = kbench.assertions.assess_response_with_judge(
         criteria=[
             "The story is exactly one paragraph.",
             "The main character is a robot.",
-            "The story is about the discovery of music.",
-            "The story has a clear beginning, middle, and end.",
             "The story is inspired by a true story.",  # This should FAIL.
         ],
         response_text=story,
@@ -190,20 +179,17 @@ def critique_short_story(llm):
     )
 
     if critique is None:
-        kbench.assertions.assert_fail(
-            expectation="Judge LLM should respond with a critique."
-        )
+        kbench.assertions.assert_fail(expectation="Judge LLM should respond with a critique.")
     else:
-        # You can now add assertions based on your custom critique object.
         kbench.assertions.assert_true(
             critique.overall_rating >= 3,
-            f"Story rating was {critique.overall_rating}, which is below the acceptable threshold of 3.",
+            expectation=f"Story rating was {critique.overall_rating}, which is below the acceptable threshold of 3.",
         )
-        kbench.assertions.assert_true(
-            "The story is inspired by a true story." not in critique.passed_checks,
-            "The critique incorrectly passed a failing criterion.",
+        kbench.assertions.assert_not_in(
+            "The story is inspired by a true story.",
+            critique.passed_checks,
+            expectation="The critique incorrectly passed a failing criterion."
         )
-
 
 critique_short_story.run(kbench.judge_llm)
 ```
@@ -211,58 +197,27 @@ critique_short_story.run(kbench.judge_llm)
 ## Recipe: Returning a Numerical Score
 
 To track granular metrics like accuracy or a specific score, your task
-should return a value. You **must** add a return type annotation (e.g.,
-`-> float`) so the leaderboard knows how to interpret the result.
+should return a value. You **must** add a Python return type annotation to your function signature so the framework knows how to correctly serialize the result into the `BenchmarkTaskRun` protobuf.
 
-``` python
-@kbench.task(name="math_score")
-def math_score(llm) -> float:
-    # ... perform complex logic or multiple checks ...
-    score = 0.85
-    return score
-```
-
-The supported return types are:
-
-- `None`: The default. The task succeeds if no assertions fail.
-- `bool`: Returns True for success (Pass) and False for failure (Fail).
-- `float`: Returns a continuous score (e.g., 0.0 to 1.0).
-- `tuple[int, int]`: Returns a count of (passed, total) items.
-- `tuple[float, float]`: Returns a (score, confidence_interval) pair.
-- `dict`: Returns a dictionary of metrics. Dictionary metrics are NOT currently supported on leaderboard. But they can be used for detailed analysis as intermediate tasks, e.g. for dataset evaluation.
-
-Here are some examples of different return types
+Supported return type annotations:
+- `None` (or no annotation): Task succeeds if no assertions fail.
+- `-> bool`: Returns True for success (Pass) and False for failure (Fail).
+- `-> int` / `-> float`: Returns a direct numeric score. It is best practice to normalize this to `[0.0, 1.0]`.
+- `-> tuple[int, int]`: Returns a count of `(successes, total)` attempts.
+- `-> tuple[float, float]`: Returns a `(score, confidence_interval)` pair.
 
 ```python
 import kaggle_benchmarks as kbench
-
-# Pass/fail task
-@kbench.task(name="check_capital")
-def check_capital(llm):
-    response = llm.prompt("What is the capital of France?")
-    # We use assert_contains_regex for a case-insensitive match.
-    kbench.assertions.assert_contains_regex(
-        r"(?i)Paris", response, expectation="Model should answer Paris."
-    )
-
-# Bool task
-@kbench.task(name="solve_riddle")
-def solve_riddle(llm) -> bool:
-    riddle = "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?"
-    response = llm.prompt(f"Solve this riddle: {riddle}")
-    return "echo" in response.lower()
 
 # Float (score) task
 @kbench.task(name="conciseness_score")
 def conciseness_score(llm) -> float:
     text = "The quick brown fox jumps over the lazy dog." * 5
-    # Task: Summarize in exactly 5 words
     response = llm.prompt(f"Summarize this text in exactly 5 words: {text}")
 
     word_count = len(response.split())
-    # Score: 1.0 if perfect, penalize deviation
     error = abs(word_count - 5)
-    return max(0.0, 1.0 - (error / 5.0))
+    return max(0.0, 1.0 - (error / 5.0)) # Normalized between 0 and 1
 
 # Tuple[int, int] (Count) Task
 @kbench.task(name="math_quiz")
@@ -273,126 +228,61 @@ def math_quiz(llm) -> tuple[int, int]:
         if a in llm.prompt(f"What is {q}?"):
             correct += 1
     return correct, len(questions)
-
-# Tuple[float, float] (Metric ± Confidence) Task
-import statistics
-
-@kbench.task(name="memorization_test")
-def memorization_test(llm) -> tuple[float, float]:
-    # Run 5 trials to test stability
-    scores = []
-    for _ in range(5):
-        seq = "7-9-2-5-1"
-        response = llm.prompt(f"Repeat this sequence: {seq}")
-        # Score 1.0 for exact match, 0.0 otherwise
-        scores.append(1.0 if seq in response else 0.0)
-
-    # Return mean accuracy and standard deviation
-    return statistics.mean(scores), statistics.stdev(scores)
-
-# Dict (Detailed Metrics) Task
-@kbench.task(name="detailed_analysis")
-def detailed_analysis(llm) -> dict:
-    response = llm.prompt("Write a haiku about coding.")
-    return {
-        "char_count": len(response),
-        "word_count": len(response.split()),
-        "has_keywords": "code" in response.lower()
-    }
-
 ```
 
 ## Recipe: Enforcing Structured Output with Schemas
 
 You can force the LLM to return data in a specific structure by
-providing a `schema` to the `prompt` method. This is essential for tasks
-that require structured output.
+providing a `schema` to the `prompt` method. The framework will automatically handle generating the JSON schema, parsing the LLM response, and returning a typed Python object.
 
-**Currently the only supported schema types are: int, bool, dict, dataclass, and pydantic BaseModel. We recommend using dataclass or pydantic BaseModel for customized structures.**
+**Supported Schema Types:**
+- Primitives: `int`, `float`, `bool`, `str`, `datetime.datetime` (Note: `str` returns the raw text response, skipping JSON parsing).
+- Structures: `TypedDict`, `dataclasses.dataclass`, and `pydantic.BaseModel`.
+*(Note: Do not pass generic `list` directly as a schema; wrap lists inside a dataclass or BaseModel).*
 
-**DO NOT use `list`, `List`, or `list[...]` as a schema.** If you need to return a list of items (like a list of names or planets), you must wrap it in a `dataclass`, or `BaseModel`.
-* **Incorrect:** `llm.prompt(..., schema=list[str])`
-* **Correct:** `llm.prompt(..., schema=dict)` (and ask for a dictionary containing the list) or define a `dataclass`/`BaseModel` with a list field.
+**Handling Errors:** Always wrap structured calls in a `try/except` block for `ResponseParsingError` if reliability is critical.
 
-``` python
-from dataclasses import dataclass
-
-@dataclass
-class MovieReview:
-    sentiment: str
-    score: int
-
-@kbench.task(name="analyze_review")
-def analyze_review(llm):
-    # The model will return an instance of MovieReview, not a string.
-    result = llm.prompt(
-        "Analyze this review: 'Fantastic movie!'. Respond with a valid JSON.",
-        schema=MovieReview
-    )
-    print(f"Score: {result.score}, Sentiment: {result.sentiment}")
-```
-
-Please note different models have different capabilities to support structured output. Try use alternatives if one doesn't work for your use case. Here are some examples of different structure output.
 ```python
-# Native Python Types as Output Schema
-@kbench.task(name="extract_year")
-def extract_year(llm):
-    """Extracts a year as an integer."""
-    text = "The Apollo 11 mission landed on the Moon in 1969. Respond with only the integer number."
-    # Force the model to return an integer
-    year = llm.prompt(f"Extract the year from this text: '{text}'", schema=int)
-
-    kbench.assertions.assert_equal(
-        1969, year, expectation="Extracted year should be 1969."
-    )
-
-# Dictionary as Output Schema
-@kbench.task(name="extract_person")
-def extract_person(llm):
-    """Extracts basic person details into a dictionary."""
-    text = "Contact info: John Doe, age 42, works as a Software Engineer."
-
-    # Define schema as a dictionary of types
-    person_schema = {
-        "name": str,
-        "age": int,
-        "occupation": str
-    }
-
-    person = llm.prompt(
-        f"Extract person details from: '{text}'. Respond with a valid JSON.",
-        schema=person_schema
-    )
-
-    kbench.assertions.assert_equal(
-        "John Doe", person.name, expectation="Name should be John Doe."
-    )
-
-# Dataclasses as Output Schema
-from dataclasses import dataclass
-
-@dataclass
-class RPGCharacter:
-    name: str
-    class_type: str
-    level: int
-    inventory: str
-
-@kbench.task(name="generate_character")
-def generate_character(llm):
-    """Generates an RPG character using a dataclass schema."""
-    character = llm.prompt(
-        "Generate a level 5 wizard character for a fantasy game. Respond with a valid JSON.",
-        schema=RPGCharacter
-    )
-
-    kbench.assertions.assert_true(
-        len(character.name) > 0, expectation="Character should have a name."
-    )
-
-# Pydantic class as Output Schema
+import kaggle_benchmarks as kbench
+from kaggle_benchmarks.prompting import ResponseParsingError
 from pydantic import BaseModel, Field
 
+# 1. Define the new schema with a list of strings
+class LanguageList(BaseModel):
+    languages: list[str] = Field(default_factory=list, description="A list of programming language names.")
+
+@kbench.task(name="list_programming_languages")
+def list_programming_languages(llm):
+    # 2. Update the prompt to match the new topic and schema
+    prompt = "List 5 of the most popular programming languages today. Your response must be a JSON object with a single key 'languages' which holds a list of the language names as strings."
+
+    try:
+        response = llm.prompt(prompt, schema=LanguageList)
+
+        # 3. Normalize the output for a safer assertion check
+        languages_lower = [lang.lower() for lang in response.languages]
+
+        # 4. Assert that "python" made it into the LLM's list
+        kbench.assertions.assert_in(
+            "python",
+            languages_lower,
+            expectation="The list of popular programming languages should include 'Python'."
+        )
+
+    except ResponseParsingError as e:
+        # Catch any parsing or schema validation errors
+        kbench.assertions.assert_fail(
+            expectation=f"The output was not valid JSON or did not match the LanguageList schema. Error: {e.error}"
+        )
+
+# Run the task
+list_programming_languages.run(kbench.llm)
+```
+
+```python
+from pydantic import BaseModel, Field
+from kaggle_benchmarks.prompting import ResponseParsingError
+import kaggle_benchmarks as kbench
 
 class Planet(BaseModel):
     name: str
@@ -403,91 +293,66 @@ class Planet(BaseModel):
 @kbench.task(name="planet_info")
 def planet_info(llm):
     """Retrieves planet information using a Pydantic model."""
-    planet = llm.prompt(
-        "Provide information about the planet Jupiter. Respond with a valid JSON.",
-        schema=Planet
-    )
-
-    kbench.assertions.assert_contains_regex(
-        r"(?i)jupiter", planet.name, expectation="Planet name should be Jupiter."
-    )
+    try:
+        planet = llm.prompt(
+            "Provide information about the planet Jupiter.",
+            schema=Planet
+        )
+        kbench.assertions.assert_contains_regex(
+            r"(?i)jupiter", planet.name, expectation="Planet name should be Jupiter."
+        )
+    except ResponseParsingError as e:
+        kbench.assertions.assert_fail(expectation=f"Failed to parse structured output: {e.error}")
 ```
 
 ## Recipe: Evaluating Performance on a Dataset
 
-Instead of a single run, you often want to evaluate a task over many
-examples. Use the `.evaluate()` method to run your task against every
-row in a pandas DataFrame.
+Instead of a single run, you can evaluate a task over many examples using the `.evaluate()` method. This maps pandas DataFrame columns directly to your task function's parameters.
+
+**Full Signature:** `task.evaluate(llm, evaluation_data, n_jobs=1, timeout=None, stop_condition=None, max_attempts=1, retry_delay=0, remove_run_files=False)`
+
+**Important Note:** `max_attempts` must be 1 for evaluations nested in other tasks.
 
 ``` python
 import pandas as pd
 import kaggle_benchmarks as kbench
 
-# 1. Prepare your dataset
+# 1. Prepare your dataset columns (maps directly to task parameters)
 df = pd.DataFrame([
     {"question": "2+2", "answer": "4"},
     {"question": "Capital of UK", "answer": "London"},
 ])
 
-# 2. Define a task that accepts row columns as arguments
+# 2. Define a task that accepts the row columns as arguments
 @kbench.task(name="single_qa_task", store_task=False)
-def single_qa_task(llm, question, answer) -> dict:
-    """Evaluates the model on a single question-answer pair."""
+def single_qa_task(llm, question, answer) -> bool:
     response = llm.prompt(question)
-    return {
-        "question": question,
-        "gold_target": answer,
-        "predicted_answer": response,
-        "is_correct": answer.lower() in response.lower(),
-    }
+    return answer.lower() in response.lower()
 
-
-# 3. Define a task to evaluate the whole dataset
+# 3. Define the aggregation task
 @kbench.task(name="multi_qa_task")
-def multi_qa_task(llm, df) -> tuple[float, float]:
-    """Runs the evaluation on the entire dataset and returns accuracy and std."""
-
-    # Optionally write code in `enable_cache` context to cache results
+def multi_qa_task(llm, df) -> float:
     with kbench.client.enable_cache():
-        # .evaluate() runs the task in parallel (up to n_jobs)
-        # It automatically iterates over the rows of `evaluation_data`.
+        # Evaluate runs the task in parallel (n_jobs) and handles retries
         runs = single_qa_task.evaluate(
-            stop_condition=lambda runs: len(runs) == df.shape[0],
-            max_attempts=1,
-            retry_delay=15,
             llm=[llm],
             evaluation_data=df,
-            n_jobs=2,
-            timeout=120,
-            remove_run_files=True,  # Optionally remove sub runs files to save space.
+            n_jobs=2,               # Parallel workers
+            retry_delay=5,
+            remove_run_files=True   # Clean up intermediate run files
         )
 
-    # Convert the results to a DataFrame for easy analysis.
+    # 4. Analyze the returned `Runs` collection
     eval_df = runs.as_dataframe()
+    accuracy = float(eval_df.result.mean())
+    return accuracy
 
-    # Calculate aggregate metrics.
-    # We extract the 'is_correct' field from the result dictionary of each run.
-    accuracy = float(eval_df.result.str.get("is_correct").mean())
-    std = float(eval_df.result.str.get("is_correct").std())
-
-    print(f"Accuracy: {accuracy:.2f}, Std: {std:.2f}")
-    return accuracy, std
-
-# 4. Run evaluation
-run = multi_qa_task.run(kbench.llm, df)
-run
+multi_qa_task.run(kbench.llm, df)
 ```
 
 ## Recipe: Comparing Multiple Models Side-by-Side
 
-Typically, you should write your task for a single LLM using the
-`kbench.llm` placeholder. This allows you to schedule runs across
-multiple models using “Add Models” button on the Kaggle Task Detail page
-without changing your code.
-
-However, if you need to compare models directly within your notebook
-(e.g., for debugging or immediate visualization), you can pass a list of
-LLMs to `.evaluate()` to run them all.
+You can pass a list of LLM instances to `.evaluate()` to run the cross-product of `(models × rows)`. The resulting `Runs` object contains built-in rendering helpers for organizing results.
 
 ``` python
 models = [
@@ -495,341 +360,137 @@ models = [
     kbench.llms["meta/llama-3.1-70b"]
 ]
 
-# Runs the evaluation for BOTH models
-results = solve_question.evaluate(llm=models, evaluation_data=df)
+# Runs the evaluation for BOTH models across the entire dataset
+results = single_qa_task.evaluate(llm=models, evaluation_data=df)
+
+# Group or pivot results for easy comparison in the notebook
+display(results.pivot(by="llm", mode="columns"))
 ```
 
 ## Recipe: Leveraging Automatic Conversation History
 
-By default, `llm.prompt()` maintains conversation history within the
-same session. This makes multi-turn conversations natural and easy to
-implement.
+By default, the system automatically creates a `Chat` object at task execution start. Every `llm.prompt()` call appends messages to this chat's history, enabling seamless multi-turn conversations.
 
 ``` python
 @kbench.task()
 def chat_task(llm):
-    # Turn 1
+    # Turn 1: Appends user and assistant messages to active Chat
     llm.prompt("Hi, I'm looking for a book.")
 
-    # Turn 2: The model "remembers" the previous turn automatically.
+    # Turn 2: The LLM receives the full history automatically
     llm.prompt("I like science fiction.")
+
+    # Respond based on existing context without appending a new user prompt
+    final_thought = llm.respond()
 ```
 
 ## Recipe: Creating Isolated Conversations for Judges
 
-Sometimes you need a side-conversation that shouldn’t be seen by the
-main agent—for example, when a “Judge” LLM is evaluating the main
-agent’s performance. Use `kbench.chats.new()` to create a clean slate.
+When you need a side-conversation that shouldn't contaminate the main agent's history, use `kbench.chats.new("name")`. This creates a temporary `Chat` context for the duration of the `with` block.
 
 ``` python
 @kbench.task()
 def game_task(llm, judge_llm):
-    # Main conversation with the player
-    llm.prompt("Player move...")
+    # Appends to the default root chat
+    llm.prompt("Player move: pawn to e4")
 
-    # Isolated conversation for the judge
-    with kbench.chats.new("judging"):
-        # This prompt is NOT added to the 'llm' history
-        judge_llm.prompt("Did the player make a valid move?")
-```
+    # Opens an isolated chat context
+    with kbench.chats.new("judging_context", system_instructions="You are a strict chess arbiter."):
+        # This interaction is saved in 'judging_context' and hidden from 'llm'
+        valid = judge_llm.prompt("Is pawn to e4 a valid opening move?", schema=bool)
 
-Here is another example showing how to benchmark a 20 question using isolated conversations.
-
-``` python
-from dataclasses import dataclass
-
-import pandas as pd
-
-from kaggle_benchmarks import assertions, chats, judge_llm, llm, llms, system, task
-
-
-@dataclass
-class Response:
-    question: str = ""
-    guess: str = ""
-    reasoning: str = ""
-
-    def _repr_markdown_(self):
-        return f"*{self.reasoning}*\n\n{self.question or ''}\n\n{self.guess or ''}"
-
-
-@task(name="Twenty Questions")
-def play_20(llm, judge_llm, category: str, target: str) -> bool:
-    """Checks LLMs ability to play 20 question game."""
-
-    rules = f"""
-Let's play 20 questions! I'm thinking of {category}.
-You have 20 questions to guess what it is.
-Ask me yes or no questions, about anything you want.
-"""
-    # 1. Conversation Management:
-    # When `llm.prompt` is called multiple times on the same `llm` object,
-    # the conversation history is automatically preserved.
-    # The LLM "remembers" previous turns (rules, questions, answers).
-    response = llm.prompt(rules, schema=Response)
-
-    for i in range(20):
-        if response.guess:
-            assertions.assert_in(
-                target,
-                response.guess.lower(),
-                f"Guessed '{response.guess}' is incorrect. The right answer was '{target}'.",
-            )
-            return True
-
-        # 2. Isolated Conversations:
-        # We use `chats.new` to create a *temporary, isolated* conversation context.
-        # This is crucial here because the Judge LLM knows the secret `target` word.
-        # If we didn't isolate this, or if we used the main `llm` for judging,
-        # the secret word might leak into the main conversation history,
-        # ruining the game.
-        with chats.new("Checking the question with another LLM"):
-            yes = judge_llm.prompt(
-                f"""
-I'm playing 20 questions with someone.
-I'm thinking of a {target}.
-Here's their question: {response.question}.""",
-                schema=bool,
-            )
-
-        answer = "Yes" if yes else "No"
-
-        # Continue the main conversation. The history now includes:
-        # - Rules
-        # - Previous Q&A pairs
-        # - The new question (from the previous `llm.prompt` call)
-        # - This new answer
-        response = llm.prompt(
-            f"My answer is {answer}. Are you ready to guess or would like to ask another question (you have {19 - i} left)?",
-            schema=Response,
-        )
-
-    system.send(f"Failed to guess `{target}` in 20 questions.")
-    return False
-
-
-play_20.run(llm, llm, category="an animal", target="dog")
+    # We are back in the root chat; 'llm' doesn't know the judge evaluated it
+    llm.prompt("What is your counter-move?")
 ```
 
 ## Recipe: Managing Multi-Agent Conversations
 
-In complex multi-agent scenarios, you often need to maintain separate
-conversation histories for each agent. The *Dungeon Adventure* example
-demonstrates how to do this by creating a dedicated `Chat` object for
-each agent and using the `contexts.enter()` context manager to switch
-between them. This allows each agent to have its own isolated
-conversation history, which is crucial for role-playing and other
-complex interactions.
+For complex interactions where multiple agents require long-lived, independent histories, instantiate explicit `chats.Chat` objects and use `contexts.enter(chat=...)` to switch between them.
 
 ``` python
-from kaggle_benchmarks import chats, contexts, LLMChat, task
-
+from kaggle_benchmarks import chats, contexts, task
 
 @task()
-def multi_chat_task(llm):
-    # Create two separate, isolated chat contexts
-    chat1 = chats.Chat(name="First Conversation")
-    chat2 = chats.Chat(name="Second Conversation")
+def multi_chat_task(llm1, llm2):
+    # Create persistent, isolated chat objects
+    chat1 = chats.Chat(name="Agent 1 History")
+    chat2 = chats.Chat(name="Agent 2 History")
 
-    # Get the main chat to add our sub-chats to for visualization
-    current_chat = chats.get_current_chat()
-    current_chat.append(chat1)
-    current_chat.append(chat2)
-
-    # --- Interaction 1 ---
-    # Enter the context of the first chat
+    # Agent 1 takes a turn
     with contexts.enter(chat=chat1):
-        # Any LLM calls or messages sent here will be recorded in 'chat1'
-        # This message is in the first conversation.
-        llm.prompt("Hello from chat 1")
+        move1 = llm1.prompt("Make your opening statement.")
 
-    # --- Interaction 2 ---
-    # Now, enter the context of the second chat
+    # Agent 2 takes a turn, isolated from Agent 1's history
     with contexts.enter(chat=chat2):
-        # Any LLM calls or messages sent here will be recorded in 'chat2'
-        # This message is now in the completely separate second conversation.
-        llm.prompt("Hello from chat 2")
+        move2 = llm2.prompt(f"The opponent said: {move1}. Formulate a rebuttal.")
 
-    # --- Interaction 3 ---
-    # We can switch back to the first chat at any time
+    # Switch back to Agent 1 seamlessly
     with contexts.enter(chat=chat1):
-        # We are back in the first conversation.
-        llm.prompt("Still in chat 1")
-
-multi_chat_task.run(kbench.llm)
+        llm1.prompt(f"The opponent replied: {move2}. Your response?")
 ```
 
 ## Recipe: Sending Images to Multimodal Models
 
-You can send images to vision-capable models using either a direct URL
-or a Base64 string.
+The framework provides robust `ImageContent` objects. You can create these from URLs, local paths, NumPy arrays, or Base64 strings using the `images` factory functions.
+
+**Important Note:**
+- `llm.prompt(image=img)` automatically downloads URL-based images and converts them to Base64 to ensure maximum compatibility with all LLMs.
+- `user.send(img)` sends the exact raw format without conversion.
 
 ``` python
 from kaggle_benchmarks.content_types import images
 import kaggle_benchmarks as kbench
+import numpy as np
 
-# Send image as an URL
-@kbench.task()
+@kbench.task("Analyze Images")
 def vision_task(llm):
-    # Load image from a URL
-    img = images.from_url("https://www.kaggle.com/static/images/site-logo.png")
+    # 1. From a URL (Auto-converted to base64 by llm.prompt)
+    url_img = images.from_url("https://www.kaggle.com/static/images/site-logo.png", caption="Logo")
+    response1 = llm.prompt("Describe this image.", image=url_img)
 
-    # Pass the image alongside the text prompt
-    response = llm.prompt("Describe this image.", image=img)
+    # 2. From a local file (Read and encoded to base64 immediately)
+    local_img = images.from_path("/path/to/chart.png")
 
-# Send image as base64 string
-@kbench.task("Describe Image (Base64)")
-def describe_image_base64(llm):
-    """Sends a base64 encoded image with explicit format specification."""
+    # 3. From a NumPy array
+    array_img = images.from_array(np.zeros((100, 100, 3), dtype=np.uint8))
 
-    image_b64 = images.image_url_to_base64("https://www.kaggle.com/static/images/site-logo.png")
-
-    # Create Image object from Base64, specifying the format as 'png'
-    # The 'format' parameter is important when the image is not a JPEG (default)
-    image = images.from_base64(image_b64, format="png")
-
-    response = llm.prompt("What color is this image?", image=image)
-
-    kbench.assertions.assert_contains_regex(
-        r"(?i)blue",
-        response,
-        expectation="LLM should identify the color blue.",
-    )
+    # You can also preload multi-image context
+    kbench.user.send(local_img)
+    kbench.user.send(array_img)
+    response2 = llm.prompt("Compare the two images I just sent.")
 ```
-
-## Recipe: Writing Reusable Custom Assertions
-
-Keep your code clean by encapsulating complex checks into reusable
-assertion functions using the `@assertion_handler` decorator.
-
-``` python
-from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
-
-@assertion_handler()
-def assert_is_even(value: int, expectation: str) -> AssertionResult:
-    # Return a structured result object
-    return AssertionResult(
-        passed=(value % 2 == 0),
-        expectation=expectation
-    )
-
-@kbench.task()
-def even_task(llm):
-    num = int(llm.prompt("Pick a not odd number", schema=int))
-    # Use your custom assertion just like built-in ones
-    assert_is_even(num, expectation="Number should be even")
-```
-
 
 ## Recipe: Using the Built-in Python Script Runner
 
-We provide some helper functions to make it easy for the LLM to write
-and execute Python code to solve problems. The library provides tools to
-extract and run this code safely.
-
-``` python
-@kbench.task()
-def python_task(llm):
-    prompt = "Calculate the 10th Fibonacci number using Python."
-    response = llm.prompt(prompt)
-
-    # 1. Extract code from the markdown response
-    code = kbench.tools.python.extract_code(response)
-
-    # 2. Run the code
-    result = kbench.tools.python.script_runner.run_code(code)
-
-    # 3. Verify the output
-    kbench.assertions.assert_contains_regex("55", result.stdout)
-```
-
-A complete example of asking LLM to generate Python code for the Tower of Hanoi problem is like this.
+The library provides tools to extract and safely execute python code generated by the LLM.
+- `extract_code(text, all_blocks=False)` pulls out Python code from fenced markdown blocks.
+- `script_runner.run_code()` executes the code in a subprocess and returns a `ScriptOutput` containing `stdout`, `stderr`, and the `exit_code`.
 
 ```python
 import kaggle_benchmarks as kbench
-import re
 
-@kbench.task(name="hanoi_python_solver")
-def hanoi_python_solver(llm):
-    """
-    Asks the LLM to generate Python code for the Tower of Hanoi problem
-    and verifies its correctness by executing it.
-    """
-    prompt = """
-    Write a Python function that solves the Tower of Hanoi problem.
-    The function should be named `hanoi` and take four arguments:
-    1. `n`: the number of disks
-    2. `source`: the source peg
-    3. `auxiliary`: the auxiliary peg
-    4. `destination`: the destination peg
-
-    The function should print each move required to solve the puzzle.
-    For example: 'Move disk 1 from A to C'.
-
-    Respond with function defintion only.
-    """
+@kbench.task(name="python_math")
+def python_math(llm):
+    prompt = "Write a python script that prints 'Hello World'."
     response = llm.prompt(prompt)
 
-    # Extract the Python code block from the LLM's response.
+    # 1. Extract code (strips markdown formatting)
     code = kbench.tools.python.extract_code(response)
+
     kbench.assertions.assert_not_empty(
-        code,
-        expectation="Response should contain a Python code block."
+        code, expectation="Response should contain a Python code block."
     )
 
-    # Add driver code to call the generated function for a 3-disk problem.
-    driver_code = "\nhanoi(n=3, source='A', auxiliary='B', destination='C')"
-    full_code = code + driver_code
+    # 2. Run the code using the subprocess ScriptRunner
+    result = kbench.tools.python.script_runner.run_code(code)
 
-    # Execute the combined code.
-    result = kbench.tools.python.script_runner.run_code(full_code)
-
-    # Assert that the code ran successfully without any errors.
-    kbench.assertions.assert_empty(
-        result.stderr,
-        expectation=f"The generated Python code should run without errors. Stderr: {result.stderr}"
-    )
-
-    # For n=3 disks, the solution always takes 2^3 - 1 = 7 moves.
-    # We count the number of "Move disk" lines in the output.
-    move_count = len(re.findall(r"(?i)move disk", result.stdout))
+    # 3. Validate execution metrics (exit code 0 indicates success)
     kbench.assertions.assert_equal(
-        move_count, 7,
-        expectation="The solution for 3 disks must contain exactly 7 moves."
+        0, result.exit_code,
+        expectation=f"Code should execute successfully. Stderr: {result.stderr}"
     )
-
-    # Check for the crucial move of the largest disk from source to destination.
     kbench.assertions.assert_contains_regex(
-        r"(?i)move disk 3 from A to C",
-        result.stdout,
-        expectation="The largest disk (3) must move from the source (A) to the destination (C) at some point."
+        r"(?i)hello world", result.stdout,
+        expectation="Standard output should contain 'Hello World'."
     )
-
-hanoi_python_solver.run(kbench.llm)
-```
-
-## Recipe: Equipping Models with Custom Tools
-
-You can also pass your own Python functions as tools. The model can then
-call these functions to retrieve information or perform actions. Please
-note this is currently an experimental feature.
-
-``` python
-def get_weather(city: str) -> str:
-    """Returns the weather for a city."""
-    return "Sunny"
-
-@kbench.task()
-def weather_task(llm):
-    # Pass the function directly to the 'tools' argument
-    # Note: Works best with 'genai' API models
-    llm.prompt("Weather in Tokyo?", tools=[get_weather])
-
-# This feature currently only works with 'genai' API models
-llm= models.load_model(
-    model_name=kbench.llm.name,
-    api="genai",
-)
-
-weather_task.run(llm)
 ```
