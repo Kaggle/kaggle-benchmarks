@@ -308,6 +308,12 @@ You can force the LLM to return data in a specific structure by
 providing a `schema` to the `prompt` method. This is essential for tasks
 that require structured output.
 
+**Currently the only supported schema types are: int, bool, dict, dataclass, and pydantic BaseModel. We recommend using dataclass or pydantic BaseModel for customized structures.**
+
+**DO NOT use `list`, `List`, or `list[...]` as a schema.** If you need to return a list of items (like a list of names or planets), you must wrap it in a `dataclass`, or `BaseModel`.
+* **Incorrect:** `llm.prompt(..., schema=list[str])`
+* **Correct:** `llm.prompt(..., schema=dict)` (and ask for a dictionary containing the list) or define a `dataclass`/`BaseModel` with a list field.
+
 ``` python
 from dataclasses import dataclass
 

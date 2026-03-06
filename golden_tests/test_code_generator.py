@@ -4,14 +4,17 @@ Golden tests for code generation to ensure backward compatibility and end-to-end
 Excluded from standard CI/CD due to manual configuration requirements (e.g., API keys).
 
 Usage:
-  # Default (3 stability runs per test)
+  # Sequential execution (default, 3 stability runs per test)
   uv run pytest golden_tests/test_code_generator.py
+
+  # Parallel execution (recommended)
+  uv run pytest golden_tests/test_code_generator.py -n auto
 
   # Quick validation (1 run per test)
   CODE_GEN_NUM_RUNS=1 uv run pytest golden_tests/test_code_generator.py
 
-  # Strict stability check (5 runs per test)
-  CODE_GEN_NUM_RUNS=5 uv run pytest golden_tests/test_code_generator.py
+  # Strict stability check in parallel (5 runs per test)
+  CODE_GEN_NUM_RUNS=5 uv run pytest golden_tests/test_code_generator.py -n auto
 """
 
 import os
@@ -28,7 +31,7 @@ NUM_RUNS = int(os.environ.get("CODE_GEN_NUM_RUNS", "3"))
 
 
 # System prompt instructing the LLM on writing benchmark code.
-# Tweak this to experiment with generation strategies or output constraints.
+# Update this to experiment with generation strategies or output constraints.
 TASK_GENERATOR_PROMPT = """
 You are a specialized code-generation model. Your sole purpose is to output executable Python code using the `kaggle_benchmarks` library.
 
@@ -147,6 +150,13 @@ TEST_DESCRIPTIONS = [
         "The answer is 3 hours",
     ),
 ]
+
+# TEST_DESCRIPTIONS = [
+#     (
+#         "List the planets in our solar system as json",
+#         "The output is valid json and includes Earth",
+#     ),
+# ]
 
 def _initialize_models(api: str):
     """Limits model loading and configures stringent SDK testing parameters."""
