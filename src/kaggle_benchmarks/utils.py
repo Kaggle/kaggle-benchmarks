@@ -175,12 +175,24 @@ def get_openai_client() -> OpenAI:
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
-def prompt_llm_with_openai_api(prompt: str, model: str, client: OpenAI) -> str:
+def prompt_llm_with_openai_api(
+    prompt: str,
+    model: str,
+    client: OpenAI,
+    system_instruction: str | None = None,
+    **kwargs,
+) -> str:
+    messages = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    messages.append({"role": "user", "content": prompt})
+
     try:
         response = client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             stream=False,
+            **kwargs,
         )
         return response.choices[0].message.content or ""
     except OpenAIError as e:
