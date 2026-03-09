@@ -38,6 +38,18 @@ class Usage:
             self.output_tokens_cost_nanodollars or 0
         )
 
+    def __str__(self) -> str:
+        """Returns a human-readable string representation of the usage."""
+        lines = [
+            f"Input tokens: {self.input_tokens}",
+            f"Output tokens: {self.output_tokens}",
+            f"Input cost (nanodollars): {self.input_tokens_cost_nanodollars}",
+            f"Output cost (nanodollars): {self.output_tokens_cost_nanodollars}",
+            f"Total cost (nanodollars): {self.total_cost_nanodollars}",
+            f"Backend latency (ms): {self.total_backend_latency_ms}",
+        ]
+        return "\n".join(lines)
+
     def __add__(self, other: Self | None) -> Self:
         if other is None:
             return self
