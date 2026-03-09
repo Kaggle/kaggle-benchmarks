@@ -184,8 +184,8 @@ def test_chat_usage_aggregation():
 def test_chat_usage_empty():
     """Test that chat usage properties return zero/None for empty chat."""
     with chats.new("Empty") as t:
-        assert t.usage.input_tokens == 0
-        assert t.usage.output_tokens == 0
+        assert t.usage.input_tokens is None
+        assert t.usage.output_tokens is None
         assert t.usage.input_tokens_cost_nanodollars is None
         assert t.usage.output_tokens_cost_nanodollars is None
         assert t.usage.total_backend_latency_ms is None
