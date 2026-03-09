@@ -31,11 +31,10 @@ from kaggle_web_client import (
     CredentialError,
 )
 
-_TEST_JWT = 'test-secrets-key'
+_TEST_JWT = "test-secrets-key"
 
 
 class UserSecretsHTTPHandler(BaseHTTPRequestHandler):
-
     def set_request(self):
         raise NotImplementedError()
 
@@ -54,42 +53,69 @@ class UserSecretsHTTPHandler(BaseHTTPRequestHandler):
 
 
 class TestUserSecrets(unittest.TestCase):
-    SERVER_ADDRESS = urlparse(os.getenv(_KAGGLE_URL_BASE_ENV_VAR_NAME, default="http://127.0.0.1:0"))
+    SERVER_ADDRESS = urlparse(
+        os.getenv(_KAGGLE_URL_BASE_ENV_VAR_NAME, default="http://127.0.0.1:0")
+    )
 
-    def _test_client(self, client_func, expected_path, expected_body, secret=None, success=True):
+    def _test_client(
+        self, client_func, expected_path, expected_body, secret=None, success=True
+    ):
         _request = {}
 
         class AccessTokenHandler(UserSecretsHTTPHandler):
             def set_request(self):
-                _request['path'] = self.path
-                content_len = int(self.headers.get('Content-Length'))
-                _request['body'] = json.loads(self.rfile.read(content_len))
-                _request['headers'] = self.headers
+                _request["path"] = self.path
+                content_len = int(self.headers.get("Content-Length"))
+                _request["body"] = json.loads(self.rfile.read(content_len))
+                _request["headers"] = self.headers
 
             def get_response(self):
                 if success:
-                    return {'result': {'secret': secret, 'secretType': 'refreshToken', 'secretProvider': 'google', 'expiresInSeconds': 3600}, 'wasSuccessful': "true"}
+                    return {
+                        "result": {
+                            "secret": secret,
+                            "secretType": "refreshToken",
+                            "secretProvider": "google",
+                            "expiresInSeconds": 3600,
+                        },
+                        "wasSuccessful": "true",
+                    }
                 else:
-                    return {'wasSuccessful': "false", 'errors': ['No user secrets exist for kernel']}
+                    return {
+                        "wasSuccessful": "false",
+                        "errors": ["No user secrets exist for kernel"],
+                    }
 
-        with _patch.dict(os.environ, {_KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME: _TEST_JWT}):
-            with HTTPServer((self.SERVER_ADDRESS.hostname, self.SERVER_ADDRESS.port), AccessTokenHandler) as httpd:
+        with _patch.dict(
+            os.environ, {_KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME: _TEST_JWT}
+        ):
+            with HTTPServer(
+                (self.SERVER_ADDRESS.hostname, self.SERVER_ADDRESS.port),
+                AccessTokenHandler,
+            ) as httpd:
                 threading.Thread(target=httpd.serve_forever).start()
                 try:
-                    os.environ[_KAGGLE_URL_BASE_ENV_VAR_NAME] = "http://"+httpd.server_address[0]+":"+str(httpd.server_address[1])
+                    os.environ[_KAGGLE_URL_BASE_ENV_VAR_NAME] = (
+                        "http://"
+                        + httpd.server_address[0]
+                        + ":"
+                        + str(httpd.server_address[1])
+                    )
                     client_func()
                 finally:
                     httpd.shutdown()
 
-                path, body = _request['path'], _request['body']
+                path, body = _request["path"], _request["body"]
                 self.assertEqual(
                     path,
                     expected_path,
-                    msg="Fake server did not receive the right request from the UserSecrets client.")
+                    msg="Fake server did not receive the right request from the UserSecrets client.",
+                )
                 self.assertEqual(
                     body,
                     expected_body,
-                    msg="Fake server did not receive the right body from the UserSecrets client.")
+                    msg="Fake server did not receive the right body from the UserSecrets client.",
+                )
 
     def test_no_token_fails(self):
         env = os.environ.copy()
@@ -99,54 +125,74 @@ class TestUserSecrets(unittest.TestCase):
                 UserSecretsClient()
 
     def test_get_secret_succeeds(self):
-        secret = '12345'
+        secret = "12345"
+
         def call_get_secret():
             client = UserSecretsClient()
             secret_response = client.get_secret("secret_label")
             self.assertEqual(secret_response, secret)
-        self._test_client(call_get_secret,
-                          '/requests/GetUserSecretByLabelRequest', {'Label': "secret_label"},
-                          secret=secret)
+
+        self._test_client(
+            call_get_secret,
+            "/requests/GetUserSecretByLabelRequest",
+            {"Label": "secret_label"},
+            secret=secret,
+        )
 
     def test_get_secret_handles_unsuccessful(self):
         def call_get_secret():
             client = UserSecretsClient()
             with self.assertRaises(BackendError):
                 client.get_secret("secret_label")
-        self._test_client(call_get_secret,
-                          '/requests/GetUserSecretByLabelRequest', {'Label': "secret_label"},
-                          success=False)
+
+        self._test_client(
+            call_get_secret,
+            "/requests/GetUserSecretByLabelRequest",
+            {"Label": "secret_label"},
+            success=False,
+        )
 
     def test_get_secret_validates_label(self):
-        with _patch.dict(os.environ, {_KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME: _TEST_JWT}):
+        with _patch.dict(
+            os.environ, {_KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME: _TEST_JWT}
+        ):
             client = UserSecretsClient()
             with self.assertRaises(ValidationError):
                 client.get_secret("")
 
     def test_get_gcloud_secret_succeeds(self):
         secret = '{"client_id":"gcloud","type":"authorized_user"}'
+
         def call_get_secret():
             client = UserSecretsClient()
             secret_response = client.get_gcloud_credential()
             self.assertEqual(secret_response, secret)
-        self._test_client(call_get_secret,
-                          '/requests/GetUserSecretByLabelRequest', {'Label': "__gcloud_sdk_auth__"},
-                          secret=secret)
+
+        self._test_client(
+            call_get_secret,
+            "/requests/GetUserSecretByLabelRequest",
+            {"Label": "__gcloud_sdk_auth__"},
+            secret=secret,
+        )
 
     def test_get_gcloud_secret_handles_unsuccessful(self):
         def call_get_secret():
             client = UserSecretsClient()
             with self.assertRaises(NotFoundError):
                 client.get_gcloud_credential()
-        self._test_client(call_get_secret,
-                          '/requests/GetUserSecretByLabelRequest', {'Label': "__gcloud_sdk_auth__"},
-                          success=False)
 
-    @patch('subprocess.run')
+        self._test_client(
+            call_get_secret,
+            "/requests/GetUserSecretByLabelRequest",
+            {"Label": "__gcloud_sdk_auth__"},
+            success=False,
+        )
+
+    @patch("subprocess.run")
     def test_set_gcloud_credentials_succeeds(self, mock_run):
         secret = '{"client_id":"gcloud","type":"authorized_user","refresh_token":"refresh_token"}'
-        project = 'foo'
-        account = 'bar'
+        project = "foo"
+        account = "bar"
 
         mock_run.return_value = Mock(returncode=0)
 
@@ -154,20 +200,28 @@ class TestUserSecrets(unittest.TestCase):
             client = UserSecretsClient()
             client.set_gcloud_credentials(project=project, account=account)
 
-            self.assertEqual(project, os.environ['GOOGLE_CLOUD_PROJECT'])
-            self.assertEqual(account, os.environ['GOOGLE_ACCOUNT'])
+            self.assertEqual(project, os.environ["GOOGLE_CLOUD_PROJECT"])
+            self.assertEqual(account, os.environ["GOOGLE_ACCOUNT"])
 
-            expected_creds_file = os.path.join(os.environ['HOME'], 'gcloud_credential.json')
-            self.assertEqual(expected_creds_file, os.environ['GOOGLE_APPLICATION_CREDENTIALS'])
+            expected_creds_file = os.path.join(
+                os.environ["HOME"], "gcloud_credential.json"
+            )
+            self.assertEqual(
+                expected_creds_file, os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+            )
 
-            with open(expected_creds_file, 'r') as f:
-                self.assertEqual(secret, '\n'.join(f.readlines()))
+            with open(expected_creds_file, "r") as f:
+                self.assertEqual(secret, "\n".join(f.readlines()))
 
             # Verify gcloud was called
             self.assertTrue(mock_run.called)
 
-        self._test_client(test_fn, '/requests/GetUserSecretByLabelRequest',
-                          {'Label': "__gcloud_sdk_auth__"}, secret=secret)
+        self._test_client(
+            test_fn,
+            "/requests/GetUserSecretByLabelRequest",
+            {"Label": "__gcloud_sdk_auth__"},
+            secret=secret,
+        )
 
     def test_set_tensorflow_credential(self):
         secret = '{"client_id":"gcloud","type":"authorized_user","refresh_token":"refresh_token"}'
@@ -177,17 +231,26 @@ class TestUserSecrets(unittest.TestCase):
             creds = client.get_gcloud_credential()
             client.set_tensorflow_credential(creds)
 
-            expected_creds_file = os.path.join(os.environ['HOME'], 'gcloud_credential.json')
-            self.assertEqual(expected_creds_file, os.environ['GOOGLE_APPLICATION_CREDENTIALS'])
+            expected_creds_file = os.path.join(
+                os.environ["HOME"], "gcloud_credential.json"
+            )
+            self.assertEqual(
+                expected_creds_file, os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+            )
 
-            with open(expected_creds_file, 'r') as f:
-                self.assertEqual(secret, '\n'.join(f.readlines()))
+            with open(expected_creds_file, "r") as f:
+                self.assertEqual(secret, "\n".join(f.readlines()))
 
-        self._test_client(test_fn, '/requests/GetUserSecretByLabelRequest', {'Label': "__gcloud_sdk_auth__"}, secret=secret)
+        self._test_client(
+            test_fn,
+            "/requests/GetUserSecretByLabelRequest",
+            {"Label": "__gcloud_sdk_auth__"},
+            secret=secret,
+        )
 
-    @patch('kaggle_secrets.datetime')
+    @patch("kaggle_secrets.datetime")
     def test_get_access_token_succeeds(self, mock_dt):
-        secret = '12345'
+        secret = "12345"
         now = datetime(1993, 4, 24)
         mock_dt.utcnow = Mock(return_value=now)
 
@@ -195,29 +258,45 @@ class TestUserSecrets(unittest.TestCase):
             client = UserSecretsClient()
             secret_response = client.get_bigquery_access_token()
             self.assertEqual(secret_response, (secret, now + timedelta(seconds=3600)))
+
         def call_get_gcs_access_token():
             client = UserSecretsClient()
             secret_response = client._get_gcs_access_token()
             self.assertEqual(secret_response, (secret, now + timedelta(seconds=3600)))
+
         def call_get_cloudai_access_token():
             client = UserSecretsClient()
             secret_response = client._get_cloudai_access_token()
             self.assertEqual(secret_response, (secret, now + timedelta(seconds=3600)))
 
-        self._test_client(call_get_bigquery_access_token,
-                          '/requests/GetUserSecretRequest', {'Target': GcpTarget.BIGQUERY.target},
-                          secret=secret)
-        self._test_client(call_get_gcs_access_token,
-                          '/requests/GetUserSecretRequest', {'Target': GcpTarget.GCS.target},
-                          secret=secret)
-        self._test_client(call_get_cloudai_access_token,
-                          '/requests/GetUserSecretRequest', {'Target': GcpTarget.CLOUDAI.target},
-                          secret=secret)
+        self._test_client(
+            call_get_bigquery_access_token,
+            "/requests/GetUserSecretRequest",
+            {"Target": GcpTarget.BIGQUERY.target},
+            secret=secret,
+        )
+        self._test_client(
+            call_get_gcs_access_token,
+            "/requests/GetUserSecretRequest",
+            {"Target": GcpTarget.GCS.target},
+            secret=secret,
+        )
+        self._test_client(
+            call_get_cloudai_access_token,
+            "/requests/GetUserSecretRequest",
+            {"Target": GcpTarget.CLOUDAI.target},
+            secret=secret,
+        )
 
     def test_get_access_token_handles_unsuccessful(self):
         def call_get_access_token():
             client = UserSecretsClient()
             with self.assertRaises(BackendError):
                 client.get_bigquery_access_token()
-        self._test_client(call_get_access_token,
-                          '/requests/GetUserSecretRequest', {'Target': GcpTarget.BIGQUERY.target}, success=False)
+
+        self._test_client(
+            call_get_access_token,
+            "/requests/GetUserSecretRequest",
+            {"Target": GcpTarget.BIGQUERY.target},
+            success=False,
+        )
