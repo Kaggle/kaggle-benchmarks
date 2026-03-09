@@ -22,6 +22,7 @@ from typing import Any, Iterator, Self
 
 from kaggle_benchmarks import actors, events, utils
 from kaggle_benchmarks.messages import Message
+from kaggle_benchmarks.usage import Usage
 
 
 @dataclasses.dataclass
@@ -44,6 +45,15 @@ class Chat:
     @property
     def messages(self) -> list[Message]:
         return [m for m in self.history if isinstance(m, Message)]
+
+    @property
+    def usage(self) -> Usage:
+        """Aggregated token usage and cost metadata across all assistant messages."""
+        total = Usage()
+        for m in self.messages:
+            if m.sender.role == "assistant":
+                total = total + m.usage
+        return total
 
     @property
     def status(self):

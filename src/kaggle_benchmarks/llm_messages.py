@@ -16,25 +16,9 @@ from typing import Iterable, Self, TypeVar
 
 from kaggle_benchmarks import chats, messages, utils
 from kaggle_benchmarks import tools as tool_utils
+from kaggle_benchmarks.usage import Usage
 
 T = TypeVar("T")
-
-
-@dataclasses.dataclass
-class Usage:
-    """Represents the token usage of an LLM invocation."""
-
-    input_tokens: int = 0
-    output_tokens: int = 0
-
-    def __add__(self, other: Self | None) -> Self:
-        if other is None:
-            return self
-
-        return Usage(
-            input_tokens=(self.input_tokens or 0) + (other.input_tokens or 0),
-            output_tokens=(self.output_tokens or 0) + (other.output_tokens or 0),
-        )
 
 
 @dataclasses.dataclass

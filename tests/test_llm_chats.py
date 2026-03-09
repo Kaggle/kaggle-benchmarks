@@ -164,3 +164,28 @@ def test_nested_chat_id():
     assert root.history[0] is sub
     assert sub.id.startswith("sub - analysis-")
     assert len(sub.history) == 2
+
+
+def test_chat_usage_aggregation():
+    """Test that chat usage properties aggregate token usage from all assistant messages."""
+    llm = Ferret()
+    llm.stream_responses = True
+
+    with chats.new("Test Usage") as t:
+        llm.prompt("first")
+        llm.prompt("second")
+
+        # Each streaming response yields: input_tokens=10, output_tokens=2
+        # Two prompts = 2 * 10 = 20 input tokens, 2 * 2 = 4 output tokens
+        assert t.usage.input_tokens == 20
+        assert t.usage.output_tokens == 4
+
+
+def test_chat_usage_empty():
+    """Test that chat usage properties return zero/None for empty chat."""
+    with chats.new("Empty") as t:
+        assert t.usage.input_tokens is None
+        assert t.usage.output_tokens is None
+        assert t.usage.input_tokens_cost_nanodollars is None
+        assert t.usage.output_tokens_cost_nanodollars is None
+        assert t.usage.total_backend_latency_ms is None

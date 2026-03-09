@@ -55,6 +55,23 @@ class Message(Generic[T]):
         return self._meta.get("tool_calls")
 
     @property
+    def usage(self):
+        """Token usage and cost metadata for this message."""
+        from kaggle_benchmarks.usage import Usage
+
+        return Usage(
+            input_tokens=self._meta.get("input_tokens"),
+            output_tokens=self._meta.get("output_tokens"),
+            input_tokens_cost_nanodollars=self._meta.get(
+                "input_tokens_cost_nanodollars"
+            ),
+            output_tokens_cost_nanodollars=self._meta.get(
+                "output_tokens_cost_nanodollars"
+            ),
+            total_backend_latency_ms=self._meta.get("total_backend_latency_ms"),
+        )
+
+    @property
     def payload(self) -> str | list[dict]:
         if hasattr(self.content, "get_payload"):
             return self.content.get_payload()
