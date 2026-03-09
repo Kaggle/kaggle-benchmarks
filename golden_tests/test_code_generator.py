@@ -151,7 +151,9 @@ TEST_DESCRIPTIONS = [
         "Two trains leave stations 300 miles apart heading toward each other, one going 60mph and the other 40mph. How long until they meet?",
         "The answer is 3 hours",
     ),
+    ("Generate 100 unique names", "Ensure there are no duplicates"),
 ]
+
 
 def _initialize_models(api: str):
     """Limits model loading and configures stringent SDK testing parameters."""
