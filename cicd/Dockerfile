@@ -1,6 +1,6 @@
 # TOP LAYER: This builds on top of the cached environment.
 # Use the tag for the newest cached base image layer
-FROM gcr.io/kaggle-private-byod/personal-benchmarks-base:v1
+FROM gcr.io/kaggle-private-byod/personal-benchmarks-base:v2
 
 WORKDIR /benchmarks
 
