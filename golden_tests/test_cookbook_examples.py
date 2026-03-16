@@ -60,6 +60,7 @@ TEST_LLM_NAMES = {
     "anthropic/claude-sonnet-4-5@20250929",
     "deepseek-ai/deepseek-r1-0528",
     "deepseek-ai/deepseek-v3.2",
+    "zai/glm-5",
 }
 
 # Models to be used as judges for evaluation.

@@ -63,6 +63,14 @@ class RenderablePydanticModel(pydantic.BaseModel):
 class TypedResponse(RenderablePydanticModel, Generic[T]):
     value: T
 
+    model_config = pydantic.ConfigDict(
+        title="Response",
+        extra="forbid",
+        arbitrary_types_allowed=False,
+    )
+
+    __name__ = "Response"
+
 
 class ResponseParsingError(ValueError):
     """Error raised when a model response cannot be parsed into the desired schema."""
@@ -178,6 +186,7 @@ def root_model_handler(cls):
 @handler(types=(float, int, datetime.datetime, bool))
 def primitive_type_handler(cls):
     model = TypedResponse[cls]
+    model.__name__ = "Response"
     response = yield (
         f"Output JSON using this schema: {json.dumps(model.model_json_schema())}",
         model,
