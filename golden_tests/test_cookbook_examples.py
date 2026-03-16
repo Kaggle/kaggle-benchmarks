@@ -60,6 +60,8 @@ TEST_LLM_NAMES = {
     "anthropic/claude-sonnet-4-5@20250929",
     "deepseek-ai/deepseek-r1-0528",
     "deepseek-ai/deepseek-v3.2",
+    "zai/glm-5",
+    "google/gemini-3.1-flash-lite-preview",
 }
 
 # Models to be used as judges for evaluation.
@@ -406,6 +408,7 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
         "deepseek-ai/deepseek-v3.2",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -436,6 +439,7 @@ def test_image_url(llm):
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
         "anthropic/claude-sonnet-4-5@20250929",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -466,6 +470,7 @@ def test_image_base64(llm):
         "deepseek-ai/deepseek-v3.2",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -511,6 +516,7 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
         "google/gemma-3-12b",
+        "google/gemini-3.1-flash-lite-preview",
     }
 )
 @kbench.task()
