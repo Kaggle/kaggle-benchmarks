@@ -1854,6 +1854,22 @@ wheels = [
 ]
 
 [[package]]
+name = "jupytext"
+version = "1.19.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "mdit-py-plugins" },
+    { name = "nbformat" },
+    { name = "packaging" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/a5/80c02f307c8ce863cb33e27daf049315e9d96979e14eead700923b5ec9cc/jupytext-1.19.1.tar.gz", hash = "sha256:82587c07e299173c70ed5e8ec7e75183edf1be289ed518bab49ad0d4e3d5f433", size = 4307829, upload-time = "2026-01-25T21:35:13.276Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/5a/736dd2f4535dbf3bf26523f9158c011389ef88dd06ec2eef67fd744f1c7b/jupytext-1.19.1-py3-none-any.whl", hash = "sha256:d8975035155d034bdfde5c0c37891425314b7ea8d3a6c4b5d18c294348714cd9", size = 170478, upload-time = "2026-01-25T21:35:11.17Z" },
+]
+
+[[package]]
 name = "kaggle-benchmarks"
 source = { editable = "." }
 dependencies = [
@@ -1873,6 +1889,11 @@ dependencies = [
     { name = "tqdm" },
 ]
 
+[package.optional-dependencies]
+kaggle-client = [
+    { name = "jupytext" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "chess" },
@@ -1884,6 +1905,7 @@ dev = [
     { name = "jupyter-lsp" },
     { name = "jupyter-server" },
     { name = "jupyterlab-lsp" },
+    { name = "kaggle-benchmarks", extra = ["kaggle-client"] },
     { name = "kagglehub" },
     { name = "moviepy" },
     { name = "mypy" },
@@ -1938,6 +1960,7 @@ kaggle = [
     { name = "traitlets" },
 ]
 test = [
+    { name = "kaggle-benchmarks", extra = ["kaggle-client"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-mock" },
@@ -1952,6 +1975,7 @@ requires-dist = [
     { name = "hishel", extras = ["httpx"], specifier = ">1.1.8" },
     { name = "joblib" },
     { name = "jupyter" },
+    { name = "jupytext", marker = "extra == 'kaggle-client'" },
     { name = "nest-asyncio", specifier = ">=1.6.0" },
     { name = "openai", specifier = ">=1.66" },
     { name = "pandas" },
@@ -1962,6 +1986,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "tqdm" },
 ]
+provides-extras = ["kaggle-client"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1974,6 +1999,7 @@ dev = [
     { name = "jupyter-lsp", specifier = "==1.5.1" },
     { name = "jupyter-server", specifier = "==2.12.5" },
     { name = "jupyterlab-lsp" },
+    { name = "kaggle-benchmarks", extras = ["kaggle-client"] },
     { name = "kagglehub", specifier = ">=0.3.10" },
     { name = "moviepy", specifier = ">=2.2.1" },
     { name = "mypy" },
@@ -2028,6 +2054,7 @@ kaggle = [
     { name = "traitlets", specifier = "==5.9.0" },
 ]
 test = [
+    { name = "kaggle-benchmarks", extras = ["kaggle-client"] },
     { name = "pytest" },
     { name = "pytest-asyncio", specifier = ">=0.25.3" },
     { name = "pytest-mock", specifier = ">=3.14.1" },

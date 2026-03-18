@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+pytest: disable_assert_rewrite
+"""
+
 import operator
 
 import pandas as pd

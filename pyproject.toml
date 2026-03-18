@@ -35,6 +35,12 @@ dependencies = [
   "joblib",
   "google-genai>=1.38.0",
 ]
+
+[project.optional-dependencies]
+kaggle-client = [
+  "jupytext",
+]
+
 # Configuration for the build backend to find the version file
 [tool.hatch.version]
 path = "src/kaggle_benchmarks/__init__.py"
@@ -50,6 +56,7 @@ test = [
     "pytest-mock>=3.14.1",
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
+    "kaggle_benchmarks[kaggle-client]",
 ]
 kaggle = [
   "kagglehub>=0.3.10",
@@ -108,3 +115,6 @@ extend-select = ["I"]
 [tool.ruff.lint.per-file-ignores]
 
 "__init__.py" = ["F401", "F402"]
+
+[tool.pytest.ini_options]
+addopts = "--ignore=tests/test_user_secrets.py"
