@@ -23,6 +23,14 @@ from unittest.mock import Mock, patch
 from unittest.mock import patch as _patch
 from urllib.parse import urlparse
 
+import pytest
+
+# Only run user secrets tests in CI environments when deps are available.
+if os.getenv("CI") != "true":
+    pytest.skip(
+        "Only run user secrets tests in CI environments", allow_module_level=True
+    )
+
 from kaggle_secrets import GcpTarget, NotFoundError, UserSecretsClient, ValidationError
 from kaggle_web_client import (
     _KAGGLE_URL_BASE_ENV_VAR_NAME,

@@ -115,6 +115,3 @@ extend-select = ["I"]
 [tool.ruff.lint.per-file-ignores]
 
 "__init__.py" = ["F401", "F402"]
-
-[tool.pytest.ini_options]
-addopts = "--ignore=tests/test_user_secrets.py"
