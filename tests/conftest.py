@@ -21,7 +21,6 @@ from kaggle_benchmarks import ExecutionMode, clients, config, contexts, events
 def context(monkeypatch):
     with contexts.enter():
         config.execution_mode = ExecutionMode.TESTING
-        config.enable_caching = True
         config.interactive_mode = False
         events.manager.listeners = []
         config.ui_handler = None
