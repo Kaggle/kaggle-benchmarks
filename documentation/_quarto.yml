@@ -11,14 +11,15 @@ project:
 toc: true
 
 website:
-  title: "Benchmarks"
+  title: "Kaggle Benchmarks"
   navbar:
     left:
       - href: index.qmd
         text: Home
+      - href: quick_start.qmd
+      - href: user_guide.qmd
+      - href: cookbook.qmd
 
-  sidebar:
-    contents: auto
 
 format:
   html:
