@@ -25,19 +25,24 @@ from urllib.parse import urlparse
 
 import pytest
 
-# Only run user secrets tests in CI environments when deps are available.
-if os.getenv("CI") != "true":
+try:
+    from kaggle_secrets import (
+        GcpTarget,
+        NotFoundError,
+        UserSecretsClient,
+        ValidationError,
+    )
+    from kaggle_web_client import (
+        _KAGGLE_URL_BASE_ENV_VAR_NAME,
+        _KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME,
+        BackendError,
+        CredentialError,
+    )
+except ImportError:
     pytest.skip(
         "Only run user secrets tests in CI environments", allow_module_level=True
     )
 
-from kaggle_secrets import GcpTarget, NotFoundError, UserSecretsClient, ValidationError
-from kaggle_web_client import (
-    _KAGGLE_URL_BASE_ENV_VAR_NAME,
-    _KAGGLE_USER_SECRETS_TOKEN_ENV_VAR_NAME,
-    BackendError,
-    CredentialError,
-)
 
 _TEST_JWT = "test-secrets-key"
 

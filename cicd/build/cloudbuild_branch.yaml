@@ -40,7 +40,6 @@ steps:
     waitFor: ["push-image"]
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
-      - "CI=true"
 
   - id: test-3.12
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
@@ -50,7 +49,6 @@ steps:
     waitFor: ["push-image"]
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
-      - "CI=true"
 
   - id: ruff
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
