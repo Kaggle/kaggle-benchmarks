@@ -14,14 +14,25 @@
 
 import pytest
 
-from kaggle_benchmarks import clients, config, contexts, events
+from kaggle_benchmarks import ExecutionMode, clients, config, contexts, events
 
 
 @pytest.fixture(autouse=True)
 def context(monkeypatch):
     with contexts.enter():
+        config.execution_mode = ExecutionMode.TESTING
+        config.enable_caching = True
         config.interactive_mode = False
         events.manager.listeners = []
         config.ui_handler = None
+        config.apply()
         monkeypatch.setattr("kaggle_benchmarks.client", clients.InMemoryClient())
         yield
+
+
+@pytest.fixture()
+def cfg():
+    before = config.__dict__.copy()
+    yield config
+    config.__dict__.update(before)
+    config.apply()

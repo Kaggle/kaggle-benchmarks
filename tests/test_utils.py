@@ -14,7 +14,6 @@
 
 import json
 import uuid
-from unittest.mock import patch
 
 import httpx
 import pydantic
@@ -92,56 +91,53 @@ def test_normalize_name(name, expected):
 
 @respx.mock
 @pytest.mark.parametrize("method", ["get", "post"])
-def test_client_caches_despite_server_headers(tmp_path, method):
-    with (
-        patch("kaggle_benchmarks.config.cache_directory", tmp_path),
-        patch("kaggle_benchmarks.config.enable_caching", True),
-    ):
-        url = f"https://test.com/{uuid.uuid4()}"
-        client = utils.build_httpx_client(filename="test")
-        route = respx.request(method, url).mock(
-            return_value=httpx.Response(200, content="")
-        )
+def test_client_caches_despite_server_headers(tmp_path, method, cfg):
+    cfg.cache_directory = tmp_path
+    cfg.enable_caching = True
+    url = f"https://test.com/{uuid.uuid4()}"
+    client = utils.build_httpx_client(filename="test")
+    route = respx.request(method, url).mock(
+        return_value=httpx.Response(200, content="")
+    )
 
-        resp1 = client.request(method, url, headers={"Cache-Control": "no-cache"})
-        assert resp1.status_code == 200
-        assert route.called
-        assert not resp1.extensions.get("hishel_from_cache")
+    resp1 = client.request(method, url, headers={"Cache-Control": "no-cache"})
+    assert resp1.status_code == 200
+    assert route.called
+    assert not resp1.extensions.get("hishel_from_cache")
 
-        resp2 = client.request(method, url)
-        assert resp2.status_code == 200
-        assert route.call_count == 1
-        assert resp2.extensions.get("hishel_from_cache") is True
+    resp2 = client.request(method, url)
+    assert resp2.status_code == 200
+    assert route.call_count == 1
+    assert resp2.extensions.get("hishel_from_cache") is True
 
 
-def test_client_respects_disable_config():
-    with patch("kaggle_benchmarks.config.enable_caching", False):
-        client = utils.build_httpx_client()
+def test_client_respects_disable_config(cfg):
+    cfg.enable_caching = False
+    client = utils.build_httpx_client()
 
-        assert isinstance(client, httpx.Client)
-        assert not hasattr(client, "_controller")
+    assert isinstance(client, httpx.Client)
+    assert not hasattr(client, "_controller")
 
 
 @respx.mock
 @pytest.mark.parametrize("method", ["get", "post"])
-def test_client_does_not_cache_error_responses(tmp_path, method):
-    with (
-        patch("kaggle_benchmarks.config.cache_directory", tmp_path),
-        patch("kaggle_benchmarks.config.enable_caching", True),
-    ):
-        url = f"https://test.com/{uuid.uuid4()}"
-        client = utils.build_httpx_client(filename="test")
-        route = respx.request(method, url).mock(return_value=httpx.Response(400))
+def test_client_does_not_cache_error_responses(tmp_path, method, cfg):
+    cfg.cache_directory = tmp_path
+    cfg.enable_caching = True
 
-        resp1 = client.request(method, url)
-        assert resp1.status_code == 400
-        assert route.called
-        assert not resp1.extensions.get("hishel_from_cache")
+    url = f"https://test.com/{uuid.uuid4()}"
+    client = utils.build_httpx_client(filename="test")
+    route = respx.request(method, url).mock(return_value=httpx.Response(400))
 
-        resp2 = client.request(method, url)
-        assert resp2.status_code == 400
-        assert route.call_count == 2
-        assert not resp2.extensions.get("hishel_from_cache")
+    resp1 = client.request(method, url)
+    assert resp1.status_code == 400
+    assert route.called
+    assert not resp1.extensions.get("hishel_from_cache")
+
+    resp2 = client.request(method, url)
+    assert resp2.status_code == 400
+    assert route.call_count == 2
+    assert not resp2.extensions.get("hishel_from_cache")
 
 
 class NestedModel(pydantic.BaseModel):
