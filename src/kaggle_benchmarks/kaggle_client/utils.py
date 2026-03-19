@@ -16,6 +16,7 @@ import json
 import re
 import warnings
 from pathlib import Path
+from typing import Any
 
 
 def convert_py_to_ipynb(py_path: str | Path, ipynb_path: str | Path) -> None:
@@ -57,7 +58,7 @@ def resolve_metadata(
     is_private: bool = True,
     title: str | None = None,
     **kwargs,
-) -> dict:
+) -> dict[str, Any]:
     """Assembles the kernel-metadata.json payload for Kaggle.
 
     Loads existing metadata if present, applies overrides, and ensures
