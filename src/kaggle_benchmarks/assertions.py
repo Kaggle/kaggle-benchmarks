@@ -347,6 +347,8 @@ def assert_contains_regex(
     pattern: str | re.Pattern[str],
     text: str,
     expectation: str | None = None,
+    *,
+    flags=re.RegexFlag.NOFLAG,
 ) -> AssertionResult:
     """Asserts that the given regex pattern is found anywhere in the text.
 
@@ -355,7 +357,7 @@ def assert_contains_regex(
         text: The string to search within.
         expectation: An optional message summarizing the assertion.
     """
-    passed = re.search(pattern, text) is not None
+    passed = re.search(pattern, text, flags=flags) is not None
 
     return AssertionResult(
         passed=passed,
