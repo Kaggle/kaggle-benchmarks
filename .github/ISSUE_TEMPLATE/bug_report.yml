@@ -28,7 +28,7 @@ body:
       description: Your Kaggle username (so we can look up your environment / notebooks if needed).
       placeholder: "e.g. johndoe"
     validations:
-      required: false
+      required: true
 
   - type: dropdown
     id: execution-environment
