@@ -198,7 +198,7 @@ openai://anthropic/claude-haiku-4-5@20251001:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -212,7 +212,7 @@ openai://anthropic/claude-opus-4-5@20251101:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -226,7 +226,7 @@ openai://anthropic/claude-sonnet-4-5@20250929:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -239,7 +239,7 @@ openai://deepseek-ai/deepseek-r1-0528:
   config:
     structured_output: false
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -250,7 +250,7 @@ openai://deepseek-ai/deepseek-v3.2:
   config:
     structured_output: false
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -261,7 +261,7 @@ openai://google/gemini-2.0-flash:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -276,9 +276,9 @@ openai://google/gemini-2.5-flash:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
-    test_extract_composite_pydantic: passed
+    test_extract_composite_pydantic: failed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
@@ -291,7 +291,7 @@ openai://google/gemini-2.5-pro:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -306,7 +306,7 @@ openai://google/gemini-3-flash-preview:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -321,7 +321,7 @@ openai://google/gemini-3-pro-preview:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -336,7 +336,7 @@ openai://google/gemini-3.1-flash-lite-preview:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -350,7 +350,7 @@ openai://google/gemma-3-12b:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
@@ -358,7 +358,7 @@ openai://qwen/qwen3-235b-a22b-instruct-2507:
   config:
     structured_output: false
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -370,7 +370,7 @@ openai://qwen/qwen3-next-80b-a3b-instruct:
   config:
     structured_output: false
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -382,10 +382,10 @@ openai://zai/glm-5:
   config:
     structured_output: true
   tests:
-    test_dataset_eval: failed
+    test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
-    test_extract_dataclass: failed
+    test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
