@@ -1689,15 +1689,14 @@ wheels = [
 
 [[package]]
 name = "jupyter-lsp"
-version = "1.5.1"
+version = "2.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "entrypoints" },
     { name = "jupyter-server" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/ca/a2255955d862f0269c18293a4fc9df1a180587779bd413c9bb754c94c149/jupyter-lsp-1.5.1.tar.gz", hash = "sha256:751abd35413be99a4331f3597b09341adc755589ed32091ac2f686db3d61267e", size = 35907, upload-time = "2021-12-12T13:17:52.274Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/02/93423994c2e2827a9315118839448330b37dd5063f2fc318ddb294585b5b/jupyter-lsp-2.2.2.tar.gz", hash = "sha256:256d24620542ae4bba04a50fc1f6ffe208093a07d8e697fea0a8d1b8ca1b7e5b", size = 48168, upload-time = "2024-01-17T22:19:28.34Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/49/c87099bdccb160b4ebd2c4485bf385c15f0288b4db76f460abccc0e51b9b/jupyter_lsp-1.5.1-py3-none-any.whl", hash = "sha256:28bb4c44f0c78b4fe55041b2209a8a1f33b1719f39e5e280d8c4d689dc44ca31", size = 54021, upload-time = "2021-12-12T13:17:50.668Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/35/8332e7a07f872324e29ae4620a41a21372a8dc710b63b873d80cb2184241/jupyter_lsp-2.2.2-py3-none-any.whl", hash = "sha256:3b95229e4168355a8c91928057c1621ac3510ba98b2a925e82ebd77f078b1aa5", size = 68777, upload-time = "2024-01-17T22:19:23.255Z" },
 ]
 
 [[package]]
@@ -1996,7 +1995,7 @@ dev = [
     { name = "jedi" },
     { name = "jupyter-bokeh", specifier = ">=4.0.5" },
     { name = "jupyter-cache", specifier = ">=1.0.1" },
-    { name = "jupyter-lsp", specifier = "==1.5.1" },
+    { name = "jupyter-lsp", specifier = "==2.2.2" },
     { name = "jupyter-server", specifier = "==2.12.5" },
     { name = "jupyterlab-lsp" },
     { name = "kaggle-benchmarks", extras = ["kaggle-client"] },
@@ -2041,7 +2040,7 @@ docs = [
 kaggle = [
     { name = "jedi" },
     { name = "jupyter-bokeh", specifier = ">=4.0.5" },
-    { name = "jupyter-lsp", specifier = "==1.5.1" },
+    { name = "jupyter-lsp", specifier = "==2.2.2" },
     { name = "jupyter-server", specifier = "==2.12.5" },
     { name = "jupyterlab-lsp" },
     { name = "kagglehub", specifier = ">=0.3.10" },
