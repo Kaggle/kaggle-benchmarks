@@ -1,0 +1,51 @@
+name: Bug Report
+description: Report a bug on Kaggle
+labels: ["bug"]
+body:
+  - type: input
+    id: username
+    attributes:
+      label: Kaggle Username
+      description: Your Kaggle username
+      placeholder: e.g. johndoe
+    validations:
+      required: true
+  - type: dropdown
+    id: using-kaggle-benchmarks
+    attributes:
+      label: Are you using Kaggle Benchmarks?
+      description: "Do you have `import kaggle_benchmarks as kbench` in your code?"
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction Steps
+      description: Steps to reproduce the issue
+      placeholder: |
+        1. Go to ...
+        2. Run ...
+        3. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment Info
+      description: "Browser, OS, Python version, package version, etc."
+      placeholder: |
+        OS: Ubuntu 22.04
+        Python: 3.10
+        kaggle-benchmarks: 1.0.0
+    validations:
+      required: false
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or logs about the issue
+    validations:
+      required: false

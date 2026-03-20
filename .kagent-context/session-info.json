@@ -1,0 +1,29 @@
+{
+  "task_id": "limagoog-20260320175420-02792410",
+  "agent_type": "claude",
+  "session_id": "52004451-b50b-466f-86a5-46e20b91d618",
+  "updated_at": "2026-03-20T17:59:40Z",
+  "resume_command": "claude --resume 52004451-b50b-466f-86a5-46e20b91d618",
+  "usage": {
+    "total_cost_usd": 0.4591635,
+    "input_tokens": 66,
+    "output_tokens": 2988,
+    "cache_read_input_tokens": 131917,
+    "cache_creation_input_tokens": 50908,
+    "duration_ms": 63013,
+    "duration_api_ms": 61880,
+    "num_turns": 18,
+    "model_usage": {
+      "claude-opus-4-6@default": {
+        "inputTokens": 66,
+        "outputTokens": 2988,
+        "cacheReadInputTokens": 131917,
+        "cacheCreationInputTokens": 50908,
+        "webSearchRequests": 0,
+        "costUSD": 0.4591635,
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000
+      }
+    }
+  }
+}
