@@ -26,6 +26,8 @@ Usage:
         `uv run pytest golden_tests/test_cookbook_examples.py::test_extract_int`
     - Run tests for a specific API (e.g., genai/openai):
         `uv run pytest golden_tests/test_cookbook_examples.py -k "genai"`
+    - Run tests and update the report:
+        `uv run pytest golden_tests/test_cookbook_examples.py --generate-report`
 """
 
 # %%
@@ -87,9 +89,20 @@ def benchmark_test(
         if exclude:
             models -= set(exclude)
 
-        @pytest.mark.parametrize("llm_name", sorted(list(models)))
-        def test_func(llm_name):
-            llm = kbench.llms[llm_name]
+        # Pre-load the LLM and API as fixtures to make model attributes
+        # (e.g., `support_structured_outputs`) and the API name available
+        # to the reporting hooks in `conftest.py`.
+        llms = []
+        for api in ["openai", "genai"]:
+            llms += [
+                pytest.param(
+                    kbench.kaggle.load_model(key, api=api), api, id=f"{api}-{key}"
+                )
+                for key in sorted(models)
+            ]
+
+        @pytest.mark.parametrize("llm, api", llms)
+        def test_func(llm, api):
             run = task.run(llm, **task_kwargs)
             assert run.passed
             if verify_fn:
@@ -118,28 +131,10 @@ def download_temp_image(url: str, suffix: str):
             os.remove(temp_path)
 
 
-# %%
-# Setup fixture
-
-
-def _initialize_models(api: str):
-    """Loads all required models into the global kbench registry."""
-    all_models = TEST_LLM_NAMES | JUDGE_LLM_NAMES
-    kbench.llms = {
-        model_name: kbench.kaggle.load_model(model_name, api=api)
-        for model_name in all_models
-    }
+@pytest.fixture(scope="session", autouse=True)
+def configure():
     # Ensure tests fail immediately on exceptions rather than continuing.
     kbench.config.continue_with_exceptions = False
-
-
-# It tests both "openai" and "genai" API.
-@pytest.fixture(scope="module", autouse=True, params=["openai", "genai"])
-def module_setup(request):
-    """Pytest fixture to initialize models once for the module."""
-    api = request.param
-    _initialize_models(api=api)
-    return api
 
 
 # %%
@@ -381,7 +376,6 @@ def assert_multi_qa_result(run):
 @benchmark_test(df=df, verify_fn=assert_multi_qa_result)
 @kbench.task()
 def test_dataset_eval(llm, df) -> tuple[float, float]:
-
     with kbench.client.enable_cache():
         runs = single_qa_task.evaluate(
             llm=[llm],
@@ -480,8 +474,8 @@ def test_image_local_file(llm):
 
     with download_temp_image(image_url, suffix=".png") as image_path:
         image = images.from_path(image_path)
+        response = llm.prompt("What does this logo say?", image=image)
 
-    response = llm.prompt("What does this logo say?", image=image)
     kbench.assertions.assert_contains_regex(
         r"(?i)kaggle",
         response,
