@@ -1,0 +1,177 @@
+name: "🐛 Bug Report"
+description: Report a bug or unexpected behavior in kaggle-benchmarks
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this issue! Please fill in the details below so we can help you as quickly as possible.
+
+  # ── Description ────────────────────────────────────────────────
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "e.g. When I run my benchmark task, the assertion passes even though the model output is wrong."
+    validations:
+      required: true
+
+  # ── Kaggle Info ────────────────────────────────────────────────
+
+  - type: input
+    id: kaggle-username
+    attributes:
+      label: Kaggle Username
+      description: Your Kaggle username (so we can look up your environment / notebooks if needed).
+      placeholder: "e.g. johndoe"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: execution-environment
+    attributes:
+      label: Execution Environment
+      description: Where are you running kaggle-benchmarks?
+      options:
+        - Kaggle Notebook
+        - Local machine
+        - Docker container (cicd/)
+        - Other (please specify in description)
+    validations:
+      required: true
+
+  # ── Library Usage ──────────────────────────────────────────────
+
+  - type: dropdown
+    id: using-kbench
+    attributes:
+      label: Are you using Kaggle Benchmarks in your code?
+      description: |
+        Do you have `import kaggle_benchmarks as kbench` (or similar) in your code?
+      options:
+        - "Yes — I import and use kaggle_benchmarks directly"
+        - "No — I'm reporting an installation or setup issue"
+        - "Not sure"
+    validations:
+      required: true
+
+  # ── Repro Steps ────────────────────────────────────────────────
+
+  - type: textarea
+    id: repro-steps
+    attributes:
+      label: Steps to Reproduce
+      description: |
+        Please provide a step-by-step description of how to reproduce this bug.
+        The more detail you provide, the faster we can help!
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-snippet
+    attributes:
+      label: Code to Reproduce
+      description: |
+        If applicable, paste a minimal code snippet that reproduces the issue.
+        This will be automatically formatted as Python code.
+      render: python
+    validations:
+      required: false
+
+  # ── Expected vs Actual ────────────────────────────────────────
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: "e.g. The assertion should fail because the model output does not contain the correct answer."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: "e.g. The assertion passed even though the model output was clearly wrong."
+    validations:
+      required: true
+
+  # ── Error Output ──────────────────────────────────────────────
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error Output / Traceback
+      description: |
+        If there is an error message or traceback, paste it here.
+        This will be automatically formatted as a log.
+      render: shell
+    validations:
+      required: false
+
+  # ── Environment Info ──────────────────────────────────────────
+
+  - type: textarea
+    id: environment-info
+    attributes:
+      label: Environment Info
+      description: |
+        Please share your environment details. You can run the following commands
+        and paste the output here:
+        ```bash
+        python --version
+        python -c "import kaggle_benchmarks; print(kaggle_benchmarks.__version__)"
+        uname -a   # or 'systeminfo' on Windows
+        ```
+      placeholder: |
+        - Python version: 3.11.x
+        - kaggle_benchmarks version: 0.x.x
+        - OS: Ubuntu 22.04 / macOS 14 / Windows 11
+      render: shell
+    validations:
+      required: false
+
+  # ── LLM Info ──────────────────────────────────────────────────
+
+  - type: input
+    id: llm-model
+    attributes:
+      label: LLM Model Used
+      description: Which model were you using when the issue occurred (if applicable)?
+      placeholder: "e.g. gemini-2.5-pro, gpt-4o, etc."
+    validations:
+      required: false
+
+  # ── Additional Context ────────────────────────────────────────
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: |
+        Add any other context, screenshots, or notebook links that might help us debug.
+        If you're running on Kaggle, a link to your notebook is very helpful!
+    validations:
+      required: false
+
+  # ── Checklist ─────────────────────────────────────────────────
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting.
+      options:
+        - label: I have searched the existing issues and this bug has not been reported before.
+          required: true
+        - label: I am using the latest version of kaggle-benchmarks (or have noted my version above).
+          required: false

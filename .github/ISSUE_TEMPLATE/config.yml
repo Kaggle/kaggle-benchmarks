@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "💬 Ask a Question"
+    url: https://www.kaggle.com/discussions/product-feedback
+    about: Use Kaggle forum for questions, ideas, and general help.
+  - name: "🎮 Discord — #benchmarks channel"
+    url: https://discord.com/channels/1101210829807956100/1475930354396303430
+    about: Chat with the community in the #benchmarks channel on the Kaggle Discord server.
+  - name: "📢 Kaggle Forum"
+    url: https://www.kaggle.com/discussions/product-announcements/667898
+    about: Join the discussion on the Kaggle Forum product announcement thread.
+  - name: "📖 Documentation"
+    url: https://github.com/Kaggle/kaggle-benchmarks#usage
+    about: Check the documentation before filing an issue.
