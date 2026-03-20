@@ -70,6 +70,7 @@ solve_riddle.run(
 For a detailed walkthrough of the library's features, check out our documentation:
 - [Quick Start Guide](quick_start.md)
 - [User Guide](user_guide.md)
+- [Cookbook](cookbook.md)
 
 ## Supported Models
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "💬 Ask a Question"
+    url: https://github.com/Kaggle/kaggle-benchmarks/discussions
+    about: Use GitHub Discussions for questions, ideas, and general help — not the issue tracker.
+  - name: "📖 Documentation"
+    url: https://github.com/Kaggle/kaggle-benchmarks#usage
+    about: Check the documentation before filing an issue.
