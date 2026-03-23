@@ -45,6 +45,14 @@ print("Hello")
     assert notebook["cells"][0]["cell_type"] == "markdown"
     assert notebook["cells"][1]["cell_type"] == "code"
 
+    # Verify the kernelspec is added so papermill can run the notebook
+    assert "kernelspec" in notebook["metadata"]
+    assert notebook["metadata"]["kernelspec"] == {
+        "display_name": "Python 3",
+        "language": "python",
+        "name": "python3",
+    }
+
 
 def test_convert_py_to_ipynb_warning(tmp_path):
     py_file = tmp_path / "benchmark.py"

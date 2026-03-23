@@ -39,6 +39,13 @@ def convert_py_to_ipynb(py_path: str | Path, ipynb_path: str | Path) -> None:
         )
 
     notebook = jupytext.reads(content, fmt="py:percent")
+
+    # Kaggle's notebook runner (papermill) requires a kernelspec to evaluate cells.
+    notebook.metadata.setdefault(
+        "kernelspec",
+        {"display_name": "Python 3", "language": "python", "name": "python3"},
+    )
+
     jupytext.write(notebook, ipynb_path)
 
 

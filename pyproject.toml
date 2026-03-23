@@ -39,6 +39,7 @@ dependencies = [
 [project.optional-dependencies]
 kaggle-client = [
   "jupytext",
+  "kaggle",
 ]
 
 # Configuration for the build backend to find the version file
