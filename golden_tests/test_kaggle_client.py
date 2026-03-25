@@ -29,7 +29,7 @@ Tests are organized to mirror the typical user journey:
   5. Error handling      →  TestErrorHandling
 
 Usage:
-    uv run --group test pytest golden_tests/test_kaggle_client.py -v
+    uv run --group test pytest golden_tests/test_kaggle_client.py
     uv run --group test pytest golden_tests/test_kaggle_client.py::TestAuth
     uv run --group test pytest golden_tests/test_kaggle_client.py::TestGetResults::test_full_round_trip
 """
@@ -38,14 +38,12 @@ import json
 import threading
 import time
 import uuid
-from unittest.mock import patch
 
 import pytest
 
 from kaggle_benchmarks.kaggle_client.notebook_api import (
     BenchmarkNotebookClient,
     ConcurrentRunError,
-    KaggleAuthError,
     RunResult,
 )
 
@@ -138,19 +136,6 @@ class TestAuth:
         assert isinstance(client.username, str)
         assert len(client.username) > 0
 
-    def test_validate_and_get_username(self, client):
-        """validate_and_get_username() returns the authenticated username."""
-        username = client.validate_and_get_username()
-        assert isinstance(username, str)
-        assert len(username) > 0
-        assert username == client.username
-
-    def test_bad_credentials_raise_auth_error(self, client):
-        """validate_and_get_username() raises KaggleAuthError on bad creds."""
-        with patch.object(client.api, "get_config_value", return_value=""):
-            with pytest.raises(KaggleAuthError, match="invalid or missing"):
-                client.validate_and_get_username()
-
 
 # ===========================================================================
 # Phase 2: FORK AN EXISTING BENCHMARK
@@ -178,9 +163,9 @@ class TestFork:
 
         # Should have a .py or .ipynb file (depending on source notebook type)
         py_path = workspace / BenchmarkNotebookClient.BENCHMARK_FILENAME
-        ipynb_files = list(workspace.glob("*.ipynb"))
-        assert py_path.exists() or len(ipynb_files) > 0, (
-            f"Expected benchmark.py or .ipynb in {workspace}"
+        ipynb_path = workspace / BenchmarkNotebookClient.NOTEBOOK_FILENAME
+        assert py_path.exists() or ipynb_path.exists(), (
+            f"Expected benchmark.py or benchmark.ipynb in {workspace}"
         )
 
     def test_fork_raises_on_existing_workspace(self, client, fork_source_notebook_id):
@@ -196,7 +181,7 @@ class TestFork:
     def test_fork_raises_on_missing_notebook(self, client):
         """fork() raises ValueError for a non-existent notebook."""
         with pytest.raises(ValueError, match="Failed to pull notebook"):
-            client.fork("kaggle/this-notebook-does-not-exist-12345")
+            client.fork("kaggle/54321-tsixe-ton-seod-koobeton-siht")
 
     def test_fork_modify_publish_lifecycle(self, client, fork_source_notebook_id):
         """Full lifecycle: fork → modify → publish_and_run → get_results."""
@@ -230,7 +215,7 @@ class TestPublish:
     """Publishing benchmark scripts to Kaggle."""
 
     def test_publish_from_workspace(self, client):
-        """publish_and_run() converts .py → .ipynb, writes metadata, and pushes."""
+        """Tests the default workflow where the user authors benchmark.py directly inside the workspace."""
         workspace, slug = _prepare_workspace(client)
 
         url = client.publish_and_run(slug, force=True)
@@ -250,7 +235,7 @@ class TestPublish:
         assert (workspace / BenchmarkNotebookClient.NOTEBOOK_FILENAME).exists()
 
     def test_publish_with_source_file(self, client, tmp_path):
-        """publish_and_run(source_file=...) copies the file into the workspace."""
+        """Tests the override workflow where an external script is dynamically copied into the workspace."""
         slug = f"kbench-golden-source-file-{uuid.uuid4().hex[:8]}"
 
         # Write a source file outside the workspace
@@ -305,7 +290,6 @@ class TestPublish:
         """publish_and_run(force=False) raises ConcurrentRunError if already running."""
         from requests.exceptions import HTTPError
 
-        _prepare_workspace(fresh_client)
         _, slug = _prepare_workspace(fresh_client)
 
         # First push starts the run
@@ -324,6 +308,10 @@ class TestPublish:
         """publish_and_run(force=True) always succeeds regardless of run status."""
         _, slug = _prepare_workspace(fresh_client)
 
+        # First push starts the run
+        fresh_client.publish_and_run(slug, force=True)
+
+        # Immediate second push with force=True should bypass the guard and succeed
         url = fresh_client.publish_and_run(slug, force=True)
         assert url is not None
 
@@ -365,8 +353,14 @@ class TestGetResults:
         assert result.output_dir is not None
         assert result.error is None
 
+        # Verify the on_status callback fired correctly
+        assert len(statuses_seen) > 0, "on_status callback was never invoked"
+        assert statuses_seen[-1] == "complete", (
+            f"Final callback was {statuses_seen[-1]}, not complete"
+        )
+
         # Verify *.run.json files were downloaded and have expected structure
-        runs = dict(result.iter_runs())
+        runs = dict(result.iter_run_results())
         assert len(runs) >= 2, (
             f"Expected at least 2 run files, got {len(runs)}: {list(runs.keys())}"
         )
@@ -391,9 +385,9 @@ class TestGetResults:
         if result.status == "timeout":
             pytest.skip("Notebook did not complete in time.")
 
-        if result.status == "complete":
-            assert result.output_dir == str(custom_output)
-            assert custom_output.exists()
+        assert result.status == "complete", f"Failed with error: {result.error}"
+        assert result.output_dir == str(custom_output)
+        assert custom_output.exists()
 
     def test_timeout_returns_early(self, fresh_client):
         """get_results returns status='timeout' when the time limit is hit."""

@@ -39,7 +39,8 @@ dependencies = [
 [project.optional-dependencies]
 kaggle-client = [
   "jupytext",
-  "kaggle",
+  "kagglesdk>=0.1.14,<1.0",
+  "kagglehub>=0.3.10",
 ]
 
 # Configuration for the build backend to find the version file

@@ -16,17 +16,24 @@
 
 import json
 import logging
+import os
 import shutil
+import tarfile
+import tempfile
 import threading
 import time
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from kaggle_benchmarks.kaggle_client.utils import (
+    KAGGLE_METADATA_MAP,
+    build_local_metadata,
     convert_ipynb_to_py,
     convert_py_to_ipynb,
-    resolve_metadata,
+    normalize_status,
+    parse_remote_metadata,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,26 +65,108 @@ class RunResult:
     tracking_url: str | None
     error: str | None = None
 
-    def iter_runs(self) -> Iterator[tuple[str, dict[str, Any]]]:
+    def iter_run_results(self) -> Iterator[tuple[str, dict[str, Any]]]:
         """Yields (filename, parsed_data) for all *run.json files in the output directory."""
-        if not self.output_dir:
+        if not self.output_dir or not (output_path := Path(self.output_dir)).exists():
             return
 
-        output_path = Path(self.output_dir)
-        if not output_path.exists():
-            return
+        for run_file in output_path.glob("*run.json"):
+            yield run_file.name, json.loads(run_file.read_text(encoding="utf-8"))
 
-        for run_file in output_path.iterdir():
-            if run_file.name.endswith("run.json"):
-                yield run_file.name, json.loads(run_file.read_text(encoding="utf-8"))
+
+# =============================================================================
+# Module-level helper functions (authentication)
+# =============================================================================
+
+_AUTH_ERROR_INSTRUCTIONS = (
+    "To authenticate, use one of the following methods (in priority order):\n\n"
+    "  Option 1: Bearer token (recommended)\n"
+    "    export KAGGLE_API_TOKEN=<your-token>\n"
+    "    Or save your token to ~/.kaggle/access_token\n\n"
+    "  Option 2: Basic auth via environment variables\n"
+    "    export KAGGLE_USERNAME=<your-username>\n"
+    "    export KAGGLE_KEY=<your-api-key>\n\n"
+    "  Option 3: Basic auth via credentials file\n"
+    "    Save kaggle.json to ~/.kaggle/kaggle.json\n\n"
+    "Get your API token at: https://www.kaggle.com/settings\n"
+    "Docs: https://github.com/Kaggle/kagglehub/tree/main#authenticate"
+)
+
+
+def _authenticate() -> tuple[Any, str]:
+    """Authenticate with the Kaggle API and resolve the username.
+
+    Credential resolution relies on the kagglesdk for token introspection
+    and kagglehub for standard Basic auth/json fallbacks.
+
+    Returns:
+        A tuple of (KaggleClient, username).
+
+    Raises:
+        KaggleAuthError: If the SDK is missing, no credentials are found,
+            or the username cannot be determined.
+    """
+    try:
+        from kagglesdk.kaggle_client import KaggleClient
+        from kagglesdk.kaggle_env import get_access_token_from_env, get_env
+        from kagglesdk.security.types.oauth_service import IntrospectTokenRequest
+    except ImportError as e:
+        raise KaggleAuthError(
+            "The 'kagglesdk' package is required. Install with:\n"
+            "  pip install kaggle-benchmarks[kaggle-client]"
+        ) from e
+
+    try:
+        client = KaggleClient(env=get_env())
+    except Exception as e:
+        raise KaggleAuthError(
+            f"Kaggle authentication failed: {e}\n\n{_AUTH_ERROR_INSTRUCTIONS}"
+        ) from e
+
+    def get_token_user() -> str | None:
+        if api_token := get_access_token_from_env()[0]:
+            try:
+                req = IntrospectTokenRequest()
+                req.token = api_token
+                resp = client.security.oauth_client.introspect_token(req)
+                return resp.username if resp.active else None
+            except Exception:
+                pass
+        return None
+
+    def get_hub_user() -> str | None:
+        try:
+            import kagglehub
+
+            return (
+                creds.username
+                if (creds := kagglehub.config.get_kaggle_credentials())
+                else None
+            )
+        except Exception:
+            return None
+
+    username = client.username or get_token_user() or get_hub_user()
+
+    if not username:
+        raise KaggleAuthError(
+            f"No Kaggle credentials found or invalid.\n\n{_AUTH_ERROR_INSTRUCTIONS}"
+        )
+
+    return client, username
+
+
+# =============================================================================
+# Client class
+# =============================================================================
 
 
 class BenchmarkNotebookClient:
     """Client for the Kaggle benchmark notebook workflow.
 
-    Wraps the Kaggle API (KaggleApi from kaggle-python) to handle
-    publishing, running, and retrieving results from benchmark
-    notebooks (tagged with 'personal-benchmark' keyword).
+    Wraps the Kaggle SDK (kagglesdk) to handle publishing, running,
+    and retrieving results from benchmark notebooks (tagged with
+    'personal-benchmark' keyword).
     """
 
     BENCHMARK_FILENAME = "benchmark.py"
@@ -85,22 +174,13 @@ class BenchmarkNotebookClient:
     METADATA_FILENAME = "kernel-metadata.json"
     OUTPUT_DIRNAME = "output"
 
-    AUTH_ERROR_INSTRUCTIONS = (
-        "To authenticate, use one of the following methods:\n\n"
-        "  Option 1: Environment variable\n"
-        "    export KAGGLE_API_TOKEN=<your-token>\n\n"
-        "  Option 2: API token file\n"
-        "    Save your token to ~/.kaggle/access_token\n\n"
-        "  Option 3: Legacy credentials file\n"
-        "    Save kaggle.json to ~/.kaggle/kaggle.json\n\n"
-        "Get your API token at: https://www.kaggle.com/settings\n"
-        "Docs: https://github.com/Kaggle/kaggle-cli/blob/main/docs/README.md#authentication"
-    )
-
-    # Retry config for initial 404s from kernels_status after kernels_push.
-    # See: kaggle_api_example.py pull_notebook_output()
+    # Retry config for initial 404s from get_kernel_session_status after save_kernel.
     _STATUS_RETRIES = 5
     _STATUS_RETRY_WAIT = 10  # seconds
+
+    # =========================================================================
+    # Authentication & Identity
+    # =========================================================================
 
     def __init__(
         self,
@@ -111,69 +191,106 @@ class BenchmarkNotebookClient:
         Args:
             base_dir: Parent directory for benchmark workspaces.
         """
-        self.api = self._authenticate()
-        self.username = self.validate_and_get_username()
+        self.api, self.username = _authenticate()
         self.base_dir = Path(base_dir)
 
-    @staticmethod
-    def _authenticate():
-        """Authenticate with the Kaggle API.
+    # =========================================================================
+    # Forking
+    # =========================================================================
+
+    def fork(
+        self,
+        source_notebook_id: str,
+        dest_notebook_slug: str | None = None,
+        overwrite: bool = False,
+    ) -> Path:
+        """Pull an existing benchmark from Kaggle as a starting point.
+
+        Workspace: <base_dir>/<dest_notebook_slug>/
+
+        Downloads via get_kernel() and converts:
+        1. Pulls the .ipynb source and kernel metadata
+        2. Writes the source as benchmark.ipynb
+        3. Converts benchmark.ipynb -> benchmark.py with # %% cell delimiters
+        4. Reconstructs kernel-metadata.json from API response
+
+        The kernel-metadata.json is preserved so that publish_and_run()
+        can reuse it.
+
+        Args:
+            source_notebook_id: Full Kaggle notebook path including owner
+                (e.g., 'alice/riddle-benchmark').
+            dest_notebook_slug: Local name for the benchmark directory.
+                Defaults to the basename of source_notebook_id.
+            overwrite: If True, replace the existing workspace directory.
+                If False (default), raises FileExistsError.
 
         Returns:
-            Authenticated KaggleApi instance.
-
-        Raises:
-            KaggleAuthError: If the kaggle package is not installed or
-                authentication fails.
+            Path to the workspace directory containing the .py file.
         """
+        if dest_notebook_slug is None:
+            dest_notebook_slug = source_notebook_id.split("/")[-1]
+
+        workspace = self._workspace(dest_notebook_slug)
+
+        if workspace.exists():
+            if not overwrite:
+                raise FileExistsError(
+                    f"Workspace already exists: {workspace}. "
+                    "Use overwrite=True to replace it."
+                )
+            shutil.rmtree(workspace)
+
+        workspace.mkdir(parents=True, exist_ok=True)
+
+        # Pull notebook source and metadata from Kaggle via get_kernel()
+        from kagglesdk.kernels.types.kernels_api_service import (
+            ApiGetKernelRequest,
+        )
+        from requests.exceptions import HTTPError
+
         try:
-            from kaggle.api.kaggle_api_extended import KaggleApi
-        except ImportError as e:
-            raise KaggleAuthError(
-                "The 'kaggle' package is required. Install with:\n"
-                "  pip install kaggle-benchmarks[kaggle-client]"
+            req = ApiGetKernelRequest()
+            req.user_name, req.kernel_slug = source_notebook_id.split("/")
+            response = self.api.kernels.kernels_api_client.get_kernel(req)
+        except HTTPError as e:
+            raise ValueError(
+                f"Failed to pull notebook '{source_notebook_id}'. "
+                "Ensure the notebook exists, is public (or you have access), "
+                "and you have accepted any necessary competition rules."
             ) from e
 
-        api = KaggleApi()
-        try:
-            api.authenticate()
-        except OSError as e:
-            raise KaggleAuthError(
-                f"Kaggle authentication failed: {e}\n\n"
-                f"{BenchmarkNotebookClient.AUTH_ERROR_INSTRUCTIONS}"
-            ) from e
-        return api
+        # Write the notebook source to benchmark.ipynb
+        # response.blob.source is exactly the raw .ipynb JSON for notebook-type kernels
+        if response.blob and response.blob.source:
+            ipynb_path = workspace / self.NOTEBOOK_FILENAME
+            ipynb_path.write_text(response.blob.source, encoding="utf-8")
 
-    def _workspace(self, notebook_slug: str) -> Path:
-        """Return the workspace directory for a notebook slug."""
-        return self.base_dir / notebook_slug
+            # Convert .ipynb to .py with # %% cell delimiters
+            py_path = workspace / self.BENCHMARK_FILENAME
+            convert_ipynb_to_py(ipynb_path, py_path)
+        else:
+            logger.warning(
+                "No source found after pulling '%s'. "
+                "The notebook may be a script notebook.",
+                source_notebook_id,
+            )
 
-    def _notebook_id(self, notebook_slug: str) -> str:
-        """Return the full notebook ID (username/slug)."""
-        return f"{self.username}/{notebook_slug}"
+        # Reconstruct kernel-metadata.json from response.metadata
+        if response.metadata:
+            metadata = parse_remote_metadata(
+                meta=response.metadata,
+                default_id=source_notebook_id,
+                default_slug=dest_notebook_slug,
+            )
+            meta_path = workspace / self.METADATA_FILENAME
+            meta_path.write_text(json.dumps(metadata, indent=4), encoding="utf-8")
 
-    def _tracking_url(self, notebook_slug: str) -> str:
-        """Return the Kaggle tracking URL for a notebook."""
-        return f"https://www.kaggle.com/{self._notebook_id(notebook_slug)}"
+        return workspace
 
-    @staticmethod
-    def _normalize_status(status: object) -> str:
-        """Normalize a Kaggle notebook status to a lowercase string.
-
-        The Kaggle API may return a KernelWorkerStatus enum
-        (e.g. "KernelWorkerStatus.complete") or a plain string.
-        This method normalizes both to a simple lowercase string
-        like "complete".
-        """
-        # Handle response wrappers with a .status attribute
-        status_raw = getattr(status, "status", status)
-        status_str = str(status_raw).lower()
-        # Strip enum class prefix (e.g. "kernelworkerstatus.complete" -> "complete")
-        if "." in status_str:
-            status_str = status_str.split(".")[-1]
-        return status_str
-
-    # --- Primary Operations ---
+    # =========================================================================
+    # Publish & Run
+    # =========================================================================
 
     def publish_and_run(
         self,
@@ -198,7 +315,8 @@ class BenchmarkNotebookClient:
         Args:
             notebook_slug: Short notebook name (e.g., 'my-benchmark').
             source_file: Optional path to a .py file to copy into workspace. It will replace benchmark.py.
-            dataset_sources: Kaggle dataset slugs to mount at /kaggle/input/.
+            dataset_sources: Optional list of Kaggle dataset slugs (e.g., ``["owner/dataset-name"]``)
+                to mount at ``/kaggle/input/``.
             force: If True, push even if a previous run is in progress.
 
         Returns:
@@ -229,7 +347,7 @@ class BenchmarkNotebookClient:
 
         # Resolve metadata (load existing kernel-metadata.json or generate new)
         # 'personal-benchmark' keyword is ensured by resolve_metadata
-        metadata = resolve_metadata(
+        metadata = build_local_metadata(
             workspace_dir=workspace,
             notebook_slug=notebook_slug,
             username=self.username,
@@ -244,8 +362,7 @@ class BenchmarkNotebookClient:
         notebook_id = self._notebook_id(notebook_slug)
         if not force:
             try:
-                raw_status = self.api.kernels_status(notebook_id)
-                status = self._normalize_status(raw_status)
+                status = self._get_kernel_session_status(notebook_id)
                 if status in ("queued", "running"):
                     raise ConcurrentRunError(
                         f"Notebook '{notebook_id}' is already running "
@@ -258,89 +375,50 @@ class BenchmarkNotebookClient:
                 else:
                     raise
 
-        # Write metadata and push via api.kernels_push()
+        # Write metadata to disk (for local inspection and fork reuse)
         meta_path = workspace / self.METADATA_FILENAME
         meta_path.write_text(json.dumps(metadata, indent=4), encoding="utf-8")
 
-        self.api.kernels_push(str(workspace))
+        # Read the generated .ipynb and push inline via save_kernel
+        notebook_content = notebook_path.read_text(encoding="utf-8")
+        req = self._build_save_request(
+            notebook_id=self._notebook_id(notebook_slug),
+            notebook_content=notebook_content,
+            metadata=metadata,
+        )
+
+        response = self.api.kernels.kernels_api_client.save_kernel(req)
+        if response.error:
+            raise RuntimeError(f"Kaggle push failed: {response.error}")
 
         return self._tracking_url(notebook_slug)
 
-    def _wait_for_notebook_creation(self, notebook_id: str) -> str | None:
-        """Wait for Kaggle to index a newly pushed notebook.
-
-        Returns:
-            The initial status string, or None if retries exceeded.
-        """
-        from requests.exceptions import HTTPError
-
-        for attempt in range(self._STATUS_RETRIES):
-            try:
-                raw_status = self.api.kernels_status(notebook_id)
-                return self._normalize_status(raw_status)
-            except HTTPError as e:
-                if e.response.status_code == 404:
-                    logger.info(
-                        "Notebook not found yet (attempt %d/%d), waiting...",
-                        attempt + 1,
-                        self._STATUS_RETRIES,
-                    )
-                    time.sleep(self._STATUS_RETRY_WAIT)
-                else:
-                    raise
-        return None
-
-    def _poll_notebook_status(
+    def _build_save_request(
         self,
         notebook_id: str,
-        initial_status: str,
-        poll_interval: int,
-        timeout: int | None,
-        cancel_event: threading.Event | None,
-        on_status: Callable[[str], None] | None,
-    ) -> str:
-        """Poll notebook status until complete, error, cancelled, or timeout."""
-        status_str = initial_status
-        last_reported_status = None
-        start_time = time.monotonic()
+        notebook_content: str,
+        metadata: dict[str, Any],
+    ):
+        """Build the API request to save/push a notebook."""
+        from kagglesdk.kernels.types.kernels_api_service import ApiSaveKernelRequest
 
-        while status_str not in ("complete", "error", "cancelled"):
-            if cancel_event is not None and cancel_event.is_set():
-                return "cancelled"
+        req = ApiSaveKernelRequest()
 
-            if timeout is not None and (time.monotonic() - start_time) >= timeout:
-                return "timeout"
+        # Special required fields
+        req.slug = notebook_id
+        req.new_title = metadata.get("title", notebook_id.split("/")[-1])
+        req.text = notebook_content
 
-            if on_status is not None and status_str != last_reported_status:
-                on_status(status_str)
-                last_reported_status = status_str
+        # Map the remaining configured attributes dynamically
+        for json_key, (api_key, _) in KAGGLE_METADATA_MAP.items():
+            if json_key in metadata:
+                setattr(req, api_key, metadata[json_key])
 
-            # Wait with cancel_event support for early exit
-            if cancel_event is not None:
-                cancel_event.wait(poll_interval)
-                if cancel_event.is_set():
-                    return "cancelled"
-            else:
-                time.sleep(poll_interval)
+        return req
 
-            raw_status = self.api.kernels_status(notebook_id)
-            status_str = self._normalize_status(raw_status)
-
-        # Report final status
-        if on_status is not None and status_str != last_reported_status:
-            on_status(status_str)
-
-        return status_str
-
-    def _download_notebook_output(
-        self, notebook_id: str, output_path: Path, clear_output: bool
-    ) -> None:
-        """Clear existing output (if requested) and download new output from Kaggle."""
-        if clear_output and output_path.exists():
-            shutil.rmtree(output_path)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        self.api.kernels_output(kernel=notebook_id, path=str(output_path), force=True)
+    # =========================================================================
+    # Polling & Results
+    # =========================================================================
 
     def get_results(
         self,
@@ -356,8 +434,8 @@ class BenchmarkNotebookClient:
 
         Workspace: <base_dir>/<notebook_slug>/
 
-        Polls api.kernels_status() until the notebook completes (or fails),
-        then downloads output via api.kernels_output().
+        Polls get_kernel_session_status() until the notebook completes (or fails),
+        then downloads output via download_kernel_output().
 
         Neither timeout nor cancel_event stops the Kaggle run itself —
         the notebook continues executing on Kaggle. They only stop
@@ -430,104 +508,139 @@ class BenchmarkNotebookClient:
             tracking_url=tracking_url,
         )
 
-    def fork(
-        self,
-        source_notebook_id: str,
-        dest_notebook_slug: str | None = None,
-        overwrite: bool = False,
-    ) -> Path:
-        """Pull an existing benchmark from Kaggle as a starting point.
-
-        Workspace: <base_dir>/<dest_notebook_slug>/
-
-        Downloads via api.kernels_pull() and converts:
-        1. Pulls the .ipynb and kernel-metadata.json
-        2. Renames the pulled .ipynb to benchmark.ipynb to prevent Kaggle from pushing multiple notebooks during publish.
-        3. Converts benchmark.ipynb -> benchmark.py with # %% cell delimiters
-
-        The kernel-metadata.json is preserved so that publish_and_run()
-        can reuse it.
-
-        Args:
-            source_notebook_id: Full Kaggle notebook path including owner
-                (e.g., 'alice/riddle-benchmark').
-            dest_notebook_slug: Local name for the benchmark directory.
-                Defaults to the basename of source_notebook_id.
-            overwrite: If True, replace the existing workspace directory.
-                If False (default), raises FileExistsError.
+    def _wait_for_notebook_creation(self, notebook_id: str) -> str | None:
+        """Wait for Kaggle to index a newly pushed notebook.
 
         Returns:
-            Path to the workspace directory containing the .py file.
+            The initial status string, or None if retries exceeded.
         """
-        if dest_notebook_slug is None:
-            dest_notebook_slug = source_notebook_id.split("/")[-1]
-
-        workspace = self._workspace(dest_notebook_slug)
-
-        if workspace.exists():
-            if not overwrite:
-                raise FileExistsError(
-                    f"Workspace already exists: {workspace}. "
-                    "Use overwrite=True to replace it."
-                )
-            shutil.rmtree(workspace)
-
-        workspace.mkdir(parents=True, exist_ok=True)
-
-        # Pull notebook and metadata from Kaggle
         from requests.exceptions import HTTPError
 
+        for attempt in range(self._STATUS_RETRIES):
+            try:
+                return self._get_kernel_session_status(notebook_id)
+            except HTTPError as e:
+                if e.response.status_code == 404:
+                    logger.info(
+                        "Notebook not found yet (attempt %d/%d), waiting...",
+                        attempt + 1,
+                        self._STATUS_RETRIES,
+                    )
+                    time.sleep(self._STATUS_RETRY_WAIT)
+                else:
+                    raise
+        return None
+
+    def _poll_notebook_status(
+        self,
+        notebook_id: str,
+        initial_status: str,
+        poll_interval: int,
+        timeout: int | None,
+        cancel_event: threading.Event | None,
+        on_status: Callable[[str], None] | None,
+    ) -> str:
+        """Poll notebook status until complete, error, cancelled, or timeout."""
+        status_str = initial_status
+        last_reported_status = None
+        start_time = time.monotonic()
+
+        while status_str not in ("complete", "error", "cancelled"):
+            if cancel_event is not None and cancel_event.is_set():
+                return "cancelled"
+
+            if timeout is not None and (time.monotonic() - start_time) >= timeout:
+                return "timeout"
+
+            if on_status is not None and status_str != last_reported_status:
+                on_status(status_str)
+                last_reported_status = status_str
+
+            # Wait with cancel_event support for early exit
+            if cancel_event is not None:
+                cancel_event.wait(poll_interval)
+                if cancel_event.is_set():
+                    return "cancelled"
+            else:
+                time.sleep(poll_interval)
+
+            status_str = self._get_kernel_session_status(notebook_id)
+
+        # Report final status
+        if on_status is not None and status_str != last_reported_status:
+            on_status(status_str)
+
+        return status_str
+
+    def _download_notebook_output(
+        self, notebook_id: str, output_path: Path, clear_output: bool
+    ) -> None:
+        """Clear existing output (if requested) and download new output from Kaggle."""
+        from kagglesdk.kernels.types.kernels_api_service import (
+            ApiDownloadKernelOutputRequest,
+        )
+
+        if clear_output and output_path.exists():
+            shutil.rmtree(output_path)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Build request (no file_path -> downloads all output as archive)
+        req = ApiDownloadKernelOutputRequest()
+        req.owner_slug, req.kernel_slug = notebook_id.split("/")
+
+        # download_kernel_output returns a streamed requests.Response
+        response = self.api.kernels.kernels_api_client.download_kernel_output(req)
+
+        # Save the archive to a temp file, then extract
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".archive") as tmp:
+            for chunk in response.iter_content(chunk_size=8192):
+                tmp.write(chunk)
+            archive_path = tmp.name
+
         try:
-            self.api.kernels_pull(
-                source_notebook_id, path=str(workspace), metadata=True
-            )
-        except HTTPError as e:
-            raise ValueError(
-                f"Failed to pull notebook '{source_notebook_id}'. "
-                "Ensure the notebook exists, is public (or you have access), "
-                "and you have accepted any necessary competition rules."
-            ) from e
+            if tarfile.is_tarfile(archive_path):
+                with tarfile.open(archive_path) as tf:
+                    tf.extractall(output_path)
+            elif zipfile.is_zipfile(archive_path):
+                with zipfile.ZipFile(archive_path, "r") as zf:
+                    zf.extractall(output_path)
+            else:
+                raise RuntimeError("Unexpected archive format from Kaggle API")
+        finally:
+            os.remove(archive_path)
 
-        # Convert .ipynb to .py with # %% cell delimiters
-        ipynb_files = list(workspace.glob("*.ipynb"))
-        if ipynb_files:
-            ipynb_path = ipynb_files[0]
-            py_path = workspace / self.BENCHMARK_FILENAME
-            convert_ipynb_to_py(ipynb_path, py_path)
+    def _get_kernel_session_status(self, notebook_id: str):
+        """Get the session status for a notebook via kagglesdk.
 
-            std_ipynb_path = workspace / self.NOTEBOOK_FILENAME
-            if ipynb_path != std_ipynb_path:
-                ipynb_path.rename(std_ipynb_path)
-        else:
-            logger.warning(
-                "No .ipynb file found after pulling '%s'. "
-                "The notebook may be a script notebook.",
-                source_notebook_id,
-            )
-
-        return workspace
-
-    def validate_and_get_username(self) -> str:
-        """Validate Kaggle credentials and return the authenticated username.
-
-        Calls the Kaggle API to verify that the stored credentials
-        are valid and retrieves the authenticated username.
+        Args:
+            notebook_id: Full notebook ID (format: "username/slug").
 
         Returns:
-            The authenticated Kaggle username.
-
-        Raises:
-            KaggleAuthError: If credentials are missing or invalid,
-                with a message guiding the user to set up
-                authentication.
+            The normalized status string.
         """
-        try:
-            username = self.api.get_config_value("username")
-            if not username:
-                raise ValueError("Kaggle username is empty")
-            return username
-        except Exception as e:
-            raise KaggleAuthError(
-                f"Kaggle credentials are invalid or missing: {e}\n\n"
-                f"{BenchmarkNotebookClient.AUTH_ERROR_INSTRUCTIONS}"
-            ) from e
+        from kagglesdk.kernels.types.kernels_api_service import (
+            ApiGetKernelSessionStatusRequest,
+        )
+
+        user_name, kernel_slug = notebook_id.split("/")
+        req = ApiGetKernelSessionStatusRequest()
+        req.user_name = user_name
+        req.kernel_slug = kernel_slug
+        response = self.api.kernels.kernels_api_client.get_kernel_session_status(req)
+        return normalize_status(response)
+
+    # =========================================================================
+    # Internal Utilities
+    # =========================================================================
+
+    def _workspace(self, notebook_slug: str) -> Path:
+        """Return the workspace directory for a notebook slug."""
+        return self.base_dir / notebook_slug
+
+    def _notebook_id(self, notebook_slug: str) -> str:
+        """Return the full notebook ID (username/slug)."""
+        return f"{self.username}/{notebook_slug}"
+
+    def _tracking_url(self, notebook_slug: str) -> str:
+        """Return the Kaggle tracking URL for a notebook."""
+        return f"https://www.kaggle.com/{self._notebook_id(notebook_slug)}"
