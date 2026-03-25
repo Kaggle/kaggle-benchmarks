@@ -1,0 +1,2 @@
+# Exclude experimental directories from release archives (git archive / GitHub tarballs)
+skills/ export-ignore
