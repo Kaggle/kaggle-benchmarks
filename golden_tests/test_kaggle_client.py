@@ -17,8 +17,7 @@ Golden tests for kaggle_client.notebook_api.BenchmarkNotebookClient.
 
 These tests exercise the real Kaggle API (authentication, push, status
 polling, fork, output download) and are excluded from CI because they
-require valid Kaggle credentials (~/.kaggle/kaggle.json) and internet
-access.
+require valid Kaggle credentials and internet access.
 
 Tests are organized to mirror the typical user journey:
 
@@ -115,7 +114,7 @@ def fork_source_notebook_id(client):
 
 
 # ===========================================================================
-# Phase 1: AUTHENTICATE
+# AUTHENTICATE
 #
 # The very first thing a user does — verify they can talk to Kaggle.
 # ===========================================================================
@@ -138,7 +137,7 @@ class TestAuth:
 
 
 # ===========================================================================
-# Phase 2: FORK AN EXISTING BENCHMARK
+# FORK AN EXISTING BENCHMARK
 #
 # Users often start by forking a public benchmark, then modifying it.
 # ===========================================================================
@@ -205,7 +204,7 @@ class TestFork:
 
 
 # ===========================================================================
-# Phase 3: PUBLISH & RUN
+# PUBLISH & RUN
 #
 # Prepare a script and push it to Kaggle for execution.
 # ===========================================================================
@@ -317,7 +316,7 @@ class TestPublish:
 
 
 # ===========================================================================
-# Phase 4: POLL & GET RESULTS
+# POLL & GET RESULTS
 #
 # After publishing, poll for completion and download outputs.
 # ===========================================================================
@@ -421,7 +420,7 @@ class TestGetResults:
 
 
 # ===========================================================================
-# Phase 5: ERROR HANDLING
+# ERROR HANDLING
 #
 # What happens when things go wrong on Kaggle.
 # ===========================================================================
