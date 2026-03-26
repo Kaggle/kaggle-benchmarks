@@ -18,6 +18,7 @@ import pytest
 
 from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks.content_types import videos
 from kaggle_benchmarks.prompting import handler
 
 
@@ -189,3 +190,15 @@ def test_chat_usage_empty():
         assert t.usage.input_tokens_cost_nanodollars is None
         assert t.usage.output_tokens_cost_nanodollars is None
         assert t.usage.total_backend_latency_ms is None
+
+
+def test_video_message_payload():
+    """Test that a VideoURL message produces the correct payload for the OpenAI backend."""
+    video = videos.from_url("https://www.youtube.com/watch?v=abc123")
+
+    from kaggle_benchmarks import messages
+
+    msg = messages.Message(sender=actors.user, content=video)
+    assert msg.payload == [
+        {"type": "image_url", "image_url": {"url": "https://www.youtube.com/watch?v=abc123"}}
+    ]

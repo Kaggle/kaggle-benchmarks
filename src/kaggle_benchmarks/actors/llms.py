@@ -99,7 +99,7 @@ from google.genai import types
 
 from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
-from kaggle_benchmarks.content_types import images
+from kaggle_benchmarks.content_types import images, videos
 
 T = TypeVar("T")
 
@@ -153,6 +153,7 @@ class LLMChat(actors.Actor):
         temperature: float = 0,
         tools: list[Any] | None = None,
         image: images.ImageContent | None = None,
+        video: videos.VideoContent | None = None,
     ) -> T:
         if image is not None:
             match image:
@@ -164,6 +165,15 @@ class LLMChat(actors.Actor):
                     raise ValueError(f"Unsupported image type: {type(image)}")
 
             actors.user.send(image_to_send)
+
+        if video is not None:
+            match video:
+                case videos.VideoURL():
+                    video_to_send = video
+                case _:
+                    raise ValueError(f"Unsupported video type: {type(video)}")
+
+            actors.user.send(video_to_send)
 
         actors.user.send(message)
         return self.respond(
@@ -390,10 +400,20 @@ class GoogleGenAI(LLMChat):
         raw_messages = []
         for message in messages:
             role = "model" if message.sender.role == "assistant" else "user"
+            content = message.content
             payload = message.payload
 
             parts = []
-            if isinstance(payload, str):
+
+            # Video URLs are passed through directly for the model provider to resolve.
+            if isinstance(content, videos.VideoContent):
+                parts.append(
+                    types.Part.from_uri(
+                        file_uri=content.url, mime_type=content.mime_type
+                    )
+                )
+
+            elif isinstance(payload, str):
                 parts.append(types.Part(text=payload))
 
             # Note: The Gemini API is smart enough to process image data URLs even when they are passed as part of a plain text string.
