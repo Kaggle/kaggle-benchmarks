@@ -14,13 +14,6 @@
 
 import abc
 import mimetypes
-import re
-
-import panel as pn
-
-_YOUTUBE_URL_PATTERN = re.compile(
-    r"^https?://(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)[\w-]+"
-)
 
 
 class VideoContent(abc.ABC):
@@ -36,7 +29,7 @@ class VideoContent(abc.ABC):
         """Returns the video payload for the OpenAI Chat Completions API format.
 
         The OpenAI Chat Completions spec has no dedicated video content part type,
-        so we use `image_url` as a generic file URL carrier.
+        so we use`image_url` as a generic file URL carrier.
         """
         return [{"type": "image_url", "image_url": {"url": self.url}}]
 
@@ -48,10 +41,6 @@ class VideoURL(VideoContent):
     @property
     def url(self) -> str:
         return self._url
-
-    def __panel__(self) -> pn.viewable.Viewable:
-        """Renders the video as a clickable link."""
-        return pn.pane.HTML(f'<a href="{self.url}" target="_blank">{self.url}</a>')
 
     @property
     def mime_type(self) -> str:
@@ -65,14 +54,5 @@ class VideoURL(VideoContent):
 
 
 def from_url(url: str) -> VideoURL:
-    """Creates VideoContent from a video URL (e.g. a YouTube link).
-
-    Currently only YouTube URLs are supported.
-    """
-    if not _YOUTUBE_URL_PATTERN.match(url):
-        raise ValueError(
-            f"Unsupported video URL: {url}\n"
-            "Only YouTube URLs are currently supported "
-            "(e.g. https://www.youtube.com/watch?v=aqz-KE-bpKQ)."
-        )
+    """Creates VideoContent from a video URL (e.g. a YouTube link)."""
     return VideoURL(url)

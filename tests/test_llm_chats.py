@@ -18,7 +18,7 @@ import pytest
 
 from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
-from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.content_types import audio, images, videos
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.prompting import handler
 from tests.mocks import MockedChat
@@ -209,6 +209,7 @@ def test_video_message_payload():
     ]
 
 
+
 def test_prompt_with_image_and_video():
     """Test that prompt() with both image and video sends them as separate messages."""
     red_pixel_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
@@ -227,6 +228,18 @@ def test_prompt_with_image_and_video():
         assert isinstance(t.messages[0].content, images.ImageBase64)
         assert isinstance(t.messages[1].content, videos.VideoURL)
         assert t.messages[2].content == "Describe both"
+
+
+def test_audio_message_payload():
+    """Test that an AudioContent message produces the correct payload for the OpenAI backend."""
+    audio_content = audio.from_base64("dGVzdA==", format="wav")
+
+    from kaggle_benchmarks import messages
+
+    msg = messages.Message(sender=actors.user, content=audio_content)
+    assert msg.payload == [
+        {"type": "input_audio", "input_audio": {"data": "dGVzdA==", "format": "wav"}}
+    ]
 
 
 def test_chat_fork():
