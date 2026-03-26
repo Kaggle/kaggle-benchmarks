@@ -17,15 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kaggle_benchmarks.kaggle_client.utils import (
-    build_local_metadata,
-    convert_ipynb_to_py,
-    convert_py_to_ipynb,
-    normalize_status,
-    parse_remote_metadata,
-)
-
-_MOD = "kaggle_benchmarks.kaggle_client.utils"
+from kaggle_benchmarks.kaggle_client import utils as kaggle_utils
 
 # ---------------------------------------------------------------------------
 # File format conversion
@@ -44,7 +36,7 @@ print("Hello")
 """
     py_file.write_text(content)
 
-    convert_py_to_ipynb(py_file, ipynb_file)
+    kaggle_utils.convert_py_to_ipynb(py_file, ipynb_file)
 
     assert ipynb_file.exists()
     with open(ipynb_file, "r") as f:
@@ -73,7 +65,7 @@ print("World")
     py_file.write_text(content)
 
     with pytest.warns(UserWarning, match="has no '# %%' cell delimiters"):
-        convert_py_to_ipynb(py_file, ipynb_file)
+        kaggle_utils.convert_py_to_ipynb(py_file, ipynb_file)
 
     assert ipynb_file.exists()
 
@@ -101,7 +93,7 @@ def test_convert_ipynb_to_py(tmp_path):
     with open(ipynb_file, "w") as f:
         json.dump(notebook, f)
 
-    convert_ipynb_to_py(ipynb_file, py_file)
+    kaggle_utils.convert_ipynb_to_py(ipynb_file, py_file)
 
     assert py_file.exists()
     content = py_file.read_text()
@@ -128,8 +120,8 @@ x = 42
 """
     py_file.write_text(content)
 
-    convert_py_to_ipynb(py_file, ipynb_file)
-    convert_ipynb_to_py(ipynb_file, py_roundtrip)
+    kaggle_utils.convert_py_to_ipynb(py_file, ipynb_file)
+    kaggle_utils.convert_ipynb_to_py(ipynb_file, py_roundtrip)
 
     roundtrip_content = py_roundtrip.read_text()
     assert "# %% [markdown]" in roundtrip_content
@@ -148,7 +140,7 @@ def test_build_local_metadata_new(tmp_path):
     slug = "my-bench"
     username = "alice"
 
-    metadata = build_local_metadata(workspace, slug, username)
+    metadata = kaggle_utils.build_local_metadata(workspace, slug, username)
 
     assert metadata["id"] == "alice/my-bench"
     assert metadata["title"] == "my-bench"  # Defaults to slug
@@ -165,7 +157,7 @@ def test_build_local_metadata_custom_title(tmp_path):
     slug = "my-bench"
     username = "alice"
 
-    metadata = build_local_metadata(
+    metadata = kaggle_utils.build_local_metadata(
         workspace, slug, username, title="My Awesome Benchmark"
     )
 
@@ -189,7 +181,7 @@ def test_build_local_metadata_existing(tmp_path):
     with open(workspace / "kernel-metadata.json", "w") as f:
         json.dump(existing, f)
 
-    metadata = build_local_metadata(
+    metadata = kaggle_utils.build_local_metadata(
         workspace, slug, username, dataset_sources=["alice/data"]
     )
 
@@ -207,7 +199,7 @@ def test_build_local_metadata_overrides(tmp_path):
     slug = "my-bench"
     username = "alice"
 
-    metadata = build_local_metadata(
+    metadata = kaggle_utils.build_local_metadata(
         workspace,
         slug,
         username,
@@ -237,7 +229,7 @@ def test_build_local_metadata_idempotent_keywords(tmp_path):
     with open(workspace / "kernel-metadata.json", "w") as f:
         json.dump(existing, f)
 
-    metadata = build_local_metadata(workspace, slug, username)
+    metadata = kaggle_utils.build_local_metadata(workspace, slug, username)
 
     assert metadata["keywords"].count("personal-benchmark") == 1
     assert "foo" in metadata["keywords"]
@@ -249,7 +241,7 @@ def test_build_local_metadata_malformed_json(tmp_path):
     (workspace / "kernel-metadata.json").write_text("not valid json")
 
     with pytest.raises(json.JSONDecodeError):
-        build_local_metadata(workspace, "my-bench", "alice")
+        kaggle_utils.build_local_metadata(workspace, "my-bench", "alice")
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +266,7 @@ def test_parse_remote_metadata_from_api_response():
     meta.model_data_sources = ["alice/model"]
     meta.category_ids = ["personal-benchmark", "nlp"]
 
-    result = parse_remote_metadata(
+    result = kaggle_utils.parse_remote_metadata(
         meta, default_id="fallback/id", default_slug="fallback"
     )
 
@@ -297,7 +289,7 @@ def test_parse_remote_metadata_uses_defaults_for_missing_attrs():
     """Falls back to defaults when API metadata has missing attributes."""
     meta = MagicMock(spec=[])  # spec=[] means no attributes exist
 
-    result = parse_remote_metadata(
+    result = kaggle_utils.parse_remote_metadata(
         meta, default_id="owner/slug", default_slug="my-slug"
     )
 
@@ -333,7 +325,9 @@ def test_parse_remote_metadata_handles_none_lists():
     meta.model_data_sources = None
     meta.category_ids = None
 
-    result = parse_remote_metadata(meta, default_id="x/y", default_slug="y")
+    result = kaggle_utils.parse_remote_metadata(
+        meta, default_id="x/y", default_slug="y"
+    )
 
     assert result["dataset_sources"] == []
     assert result["competition_sources"] == []
@@ -359,7 +353,7 @@ def test_parse_remote_metadata_handles_none_lists():
 )
 def test_normalize_status_strings(raw_status, expected):
     """normalize_status should strip enum prefixes and lower-case."""
-    assert normalize_status(raw_status) == expected
+    assert kaggle_utils.normalize_status(raw_status) == expected
 
 
 def test_normalize_status_object_with_attribute():
@@ -368,4 +362,4 @@ def test_normalize_status_object_with_attribute():
     class FakeStatus:
         status = "running"
 
-    assert normalize_status(FakeStatus()) == "running"
+    assert kaggle_utils.normalize_status(FakeStatus()) == "running"

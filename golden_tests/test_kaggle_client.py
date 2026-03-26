@@ -62,6 +62,7 @@ def test_subtraction(llm):
     response = llm.prompt("9.9 - 9.11 = ?")
     kbench.assertions.assert_in("0.79", response, expectation="Expect 9.9-9.11=0.79")
 
+# %%
 # Execute the task twice to generate two run.json files
 test_subtraction.run(llm=kbench.llm)
 test_subtraction.run(llm=kbench.llm)

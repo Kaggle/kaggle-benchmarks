@@ -166,7 +166,7 @@ def parse_remote_metadata(
 # ---------------------------------------------------------------------------
 
 
-def normalize_status(status: object) -> str:
+def normalize_status(status: Any) -> str:
     """Normalize a Kaggle notebook status to a lowercase string.
 
     The Kaggle API may return a KernelWorkerStatus enum

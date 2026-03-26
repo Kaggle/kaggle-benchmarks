@@ -27,14 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from kaggle_benchmarks.kaggle_client.utils import (
-    KAGGLE_METADATA_MAP,
-    build_local_metadata,
-    convert_ipynb_to_py,
-    convert_py_to_ipynb,
-    normalize_status,
-    parse_remote_metadata,
-)
+from kaggle_benchmarks.kaggle_client import utils as kaggle_utils
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +261,7 @@ class BenchmarkNotebookClient:
 
             # Convert .ipynb to .py with # %% cell delimiters
             py_path = workspace / self.BENCHMARK_FILENAME
-            convert_ipynb_to_py(ipynb_path, py_path)
+            kaggle_utils.convert_ipynb_to_py(ipynb_path, py_path)
         else:
             logger.warning(
                 "No source found after pulling '%s'. "
@@ -278,7 +271,7 @@ class BenchmarkNotebookClient:
 
         # Reconstruct kernel-metadata.json from response.metadata
         if response.metadata:
-            metadata = parse_remote_metadata(
+            metadata = kaggle_utils.parse_remote_metadata(
                 meta=response.metadata,
                 default_id=source_notebook_id,
                 default_slug=dest_notebook_slug,
@@ -347,7 +340,7 @@ class BenchmarkNotebookClient:
 
         # Resolve metadata (load existing kernel-metadata.json or generate new)
         # 'personal-benchmark' keyword is ensured by resolve_metadata
-        metadata = build_local_metadata(
+        metadata = kaggle_utils.build_local_metadata(
             workspace_dir=workspace,
             notebook_slug=notebook_slug,
             username=self.username,
@@ -356,7 +349,7 @@ class BenchmarkNotebookClient:
 
         # Convert benchmark.py (.py with # %% delimiters) to .ipynb
         notebook_path = workspace / self.NOTEBOOK_FILENAME
-        convert_py_to_ipynb(benchmark_py, notebook_path)
+        kaggle_utils.convert_py_to_ipynb(benchmark_py, notebook_path)
 
         # Concurrent run guard
         notebook_id = self._notebook_id(notebook_slug)
@@ -410,7 +403,7 @@ class BenchmarkNotebookClient:
         req.text = notebook_content
 
         # Map the remaining configured attributes dynamically
-        for json_key, (api_key, _) in KAGGLE_METADATA_MAP.items():
+        for json_key, (api_key, _) in kaggle_utils.KAGGLE_METADATA_MAP.items():
             if json_key in metadata:
                 setattr(req, api_key, metadata[json_key])
 
@@ -627,7 +620,7 @@ class BenchmarkNotebookClient:
         req.user_name = user_name
         req.kernel_slug = kernel_slug
         response = self.api.kernels.kernels_api_client.get_kernel_session_status(req)
-        return normalize_status(response)
+        return kaggle_utils.normalize_status(response)
 
     # =========================================================================
     # Internal Utilities
