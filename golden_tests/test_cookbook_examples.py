@@ -484,6 +484,41 @@ def test_image_local_file(llm):
 
 
 # %%
+# --- Test Case: Many images (batch) ---
+
+# 1x1 red pixel PNG.
+RED_PIXEL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+
+@benchmark_test(
+    exclude={
+    "anthropic/claude-opus-4-5@20251101",
+    "anthropic/claude-sonnet-4-5@20250929",
+    }
+)
+@kbench.task()
+def test_many_images(llm):
+    """Sends 100 small images in a single request to verify batch image handling."""
+    num_images = 100
+
+    with kbench.chats.new("many_images"):
+        for _ in range(num_images):
+            img = images.from_base64(RED_PIXEL_B64, format="png")
+            kbench.user.send(img)
+
+        response = llm.prompt(
+            f"I sent you {num_images} small red images. "
+            "Confirm you received them and say approximately how many you see."
+        )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)red|image|received",
+        response,
+        expectation="LLM should acknowledge receiving many red images.",
+    )
+
+
+# %%
 # --- Test Case: Video inputs (URL) ---
 
 
