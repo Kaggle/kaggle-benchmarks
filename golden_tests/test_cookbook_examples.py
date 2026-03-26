@@ -492,8 +492,8 @@ RED_PIXEL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8B
 
 @benchmark_test(
     exclude={
-    "anthropic/claude-opus-4-5@20251101",
-    "anthropic/claude-sonnet-4-5@20250929",
+        "anthropic/claude-opus-4-5@20251101",
+        "anthropic/claude-sonnet-4-5@20250929",
     }
 )
 @kbench.task()
