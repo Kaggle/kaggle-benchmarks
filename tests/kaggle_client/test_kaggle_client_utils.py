@@ -251,38 +251,45 @@ def test_build_local_metadata_malformed_json(tmp_path):
 
 def test_parse_remote_metadata_from_api_response():
     """Extracts all fields from a fully populated API metadata object."""
-    meta = MagicMock()
-    meta.ref = "alice/my-benchmark"
-    meta.title = "My Benchmark"
-    meta.language = "python"
-    meta.kernel_type = "notebook"
-    meta.is_private = False
-    meta.enable_gpu = True
-    meta.enable_internet = True
-    meta.enable_tpu = False
-    meta.dataset_data_sources = ["alice/dataset"]
-    meta.competition_data_sources = ["comp1"]
-    meta.kernel_data_sources = ["alice/kernel"]
-    meta.model_data_sources = ["alice/model"]
-    meta.category_ids = ["personal-benchmark", "nlp"]
+    meta = MagicMock(
+        ref="alice/my-benchmark",
+        title="My Benchmark",
+        language="python",
+        kernel_type="notebook",
+        is_private=False,
+        enable_gpu=True,
+        enable_internet=True,
+        enable_tpu=False,
+        dataset_data_sources=["alice/dataset"],
+        competition_data_sources=["comp1"],
+        kernel_data_sources=["alice/kernel"],
+        model_data_sources=["alice/model"],
+        category_ids=["personal-benchmark", "nlp"],
+        docker_image="custom-image:latest",
+        machine_shape="T4",
+    )
 
     result = kaggle_utils.parse_remote_metadata(
         meta, default_id="fallback/id", default_slug="fallback"
     )
 
-    assert result["id"] == "alice/my-benchmark"
-    assert result["title"] == "My Benchmark"
-    assert result["language"] == "python"
-    assert result["kernel_type"] == "notebook"
-    assert result["is_private"] is False
-    assert result["enable_gpu"] is True
-    assert result["enable_internet"] is True
-    assert result["enable_tpu"] is False
-    assert result["dataset_sources"] == ["alice/dataset"]
-    assert result["competition_sources"] == ["comp1"]
-    assert result["kernel_sources"] == ["alice/kernel"]
-    assert result["model_sources"] == ["alice/model"]
-    assert result["keywords"] == ["personal-benchmark", "nlp"]
+    assert result == {
+        "id": "alice/my-benchmark",
+        "title": "My Benchmark",
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": False,
+        "enable_gpu": True,
+        "enable_tpu": False,
+        "enable_internet": True,
+        "dataset_sources": ["alice/dataset"],
+        "competition_sources": ["comp1"],
+        "kernel_sources": ["alice/kernel"],
+        "model_sources": ["alice/model"],
+        "keywords": ["personal-benchmark", "nlp"],
+        "docker_image": "custom-image:latest",
+        "machine_shape": "T4",
+    }
 
 
 def test_parse_remote_metadata_uses_defaults_for_missing_attrs():
@@ -293,47 +300,66 @@ def test_parse_remote_metadata_uses_defaults_for_missing_attrs():
         meta, default_id="owner/slug", default_slug="my-slug"
     )
 
-    assert result["id"] == "owner/slug"
-    assert result["title"] == "my-slug"
-    assert result["language"] == "python"
-    assert result["kernel_type"] == "notebook"
-    assert result["is_private"] is True
-    assert result["enable_gpu"] is False
-    assert result["enable_internet"] is True
-    assert result["enable_tpu"] is False
-    assert result["dataset_sources"] == []
-    assert result["competition_sources"] == []
-    assert result["kernel_sources"] == []
-    assert result["model_sources"] == []
-    assert result["keywords"] == []
+    assert result == {
+        "id": "owner/slug",
+        "title": "my-slug",
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": True,
+        "enable_gpu": False,
+        "enable_tpu": False,
+        "enable_internet": True,
+        "dataset_sources": [],
+        "competition_sources": [],
+        "kernel_sources": [],
+        "model_sources": [],
+        "keywords": [],
+        "docker_image": None,
+        "machine_shape": "None",
+    }
 
 
 def test_parse_remote_metadata_handles_none_lists():
     """Converts None list fields to empty lists."""
-    meta = MagicMock()
-    meta.ref = "alice/bench"
-    meta.title = "Bench"
-    meta.language = "python"
-    meta.kernel_type = "notebook"
-    meta.is_private = True
-    meta.enable_gpu = False
-    meta.enable_internet = True
-    meta.enable_tpu = False
-    meta.dataset_data_sources = None
-    meta.competition_data_sources = None
-    meta.kernel_data_sources = None
-    meta.model_data_sources = None
-    meta.category_ids = None
+    meta = MagicMock(
+        ref="alice/bench",
+        title="Bench",
+        language="python",
+        kernel_type="notebook",
+        is_private=True,
+        enable_gpu=False,
+        enable_tpu=False,
+        enable_internet=True,
+        dataset_data_sources=None,
+        competition_data_sources=None,
+        kernel_data_sources=None,
+        model_data_sources=None,
+        category_ids=None,
+        docker_image=None,
+        machine_shape=None,
+    )
 
     result = kaggle_utils.parse_remote_metadata(
         meta, default_id="x/y", default_slug="y"
     )
 
-    assert result["dataset_sources"] == []
-    assert result["competition_sources"] == []
-    assert result["kernel_sources"] == []
-    assert result["model_sources"] == []
-    assert result["keywords"] == []
+    assert result == {
+        "id": "alice/bench",
+        "title": "Bench",
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": True,
+        "enable_gpu": False,
+        "enable_tpu": False,
+        "enable_internet": True,
+        "dataset_sources": [],
+        "competition_sources": [],
+        "kernel_sources": [],
+        "model_sources": [],
+        "keywords": [],
+        "docker_image": None,
+        "machine_shape": "None",
+    }
 
 
 # ---------------------------------------------------------------------------
