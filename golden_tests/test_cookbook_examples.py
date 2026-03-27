@@ -53,7 +53,6 @@ TEST_LLM_NAMES = {
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
-    "google/gemini-3-pro-preview",
     "google/gemma-3-12b",
     "qwen/qwen3-235b-a22b-instruct-2507",
     "qwen/qwen3-next-80b-a3b-instruct",
@@ -70,7 +69,6 @@ TEST_LLM_NAMES = {
 JUDGE_LLM_NAMES = {
     "google/gemini-2.5-flash",
     "google/gemini-3-flash-preview",
-    "google/gemini-3-pro-preview",
 }
 
 
@@ -527,7 +525,6 @@ def test_many_images(llm):
         "google/gemini-2.5-flash",
         "google/gemini-2.5-pro",
         "google/gemini-3-flash-preview",
-        "google/gemini-3-pro-preview",
     }
 )
 @kbench.task()

@@ -18,7 +18,7 @@ import pytest
 
 from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
-from kaggle_benchmarks.content_types import videos
+from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.prompting import handler
 
 
@@ -202,3 +202,25 @@ def test_video_message_payload():
     assert msg.payload == [
         {"type": "image_url", "image_url": {"url": "https://www.youtube.com/watch?v=abc123"}}
     ]
+
+
+def test_prompt_with_image_and_video():
+    """Test that prompt() with both image and video sends them as separate messages."""
+    llm = Ferret()
+
+    red_pixel_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    img = images.from_base64(red_pixel_b64, format="png")
+    video = videos.from_url("https://www.youtube.com/watch?v=abc123")
+
+    with chats.new("image_and_video") as t:
+        # Manually send image and video, then prompt, to verify message ordering.
+        # We don't call llm.prompt() directly because Ferret's invoke() can't
+        # serialize image/video content to JSON.
+        actors.user.send(img)
+        actors.user.send(video)
+        actors.user.send("Describe both")
+
+        assert len(t.messages) == 3
+        assert isinstance(t.messages[0].content, images.ImageBase64)
+        assert isinstance(t.messages[1].content, videos.VideoURL)
+        assert t.messages[2].content == "Describe both"
