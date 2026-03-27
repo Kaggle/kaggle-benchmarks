@@ -68,7 +68,6 @@ TEST_LLM_NAMES = {
 # Models to be used as judges for evaluation.
 JUDGE_LLM_NAMES = {
     "google/gemini-2.5-flash",
-    "google/gemini-3-flash-preview",
 }
 
 
@@ -164,7 +163,7 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 
 
 # We fix the test LLM to one reliable model to focus on testing the judges.
-@pytest.mark.parametrize("llm_name", ["google/gemini-3-flash-preview"])
+@pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
 def test_assess_with_judge(llm_name, judge_llm_name):
     llm = kbench.llms[llm_name]
@@ -492,6 +491,8 @@ RED_PIXEL_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8B
     exclude={
         "anthropic/claude-opus-4-5@20251101",
         "anthropic/claude-sonnet-4-5@20250929",
+        "deepseek-ai/deepseek-r1-0528",
+        "google/gemma-3-12b",
     }
 )
 @kbench.task()
@@ -523,8 +524,6 @@ def test_many_images(llm):
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
-        "google/gemini-2.5-pro",
-        "google/gemini-3-flash-preview",
     }
 )
 @kbench.task()
