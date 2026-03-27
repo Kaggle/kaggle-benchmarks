@@ -151,6 +151,32 @@ body:
     validations:
       required: false
 
+  # ── Share Your Assets ─────────────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        **Important:** To help us troubleshoot your issue, please share any associated Kaggle assets (notebooks, tasks, benchmarks, models, datasets) with **kaggle-ai-resources-support@google.com** as a **Viewer**.
+
+        To do this:
+        1. Go to your asset on Kaggle (notebook, dataset, model, etc.)
+        2. Click the **Share** button
+        3. Search for `kaggle-ai-resources-support@google.com`
+        4. Grant **Viewer** access
+        5. Paste the link(s) to the shared asset(s) in the field below
+
+  - type: textarea
+    id: shared-assets
+    attributes:
+      label: Shared Asset Links
+      description: |
+        Paste links to any Kaggle assets you've shared with kaggle-ai-resources-support@google.com.
+      placeholder: |
+        - https://www.kaggle.com/code/yourusername/your-notebook
+        - https://www.kaggle.com/datasets/yourusername/your-dataset
+    validations:
+      required: false
+
   # ── Additional Context ────────────────────────────────────────
 
   - type: textarea
