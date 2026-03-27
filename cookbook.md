@@ -1,5 +1,3 @@
-
-
 - [Kaggle Benchmarks Cookbook](#kaggle-benchmarks-cookbook)
   - [Basics](#basics)
     - [Recipe: Defining a Simple Pass/Fail
@@ -26,6 +24,8 @@
   - [Multimodal](#multimodal)
     - [Recipe: Sending Images to Multimodal
       Models](#recipe-sending-images-to-multimodal-models)
+    - [Recipe: Sending Videos to Multimodal
+      Models](#recipe-sending-videos-to-multimodal-models)
   - [Advanced Patterns](#advanced-patterns)
     - [Recipe: Implementing an Interactive Game
       Loop](#recipe-implementing-an-interactive-game-loop)
@@ -55,7 +55,7 @@ The most fundamental task type is one that asserts a condition and
 returns nothing. If all assertions pass, the task succeeds; otherwise,
 it fails. This is perfect for simple Q&A checks.
 
-``` python
+```python
 import kaggle_benchmarks as kbench
 
 @kbench.task(name="check_capital")
@@ -85,7 +85,7 @@ list of criteria using `assess_response_with_judge`.
 Note that unlike deterministic assertions, judge evaluations can be
 subjective and may vary between runs.
 
-``` python
+```python
 import kaggle_benchmarks as kbench
 
 @kbench.task(name="haiku_evaluation")
@@ -116,7 +116,7 @@ haiku_evaluation.run(kbench.judge_llm, topic="AGI")
 You can provide a custom prompt and output schema to tailor the judge’s
 evaluation to your specific needs.
 
-``` python
+```python
 import dataclasses
 import textwrap
 from typing import Iterable
@@ -197,7 +197,7 @@ To track granular metrics like accuracy or a specific score, your task
 should return a value. You **must** add a return type annotation (e.g.,
 `-> float`) so the leaderboard knows how to interpret the result.
 
-``` python
+```python
 @kbench.task(name="math_score")
 def math_score(llm) -> float:
     # ... perform complex logic or multiple checks ...
@@ -219,7 +219,7 @@ You can force the LLM to return data in a specific structure by
 providing a `schema` to the `prompt` method. This is essential for tasks
 that require structured output.
 
-``` python
+```python
 from dataclasses import dataclass
 
 @dataclass
@@ -251,7 +251,7 @@ leaderboard, you need to designate one “main” task output using the
 2.  **Select the main task** in the very last cell using `%choose`.
 3.  **Save Version** of your notebook.
 
-``` python
+```python
 # In the final cell of your notebook:
 %choose my_main_task
 ```
@@ -259,7 +259,7 @@ leaderboard, you need to designate one “main” task output using the
 [See Example: Task Creation
 Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-task-creation)
 
-------------------------------------------------------------------------
+---
 
 ## Data & Evaluation
 
@@ -269,7 +269,7 @@ Instead of a single run, you often want to evaluate a task over many
 examples. Use the `.evaluate()` method to run your task against every
 row in a pandas DataFrame.
 
-``` python
+```python
 import pandas as pd
 
 # 1. Define a task that accepts row columns as arguments
@@ -300,7 +300,7 @@ However, if you need to compare models directly within your notebook
 (e.g., for debugging or immediate visualization), you can pass a list of
 LLMs to `.evaluate()` to run them all.
 
-``` python
+```python
 models = [
     kbench.llms["google/gemini-2.5-flash"],
     kbench.llms["meta/llama-3.1-70b"]
@@ -313,7 +313,7 @@ results = solve_question.evaluate(llm=models, evaluation_data=df)
 [See Example: Dataset Evaluation
 Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-dataset-evaluation)
 
-------------------------------------------------------------------------
+---
 
 ## Conversations
 
@@ -323,7 +323,7 @@ By default, `llm.prompt()` maintains conversation history within the
 same session. This makes multi-turn conversations natural and easy to
 implement.
 
-``` python
+```python
 @kbench.task()
 def chat_task(llm):
     # Turn 1
@@ -339,7 +339,7 @@ Sometimes you need a side-conversation that shouldn’t be seen by the
 main agent—for example, when a “Judge” LLM is evaluating the main
 agent’s performance. Use `kbench.chats.new()` to create a clean slate.
 
-``` python
+```python
 @kbench.task()
 def game_task(llm, judge_llm):
     # Main conversation with the player
@@ -357,14 +357,14 @@ Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-convers
 ### Recipe: Managing Multi-Agent Conversations
 
 In complex multi-agent scenarios, you often need to maintain separate
-conversation histories for each agent. The *Dungeon Adventure* example
+conversation histories for each agent. The _Dungeon Adventure_ example
 demonstrates how to do this by creating a dedicated `Chat` object for
 each agent and using the `contexts.enter()` context manager to switch
 between them. This allows each agent to have its own isolated
 conversation history, which is crucial for role-playing and other
 complex interactions.
 
-``` python
+```python
 # Create isolated chat contexts for each agent
 dm_chat = chats.Chat(name="Dungeon Master")
 player1_chat = chats.Chat(name="Player 1")
@@ -387,7 +387,7 @@ with contexts.enter(chat=self.dm_chat):
 [See Example: Dungeon Adventure
 Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-dungeon-adventure)
 
-------------------------------------------------------------------------
+---
 
 ## Multimodal
 
@@ -409,7 +409,7 @@ single prompt or building conversation history.
 **Constructing Image Objects:** Regardless of the sending method, you
 initiate images using three factory methods:
 
-``` python
+```python
 # 1. From URL (MIME type guessed from URL)
 img_url = images.from_url("https://example.com/image.jpg")
 
@@ -424,16 +424,16 @@ img_b64 = images.from_base64(image_b64_str, format="png")
 interact with models. It is crucial to understand how they handle
 **Image URLs** differently.
 
-| Method | Use Case | Behavior with Image URLs |
-|:---|:---|:---|
-| `llm.prompt` | Single message & immediate response. | **Auto-converts to Base64.** The SDK downloads the image and sends the data. Safe for models that don’t support URLs. |
-| `user.send` | Building multi-turn chat history. | **Sends Raw URL.** The SDK passes the URL directly. This is useful for testing if a model natively supports URL fetching. |
+| Method       | Use Case                             | Behavior with Image URLs                                                                                                  |
+| :----------- | :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------ |
+| `llm.prompt` | Single message & immediate response. | **Auto-converts to Base64.** The SDK downloads the image and sends the data. Safe for models that don’t support URLs.     |
+| `user.send`  | Building multi-turn chat history.    | **Sends Raw URL.** The SDK passes the URL directly. This is useful for testing if a model natively supports URL fetching. |
 
-*1.Single Turn: Using `llm.prompt`* Use this for straightforward
+_1.Single Turn: Using `llm.prompt`_ Use this for straightforward
 interactions. The SDK handles the heavy lifting of downloading and
 encoding URLs, ensuring maximum compatibility.
 
-``` python
+```python
 # Create an image input from a URL
 image = images.from_url("https://example.com/cat.jpg")
 
@@ -442,11 +442,11 @@ image = images.from_url("https://example.com/cat.jpg")
 response = llm.prompt("Describe this image", image=image)
 ```
 
-*2.Multi-Turn: Using `user.send`* Use `user.send` to stack multiple
+_2.Multi-Turn: Using `user.send`_ Use `user.send` to stack multiple
 messages or images before asking for a response. Note that this method
 acts as a low-level pass-through for URLs.
 
-``` python
+```python
 # 1. Add a local image to history
 # This is read and converted to Base64 immediately.
 user.send(images.from_path("local/chart.png"))
@@ -464,7 +464,35 @@ response = llm.prompt("Compare these two images")
 [See Example: Sending Images
 Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-images)
 
-------------------------------------------------------------------------
+### Recipe: Sending Videos to Multimodal Models
+
+Some models (currently select Gemini models) support video inputs. The
+SDK provides a `videos` module for this, following the same pattern as
+images.
+
+**Constructing Video Objects:**
+
+```python
+from kaggle_benchmarks.content_types import videos
+
+# From a YouTube URL
+video = videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+```
+
+**Sending a Video with `llm.prompt`:**
+
+```python
+from kaggle_benchmarks.content_types import videos
+
+video = videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+response = llm.prompt("What is this video about?", video=video)
+```
+
+> **Note:** Video support depends on the model. Currently, only select
+> models support video inputs, and only YouTube URLs are
+> supported. Models that don't support video will return an error.
+
+---
 
 ## Advanced Patterns
 
@@ -473,7 +501,7 @@ Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-images)
 For interactive environments like Tic-Tac-Toe or Chess, use a `while`
 loop to alternate between the LLM’s move and the game state update.
 
-``` python
+```python
 @kbench.task()
 def play_game(llm):
     game = TicTacToe()
@@ -500,7 +528,7 @@ Spymaster](https://www.kaggle.com/code/goefft/codenames-valid-spymaster-clues-ta
 Keep your code clean by encapsulating complex checks into reusable
 assertion functions using the `@assertion_handler` decorator.
 
-``` python
+```python
 from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
 
 @assertion_handler()
@@ -527,7 +555,7 @@ We provide some helper functions to make it easy for the LLM to write
 and execute Python code to solve problems. The library provides tools to
 extract and run this code safely.
 
-``` python
+```python
 @kbench.task()
 def python_task(llm):
     prompt = "Calculate the 10th Fibonacci number using Python."
@@ -549,7 +577,7 @@ You can also pass your own Python functions as tools. The model can then
 call these functions to retrieve information or perform actions. Please
 note this is currently an experimental feature.
 
-``` python
+```python
 def get_weather(city: str) -> str:
     """Returns the weather for a city."""
     return "Sunny"
