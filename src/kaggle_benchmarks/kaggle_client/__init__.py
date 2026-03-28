@@ -11,3 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from kaggle_benchmarks.kaggle_client.notebook_api import (
+    BenchmarkNotebookClient,
+    ConcurrentRunError,
+    KaggleAuthError,
+    RunResult,
+)
+
+__all__ = [
+    "BenchmarkNotebookClient",
+    "ConcurrentRunError",
+    "KaggleAuthError",
+    "RunResult",
+]

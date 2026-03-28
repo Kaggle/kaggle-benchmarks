@@ -36,9 +36,15 @@ dependencies = [
   "google-genai>=1.38.0",
 ]
 
+[project.scripts]
+kaggle-bench = "kaggle_benchmarks.kaggle_client.cli:run"
+
+
 [project.optional-dependencies]
 kaggle-client = [
   "jupytext",
+  "kagglesdk>=0.1.14,<1.0",
+  "kagglehub>=0.3.10",
 ]
 
 # Configuration for the build backend to find the version file

@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Utility functions for the Kaggle benchmark client."""
+
 import json
 import re
 import warnings
 from pathlib import Path
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# File format conversion
+# ---------------------------------------------------------------------------
 
 
 def convert_py_to_ipynb(py_path: str | Path, ipynb_path: str | Path) -> None:
@@ -39,6 +45,13 @@ def convert_py_to_ipynb(py_path: str | Path, ipynb_path: str | Path) -> None:
         )
 
     notebook = jupytext.reads(content, fmt="py:percent")
+
+    # Kaggle's notebook runner (papermill) requires a kernelspec to evaluate cells.
+    notebook.metadata.setdefault(
+        "kernelspec",
+        {"display_name": "Python 3", "language": "python", "name": "python3"},
+    )
+
     jupytext.write(notebook, ipynb_path)
 
 
@@ -50,7 +63,30 @@ def convert_ipynb_to_py(ipynb_path: str | Path, py_path: str | Path) -> None:
     jupytext.write(notebook, py_path, fmt="py:percent")
 
 
-def resolve_metadata(
+# ---------------------------------------------------------------------------
+# Metadata
+# ---------------------------------------------------------------------------
+
+
+# Maps kernel-metadata.json keys to (ApiSaveKernelRequest attribute, default value)
+KAGGLE_METADATA_MAP = {
+    "language": ("language", "python"),
+    "kernel_type": ("kernel_type", "notebook"),
+    "is_private": ("is_private", True),
+    "enable_gpu": ("enable_gpu", False),
+    "enable_tpu": ("enable_tpu", False),
+    "enable_internet": ("enable_internet", True),
+    "dataset_sources": ("dataset_data_sources", []),
+    "competition_sources": ("competition_data_sources", []),
+    "kernel_sources": ("kernel_data_sources", []),
+    "model_sources": ("model_data_sources", []),
+    "keywords": ("category_ids", []),
+    "docker_image": ("docker_image", None),
+    "machine_shape": ("machine_shape", "None"),
+}
+
+
+def build_local_metadata(
     workspace_dir: Path | str,
     notebook_slug: str,
     username: str,
@@ -59,32 +95,18 @@ def resolve_metadata(
     title: str | None = None,
     **kwargs,
 ) -> dict[str, Any]:
-    """Assembles the kernel-metadata.json payload for Kaggle.
+    """Builds the local `kernel-metadata.json` dictionary for pushing to Kaggle.
 
-    Loads existing metadata if present, applies overrides, and ensures
-    mandatory fields/tags are set.
+    Loads existing workspace metadata, merges runtime CLI overrides, and enforces
+    required benchmark schemas (such as the 'personal-benchmark' tag).
     """
     meta_path = Path(workspace_dir) / "kernel-metadata.json"
 
-    if meta_path.exists():
-        metadata = json.loads(meta_path.read_text(encoding="utf-8"))
-    else:
-        # Default metadata template for new notebooks.
-        # See: https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md
-        metadata = {
-            "language": "python",
-            "kernel_type": "notebook",
-            "enable_gpu": False,
-            "enable_tpu": False,
-            "enable_internet": True,  # Required for LLM API calls
-            "dataset_sources": [],  # Kaggle datasets to mount at /kaggle/input/
-            "competition_sources": [],
-            "kernel_sources": [],
-            "model_sources": [],
-            "keywords": [],  # Tags; we ensure "personal-benchmark" is added
-            "docker_image": None,  # Custom docker image (future use)
-            "machine_shape": "None",  # "None" = default, "gpu", "tpu" etc.
-        }
+    metadata = (
+        json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    )
+    for json_key, (_, default_val) in KAGGLE_METADATA_MAP.items():
+        metadata.setdefault(json_key, default_val)
 
     # --- Mandatory overrides ---
     overrides = {
@@ -109,8 +131,48 @@ def resolve_metadata(
     metadata.update(overrides)
 
     # Ensure "personal-benchmark" tag is present.
-    keywords = metadata.setdefault("keywords", [])
-    if "personal-benchmark" not in keywords:
+    if "personal-benchmark" not in (keywords := metadata.setdefault("keywords", [])):
         keywords.append("personal-benchmark")
 
     return metadata
+
+
+def parse_remote_metadata(
+    meta: Any, default_id: str, default_slug: str
+) -> dict[str, Any]:
+    """Converts a Kaggle API `Kernel` object into a local `kernel-metadata.json` dictionary.
+
+    Translates SDK-specific attribute names (like `dataset_data_sources`) back into
+    standard Kaggle JSON fields to allow for local editing on disk.
+    """
+    meta_dict = {
+        "id": getattr(meta, "ref", default_id),
+        "title": getattr(meta, "title", default_slug),
+    }
+
+    for json_key, (api_key, default_val) in KAGGLE_METADATA_MAP.items():
+        val = getattr(meta, api_key, None)
+        # Handle repeated enum/list types cleanly by defaulting to []
+        if isinstance(default_val, list):
+            meta_dict[json_key] = list(val or [])
+        else:
+            meta_dict[json_key] = val if val is not None else default_val
+
+    return meta_dict
+
+
+# ---------------------------------------------------------------------------
+# Status normalization
+# ---------------------------------------------------------------------------
+
+
+def normalize_status(status: Any) -> str:
+    """Normalize a Kaggle notebook status to a lowercase string.
+
+    The Kaggle API may return a KernelWorkerStatus enum
+    (e.g. "KernelWorkerStatus.complete") or a plain string.
+    This method normalizes both to a simple lowercase string
+    like "complete".
+    """
+    status_raw = getattr(status, "status", status)
+    return str(status_raw).lower().split(".")[-1]

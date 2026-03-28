@@ -1892,6 +1892,8 @@ dependencies = [
 [package.optional-dependencies]
 kaggle-client = [
     { name = "jupytext" },
+    { name = "kagglehub" },
+    { name = "kagglesdk" },
 ]
 
 [package.dev-dependencies]
@@ -1976,6 +1978,8 @@ requires-dist = [
     { name = "joblib" },
     { name = "jupyter" },
     { name = "jupytext", marker = "extra == 'kaggle-client'" },
+    { name = "kagglehub", marker = "extra == 'kaggle-client'", specifier = ">=0.3.10" },
+    { name = "kagglesdk", marker = "extra == 'kaggle-client'", specifier = ">=0.1.14,<1.0" },
     { name = "nest-asyncio", specifier = ">=1.6.0" },
     { name = "openai", specifier = ">=1.66" },
     { name = "pandas" },
@@ -2075,6 +2079,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1c/12/e13c1c8b203535b15dacc420c0f1596dda67463175ff1e4404af21815bdd/kagglehub-0.3.13.tar.gz", hash = "sha256:d3c8b6250627d665096cd91a9487559bf5ed61be607eaf63d14511b20eea646e", size = 113694, upload-time = "2025-08-26T16:17:33.486Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/8e/4077b08b95a1f8302c694a8b399bd413815fbe89045c41e6e08cd7d9439a/kagglehub-0.3.13-py3-none-any.whl", hash = "sha256:e00dec8b81396cbad9c7b5eb62a33cf8ae27da26227abd196ed8f054c845ca00", size = 68257, upload-time = "2025-08-26T16:17:32.13Z" },
+]
+
+[[package]]
+name = "kagglesdk"
+version = "0.1.16"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/0e/51bf72a462e1e72fe3427b7c52b11c9c52cbcc63d7ce90f81a8f56d5a71b/kagglesdk-0.1.16.tar.gz", hash = "sha256:4a20da4ac6f4085e64b976a313ee136d4698737dc5be7c0f13009fadd41d5540", size = 121064, upload-time = "2026-02-27T19:32:34.019Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/6b/db30f17ad132391ac37a751fa45b32fd954a7ffa484fa3550eee9678334d/kagglesdk-0.1.16-py3-none-any.whl", hash = "sha256:a26ba7a754866f8eef1e327e78101f2960b6fe9b1b323183f2f61170abdb11ff", size = 160520, upload-time = "2026-02-27T19:32:32.721Z" },
 ]
 
 [[package]]

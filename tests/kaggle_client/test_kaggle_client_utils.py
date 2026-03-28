@@ -13,14 +13,15 @@
 # limitations under the License.
 
 import json
+from unittest.mock import MagicMock
 
 import pytest
 
-from kaggle_benchmarks.kaggle_client.utils import (
-    convert_ipynb_to_py,
-    convert_py_to_ipynb,
-    resolve_metadata,
-)
+from kaggle_benchmarks.kaggle_client import utils as kaggle_utils
+
+# ---------------------------------------------------------------------------
+# File format conversion
+# ---------------------------------------------------------------------------
 
 
 def test_convert_py_to_ipynb(tmp_path):
@@ -35,7 +36,7 @@ print("Hello")
 """
     py_file.write_text(content)
 
-    convert_py_to_ipynb(py_file, ipynb_file)
+    kaggle_utils.convert_py_to_ipynb(py_file, ipynb_file)
 
     assert ipynb_file.exists()
     with open(ipynb_file, "r") as f:
@@ -44,6 +45,14 @@ print("Hello")
     assert len(notebook["cells"]) == 2
     assert notebook["cells"][0]["cell_type"] == "markdown"
     assert notebook["cells"][1]["cell_type"] == "code"
+
+    # Verify the kernelspec is added so papermill can run the notebook
+    assert "kernelspec" in notebook["metadata"]
+    assert notebook["metadata"]["kernelspec"] == {
+        "display_name": "Python 3",
+        "language": "python",
+        "name": "python3",
+    }
 
 
 def test_convert_py_to_ipynb_warning(tmp_path):
@@ -56,7 +65,7 @@ print("World")
     py_file.write_text(content)
 
     with pytest.warns(UserWarning, match="has no '# %%' cell delimiters"):
-        convert_py_to_ipynb(py_file, ipynb_file)
+        kaggle_utils.convert_py_to_ipynb(py_file, ipynb_file)
 
     assert ipynb_file.exists()
 
@@ -84,7 +93,7 @@ def test_convert_ipynb_to_py(tmp_path):
     with open(ipynb_file, "w") as f:
         json.dump(notebook, f)
 
-    convert_ipynb_to_py(ipynb_file, py_file)
+    kaggle_utils.convert_ipynb_to_py(ipynb_file, py_file)
 
     assert py_file.exists()
     content = py_file.read_text()
@@ -92,113 +101,6 @@ def test_convert_ipynb_to_py(tmp_path):
     assert "# # Title" in content
     assert "# %%" in content
     assert "print('Hello')" in content
-
-
-def test_resolve_metadata_new(tmp_path):
-    workspace = tmp_path
-    slug = "my-bench"
-    username = "alice"
-
-    metadata = resolve_metadata(workspace, slug, username)
-
-    assert metadata["id"] == "alice/my-bench"
-    assert metadata["title"] == "my-bench"  # Defaults to slug
-    assert metadata["id_no"] is None
-    assert "personal-benchmark" in metadata["keywords"]
-    assert metadata["is_private"] is True
-    assert "model_sources" in metadata
-    assert metadata["docker_image"] is None
-
-
-def test_resolve_metadata_custom_title(tmp_path):
-    """Test that title can be customized separately from slug."""
-    workspace = tmp_path
-    slug = "my-bench"
-    username = "alice"
-
-    metadata = resolve_metadata(workspace, slug, username, title="My Awesome Benchmark")
-
-    assert metadata["id"] == "alice/my-bench"  # slug used for id
-    assert metadata["title"] == "My Awesome Benchmark"  # custom title
-
-
-def test_resolve_metadata_existing(tmp_path):
-    workspace = tmp_path
-    slug = "my-bench"
-    username = "alice"
-
-    existing = {
-        "id": "bob/old-bench",
-        "title": "old-bench",
-        "id_no": 12345,
-        "keywords": ["foo"],
-        "docker_image": "some-image",
-    }
-
-    with open(workspace / "kernel-metadata.json", "w") as f:
-        json.dump(existing, f)
-
-    metadata = resolve_metadata(
-        workspace, slug, username, dataset_sources=["alice/data"]
-    )
-
-    assert metadata["id"] == "alice/my-bench"
-    assert metadata["title"] == "my-bench"
-    assert metadata["id_no"] is None
-    assert "personal-benchmark" in metadata["keywords"]
-    assert "foo" in metadata["keywords"]
-    assert metadata["docker_image"] == "some-image"
-    assert metadata["dataset_sources"] == ["alice/data"]
-
-
-def test_resolve_metadata_overrides(tmp_path):
-    workspace = tmp_path
-    slug = "my-bench"
-    username = "alice"
-
-    metadata = resolve_metadata(
-        workspace,
-        slug,
-        username,
-        enable_gpu=True,
-        enable_internet=False,
-        is_private=False,
-        docker_image="custom-image",
-    )
-
-    assert metadata["id"] == "alice/my-bench"
-    assert metadata["enable_gpu"] is True
-    assert metadata["enable_internet"] is False
-    assert metadata["is_private"] is False
-    assert metadata["docker_image"] == "custom-image"
-    assert metadata["enable_tpu"] is False  # Default
-
-
-def test_resolve_metadata_idempotent_keywords(tmp_path):
-    """Test that calling resolve_metadata doesn't duplicate 'personal-benchmark'."""
-    workspace = tmp_path
-    slug = "my-bench"
-    username = "alice"
-
-    existing = {
-        "keywords": ["personal-benchmark", "foo"],
-    }
-    with open(workspace / "kernel-metadata.json", "w") as f:
-        json.dump(existing, f)
-
-    metadata = resolve_metadata(workspace, slug, username)
-
-    assert metadata["keywords"].count("personal-benchmark") == 1
-    assert "foo" in metadata["keywords"]
-
-
-def test_resolve_metadata_malformed_json(tmp_path):
-    """Test behavior when kernel-metadata.json contains invalid JSON."""
-    workspace = tmp_path
-    (workspace / "kernel-metadata.json").write_text("not valid json")
-
-    with pytest.raises(json.JSONDecodeError):
-        resolve_metadata(workspace, "my-bench", "alice")
 
 
 def test_roundtrip_conversion(tmp_path):
@@ -218,11 +120,272 @@ x = 42
 """
     py_file.write_text(content)
 
-    convert_py_to_ipynb(py_file, ipynb_file)
-    convert_ipynb_to_py(ipynb_file, py_roundtrip)
+    kaggle_utils.convert_py_to_ipynb(py_file, ipynb_file)
+    kaggle_utils.convert_ipynb_to_py(ipynb_file, py_roundtrip)
 
     roundtrip_content = py_roundtrip.read_text()
     assert "# %% [markdown]" in roundtrip_content
     assert "# # Title" in roundtrip_content
     assert 'print("Hello")' in roundtrip_content
     assert "x = 42" in roundtrip_content
+
+
+# ---------------------------------------------------------------------------
+# build_local_metadata
+# ---------------------------------------------------------------------------
+
+
+def test_build_local_metadata_new(tmp_path):
+    workspace = tmp_path
+    slug = "my-bench"
+    username = "alice"
+
+    metadata = kaggle_utils.build_local_metadata(workspace, slug, username)
+
+    assert metadata["id"] == "alice/my-bench"
+    assert metadata["title"] == "my-bench"  # Defaults to slug
+    assert metadata["id_no"] is None
+    assert "personal-benchmark" in metadata["keywords"]
+    assert metadata["is_private"] is True
+    assert "model_sources" in metadata
+    assert metadata["docker_image"] is None
+
+
+def test_build_local_metadata_custom_title(tmp_path):
+    """Test that title can be customized separately from slug."""
+    workspace = tmp_path
+    slug = "my-bench"
+    username = "alice"
+
+    metadata = kaggle_utils.build_local_metadata(
+        workspace, slug, username, title="My Awesome Benchmark"
+    )
+
+    assert metadata["id"] == "alice/my-bench"  # slug used for id
+    assert metadata["title"] == "My Awesome Benchmark"  # custom title
+
+
+def test_build_local_metadata_existing(tmp_path):
+    workspace = tmp_path
+    slug = "my-bench"
+    username = "alice"
+
+    existing = {
+        "id": "bob/old-bench",
+        "title": "old-bench",
+        "id_no": 12345,
+        "keywords": ["foo"],
+        "docker_image": "some-image",
+    }
+
+    with open(workspace / "kernel-metadata.json", "w") as f:
+        json.dump(existing, f)
+
+    metadata = kaggle_utils.build_local_metadata(
+        workspace, slug, username, dataset_sources=["alice/data"]
+    )
+
+    assert metadata["id"] == "alice/my-bench"
+    assert metadata["title"] == "my-bench"
+    assert metadata["id_no"] is None
+    assert "personal-benchmark" in metadata["keywords"]
+    assert "foo" in metadata["keywords"]
+    assert metadata["docker_image"] == "some-image"
+    assert metadata["dataset_sources"] == ["alice/data"]
+
+
+def test_build_local_metadata_overrides(tmp_path):
+    workspace = tmp_path
+    slug = "my-bench"
+    username = "alice"
+
+    metadata = kaggle_utils.build_local_metadata(
+        workspace,
+        slug,
+        username,
+        enable_gpu=True,
+        enable_internet=False,
+        is_private=False,
+        docker_image="custom-image",
+    )
+
+    assert metadata["id"] == "alice/my-bench"
+    assert metadata["enable_gpu"] is True
+    assert metadata["enable_internet"] is False
+    assert metadata["is_private"] is False
+    assert metadata["docker_image"] == "custom-image"
+    assert metadata["enable_tpu"] is False  # Default
+
+
+def test_build_local_metadata_idempotent_keywords(tmp_path):
+    """Test that calling build_local_metadata doesn't duplicate 'personal-benchmark'."""
+    workspace = tmp_path
+    slug = "my-bench"
+    username = "alice"
+
+    existing = {
+        "keywords": ["personal-benchmark", "foo"],
+    }
+    with open(workspace / "kernel-metadata.json", "w") as f:
+        json.dump(existing, f)
+
+    metadata = kaggle_utils.build_local_metadata(workspace, slug, username)
+
+    assert metadata["keywords"].count("personal-benchmark") == 1
+    assert "foo" in metadata["keywords"]
+
+
+def test_build_local_metadata_malformed_json(tmp_path):
+    """Test behavior when kernel-metadata.json contains invalid JSON."""
+    workspace = tmp_path
+    (workspace / "kernel-metadata.json").write_text("not valid json")
+
+    with pytest.raises(json.JSONDecodeError):
+        kaggle_utils.build_local_metadata(workspace, "my-bench", "alice")
+
+
+# ---------------------------------------------------------------------------
+# parse_remote_metadata
+# ---------------------------------------------------------------------------
+
+
+def test_parse_remote_metadata_from_api_response():
+    """Extracts all fields from a fully populated API metadata object."""
+    meta = MagicMock(
+        ref="alice/my-benchmark",
+        title="My Benchmark",
+        language="python",
+        kernel_type="notebook",
+        is_private=False,
+        enable_gpu=True,
+        enable_internet=True,
+        enable_tpu=False,
+        dataset_data_sources=["alice/dataset"],
+        competition_data_sources=["comp1"],
+        kernel_data_sources=["alice/kernel"],
+        model_data_sources=["alice/model"],
+        category_ids=["personal-benchmark", "nlp"],
+        docker_image="custom-image:latest",
+        machine_shape="T4",
+    )
+
+    result = kaggle_utils.parse_remote_metadata(
+        meta, default_id="fallback/id", default_slug="fallback"
+    )
+
+    assert result == {
+        "id": "alice/my-benchmark",
+        "title": "My Benchmark",
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": False,
+        "enable_gpu": True,
+        "enable_tpu": False,
+        "enable_internet": True,
+        "dataset_sources": ["alice/dataset"],
+        "competition_sources": ["comp1"],
+        "kernel_sources": ["alice/kernel"],
+        "model_sources": ["alice/model"],
+        "keywords": ["personal-benchmark", "nlp"],
+        "docker_image": "custom-image:latest",
+        "machine_shape": "T4",
+    }
+
+
+def test_parse_remote_metadata_uses_defaults_for_missing_attrs():
+    """Falls back to defaults when API metadata has missing attributes."""
+    meta = MagicMock(spec=[])  # spec=[] means no attributes exist
+
+    result = kaggle_utils.parse_remote_metadata(
+        meta, default_id="owner/slug", default_slug="my-slug"
+    )
+
+    assert result == {
+        "id": "owner/slug",
+        "title": "my-slug",
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": True,
+        "enable_gpu": False,
+        "enable_tpu": False,
+        "enable_internet": True,
+        "dataset_sources": [],
+        "competition_sources": [],
+        "kernel_sources": [],
+        "model_sources": [],
+        "keywords": [],
+        "docker_image": None,
+        "machine_shape": "None",
+    }
+
+
+def test_parse_remote_metadata_handles_none_lists():
+    """Converts None list fields to empty lists."""
+    meta = MagicMock(
+        ref="alice/bench",
+        title="Bench",
+        language="python",
+        kernel_type="notebook",
+        is_private=True,
+        enable_gpu=False,
+        enable_tpu=False,
+        enable_internet=True,
+        dataset_data_sources=None,
+        competition_data_sources=None,
+        kernel_data_sources=None,
+        model_data_sources=None,
+        category_ids=None,
+        docker_image=None,
+        machine_shape=None,
+    )
+
+    result = kaggle_utils.parse_remote_metadata(
+        meta, default_id="x/y", default_slug="y"
+    )
+
+    assert result == {
+        "id": "alice/bench",
+        "title": "Bench",
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": True,
+        "enable_gpu": False,
+        "enable_tpu": False,
+        "enable_internet": True,
+        "dataset_sources": [],
+        "competition_sources": [],
+        "kernel_sources": [],
+        "model_sources": [],
+        "keywords": [],
+        "docker_image": None,
+        "machine_shape": "None",
+    }
+
+
+# ---------------------------------------------------------------------------
+# normalize_status
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw_status, expected",
+    [
+        ("complete", "complete"),
+        ("Complete", "complete"),
+        ("KernelWorkerStatus.complete", "complete"),
+        ("kernelworkerstatus.running", "running"),
+        ("error", "error"),
+    ],
+)
+def test_normalize_status_strings(raw_status, expected):
+    """normalize_status should strip enum prefixes and lower-case."""
+    assert kaggle_utils.normalize_status(raw_status) == expected
+
+
+def test_normalize_status_object_with_attribute():
+    """Simulates an API response object with a .status attribute."""
+
+    class FakeStatus:
+        status = "running"
+
+    assert kaggle_utils.normalize_status(FakeStatus()) == "running"
