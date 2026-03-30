@@ -206,8 +206,6 @@ def test_video_message_payload():
 
 def test_prompt_with_image_and_video():
     """Test that prompt() with both image and video sends them as separate messages."""
-    llm = Ferret()
-
     red_pixel_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
     img = images.from_base64(red_pixel_b64, format="png")
     video = videos.from_url("https://www.youtube.com/watch?v=abc123")
