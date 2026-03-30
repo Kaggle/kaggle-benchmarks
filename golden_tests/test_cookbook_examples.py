@@ -524,6 +524,8 @@ def test_many_images(llm):
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
+        "google/gemini-3-flash-preview",
     }
 )
 @kbench.task()

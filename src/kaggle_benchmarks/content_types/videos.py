@@ -15,6 +15,8 @@
 import abc
 import mimetypes
 
+import panel as pn
+
 
 class VideoContent(abc.ABC):
     @property
@@ -41,6 +43,10 @@ class VideoURL(VideoContent):
     @property
     def url(self) -> str:
         return self._url
+
+    def __panel__(self) -> pn.viewable.Viewable:
+        """Renders the video as a clickable link."""
+        return pn.pane.HTML(f'<a href="{self.url}" target="_blank">{self.url}</a>')
 
     @property
     def mime_type(self) -> str:

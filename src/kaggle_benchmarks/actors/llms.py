@@ -167,13 +167,9 @@ class LLMChat(actors.Actor):
             actors.user.send(image_to_send)
 
         if video is not None:
-            match video:
-                case videos.VideoURL():
-                    video_to_send = video
-                case _:
-                    raise ValueError(f"Unsupported video type: {type(video)}")
-
-            actors.user.send(video_to_send)
+            if not isinstance(video, videos.VideoContent):
+                raise ValueError(f"Unsupported video type: {video!r}")
+            actors.user.send(video)
 
         actors.user.send(message)
         return self.respond(
