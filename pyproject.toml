@@ -19,6 +19,7 @@ description = ""
 readme = "README.md"
 authors = []
 requires-python = ">=3.11"
+# NOTE: Before upgrading dependencies, bump [tool.uv] exclude-newer date below.
 dependencies = [
   "openai>=1.66",
   "pandas",
@@ -104,7 +105,8 @@ dev = [
 ]
 
 [tool.uv]
-# Supply chain hardening: exclude packages published after this date.
+# Supply chain hardening: refuse to install any package published after this date.
+# To upgrade packages: bump this date to ~2 days before today, then run `uv lock --upgrade`.
 # This is a fixed date (not a rolling window) and must be bumped periodically.
 # See: https://docs.astral.sh/uv/reference/settings/#exclude-newer
 exclude-newer = "2026-03-24T00:00:00Z"
