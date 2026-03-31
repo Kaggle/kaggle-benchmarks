@@ -105,6 +105,24 @@ describe_image.run(
 )
 
 # %%
+@kbench.task(name="describe_video")
+def describe_video(llm, video_url: str, question: str, answer: str):
+    """Sends a video and a question to a video-capable model."""
+    video = kbench.content_types.videos.from_url(video_url)
+    response = llm.prompt(question, video=video)
+    kbench.assertions.assert_contains_regex(
+        f"(?i){answer}", response, expectation="LLM should give the right answer."
+    )
+
+
+describe_video.run(
+    llm=kbench.llms["google/gemini-2.5-flash"],
+    video_url="https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+    question="What is this video about?",
+    answer="bunny",
+)
+
+# %%
 from dataclasses import dataclass  # noqa: E402
 
 

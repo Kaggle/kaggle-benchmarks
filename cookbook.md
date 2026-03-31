@@ -26,6 +26,8 @@
   - [Multimodal](#multimodal)
     - [Recipe: Sending Images to Multimodal
       Models](#recipe-sending-images-to-multimodal-models)
+    - [Recipe: Sending Videos to Multimodal
+      Models](#recipe-sending-videos-to-multimodal-models)
   - [Advanced Patterns](#advanced-patterns)
     - [Recipe: Implementing an Interactive Game
       Loop](#recipe-implementing-an-interactive-game-loop)
@@ -463,6 +465,34 @@ response = llm.prompt("Compare these two images")
 
 [See Example: Sending Images
 Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-images)
+
+### Recipe: Sending Videos to Multimodal Models
+
+Some models (currently select Gemini models) support video inputs. The
+SDK provides a `videos` module for this, following the same pattern as
+images.
+
+**Constructing Video Objects:**
+
+``` python
+from kaggle_benchmarks.content_types import videos
+
+# From a YouTube URL
+video = videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+```
+
+**Sending a Video with `llm.prompt`:**
+
+``` python
+from kaggle_benchmarks.content_types import videos
+
+video = videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+response = llm.prompt("What is this video about?", video=video)
+```
+
+> **Note:** Video support depends on the model. Currently, only select
+> models support video inputs, and only YouTube URLs are
+> supported. Models that don't support video will return an error.
 
 ------------------------------------------------------------------------
 

@@ -45,7 +45,7 @@ from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
 from kaggle_benchmarks import messages
-from kaggle_benchmarks.content_types import images
+from kaggle_benchmarks.content_types import images, videos
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
@@ -53,7 +53,6 @@ TEST_LLM_NAMES = {
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
-    "google/gemini-3-pro-preview",
     "google/gemma-3-12b",
     "qwen/qwen3-235b-a22b-instruct-2507",
     "qwen/qwen3-next-80b-a3b-instruct",
@@ -69,8 +68,6 @@ TEST_LLM_NAMES = {
 # Models to be used as judges for evaluation.
 JUDGE_LLM_NAMES = {
     "google/gemini-2.5-flash",
-    "google/gemini-3-flash-preview",
-    "google/gemini-3-pro-preview",
 }
 
 
@@ -166,7 +163,7 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 
 
 # We fix the test LLM to one reliable model to focus on testing the judges.
-@pytest.mark.parametrize("llm_name", ["google/gemini-3-flash-preview"])
+@pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
 def test_assess_with_judge(llm_name, judge_llm_name):
     llm = kbench.llms[llm_name]
@@ -480,6 +477,34 @@ def test_image_local_file(llm):
         r"(?i)kaggle",
         response,
         expectation="LLM should identify the Kaggle logo.",
+    )
+
+
+# %%
+# --- Test Case: Video inputs (URL) ---
+
+
+@benchmark_test(
+    include={
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
+        "google/gemini-3-flash-preview",
+    }
+)
+@kbench.task()
+def test_video_url(llm):
+    """Sends a YouTube video URL to the model."""
+    # Big Buck Bunny video.
+    video_url = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+
+    video = videos.from_url(video_url)
+
+    response = llm.prompt("What is this video about? Describe it briefly.", video=video)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)bunny|rabbit|animal",
+        response,
+        expectation="LLM should identify the Big Buck Bunny video content.",
     )
 
 

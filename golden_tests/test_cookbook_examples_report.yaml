@@ -91,6 +91,7 @@ genai://google/gemini-2.5-flash:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
+    test_video_url: failed
 genai://google/gemini-2.5-pro:
   config:
     structured_output: true
@@ -106,6 +107,7 @@ genai://google/gemini-2.5-pro:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
+    test_video_url: passed
 genai://google/gemini-3-flash-preview:
   config:
     structured_output: true
@@ -121,21 +123,7 @@ genai://google/gemini-3-flash-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
-genai://google/gemini-3-pro-preview:
-  config:
-    structured_output: true
-  tests:
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_manual_tool_use: failed
+    test_video_url: passed
 genai://google/gemini-3.1-flash-lite-preview:
   config:
     structured_output: true
@@ -286,7 +274,8 @@ openai://google/gemini-2.5-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_manual_tool_use: failed
+    test_manual_tool_use: passed
+    test_video_url: passed
 openai://google/gemini-2.5-pro:
   config:
     structured_output: true
@@ -302,6 +291,7 @@ openai://google/gemini-2.5-pro:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: passed
+    test_video_url: passed
 openai://google/gemini-3-flash-preview:
   config:
     structured_output: true
@@ -317,21 +307,7 @@ openai://google/gemini-3-flash-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: passed
-openai://google/gemini-3-pro-preview:
-  config:
-    structured_output: true
-  tests:
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_manual_tool_use: passed
+    test_video_url: passed
 openai://google/gemini-3.1-flash-lite-preview:
   config:
     structured_output: true

@@ -233,11 +233,11 @@ def _message_to_proto_content(message: benchmark_messages.Message) -> dict[str, 
 
     part_value: dict[str, Any] = {}  # Holds the 'image' or 'text' part
 
-    if isinstance(message.content, content_types.images.ImageURL):  # image payload
-        image_mime = message.content.to_mime()
+    if isinstance(message.content, (content_types.images.ImageURL, content_types.videos.VideoContent)):
+        mime = message.content.to_mime()
         part_value["file_data"] = {
-            "file_uri": image_mime["location"],
-            "mime_type": image_mime["mime_type"],
+            "file_uri": mime["location"],
+            "mime_type": mime["mime_type"],
         }
     elif isinstance(message.content, content_types.images.ImageBase64):  # image payload
         image_mime = message.content.to_mime()
