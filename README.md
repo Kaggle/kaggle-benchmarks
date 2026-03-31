@@ -24,7 +24,7 @@ This is especially useful for:
 
 - **Define Custom Tasks**: Easily define evaluation tasks using a simple `@kbench.task` decorator.
 - **Interact with Multiple LLMs**: Programmatically interact with and compare various large language models.
-- **Structured & Multimodal I/O**: Go beyond plain text. Get structured `dataclass` or `pydantic` objects from models and provide image inputs.
+- **Structured & Multimodal I/O**: Go beyond plain text. Get structured `dataclass` or `pydantic` objects from models and provide image and video inputs.
 - **Tool Use**: Empower models with tools, including a built-in Python interpreter to execute code.
 - **Robust Assertions**: Use a rich set of built-in assertions or create your own to validate model outputs.
 - **Dataset Evaluation**: Run benchmarks over entire datasets (e.g., pandas DataFrames) to get aggregate performance metrics.

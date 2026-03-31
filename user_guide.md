@@ -186,6 +186,22 @@ response = kbench.llm.prompt(
 )
 ```
 
+You can also include videos using the `video` parameter. Currently,
+only YouTube URLs are supported.
+
+``` python
+from kaggle_benchmarks.content_types import videos
+
+response = kbench.llm.prompt(
+    "What is this video about?",
+    video=videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+)
+```
+
+> **Note:** Video support depends on the model. Currently, only select
+> models support video inputs. Models that don't support video will
+> return an error.
+
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them
