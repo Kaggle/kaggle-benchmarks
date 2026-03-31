@@ -12,7 +12,6 @@ genai://anthropic/claude-haiku-4-5@20251001:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_many_images: passed
 genai://anthropic/claude-opus-4-5@20251101:
   config:
     structured_output: true
@@ -62,7 +61,6 @@ genai://deepseek-ai/deepseek-v3.2:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_many_images: passed
 genai://google/gemini-2.0-flash:
   config:
     structured_output: true
@@ -78,7 +76,6 @@ genai://google/gemini-2.0-flash:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
-    test_many_images: passed
 genai://google/gemini-2.5-flash:
   config:
     structured_output: true
@@ -94,7 +91,6 @@ genai://google/gemini-2.5-flash:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
-    test_many_images: passed
     test_video_url: failed
 genai://google/gemini-2.5-pro:
   config:
@@ -111,7 +107,6 @@ genai://google/gemini-2.5-pro:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
-    test_many_images: passed
     test_video_url: failed
 genai://google/gemini-3-flash-preview:
   config:
@@ -128,7 +123,6 @@ genai://google/gemini-3-flash-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: failed
-    test_many_images: passed
     test_video_url: failed
 genai://google/gemini-3.1-flash-lite-preview:
   config:
@@ -144,7 +138,6 @@ genai://google/gemini-3.1-flash-lite-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_many_images: passed
 genai://google/gemma-3-12b:
   config:
     structured_output: true
@@ -165,7 +158,6 @@ genai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_manual_tool_use: failed
-    test_many_images: passed
 genai://qwen/qwen3-next-80b-a3b-instruct:
   config:
     structured_output: false
@@ -178,7 +170,6 @@ genai://qwen/qwen3-next-80b-a3b-instruct:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_manual_tool_use: failed
-    test_many_images: passed
 genai://zai/glm-5:
   config:
     structured_output: true
@@ -191,7 +182,6 @@ genai://zai/glm-5:
     test_extract_int: failed
     test_extract_pydantic: failed
     test_manual_tool_use: failed
-    test_many_images: passed
 openai://anthropic/claude-haiku-4-5@20251001:
   config:
     structured_output: true
@@ -206,7 +196,6 @@ openai://anthropic/claude-haiku-4-5@20251001:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_many_images: passed
 openai://anthropic/claude-opus-4-5@20251101:
   config:
     structured_output: true
@@ -256,7 +245,6 @@ openai://deepseek-ai/deepseek-v3.2:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_many_images: passed
 openai://google/gemini-2.0-flash:
   config:
     structured_output: true
@@ -272,7 +260,6 @@ openai://google/gemini-2.0-flash:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: passed
-    test_many_images: passed
 openai://google/gemini-2.5-flash:
   config:
     structured_output: true
@@ -288,7 +275,6 @@ openai://google/gemini-2.5-flash:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: passed
-    test_many_images: passed
     test_video_url: failed
 openai://google/gemini-2.5-pro:
   config:
@@ -305,7 +291,6 @@ openai://google/gemini-2.5-pro:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: passed
-    test_many_images: passed
     test_video_url: failed
 openai://google/gemini-3-flash-preview:
   config:
@@ -322,7 +307,6 @@ openai://google/gemini-3-flash-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_manual_tool_use: passed
-    test_many_images: passed
     test_video_url: failed
 openai://google/gemini-3.1-flash-lite-preview:
   config:
@@ -338,7 +322,6 @@ openai://google/gemini-3.1-flash-lite-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_many_images: passed
 openai://google/gemma-3-12b:
   config:
     structured_output: true
@@ -359,7 +342,6 @@ openai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_manual_tool_use: passed
-    test_many_images: passed
 openai://qwen/qwen3-next-80b-a3b-instruct:
   config:
     structured_output: false
@@ -372,7 +354,6 @@ openai://qwen/qwen3-next-80b-a3b-instruct:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_manual_tool_use: passed
-    test_many_images: passed
 openai://zai/glm-5:
   config:
     structured_output: true
@@ -385,4 +366,3 @@ openai://zai/glm-5:
     test_extract_int: passed
     test_extract_pydantic: failed
     test_manual_tool_use: passed
-    test_many_images: passed
