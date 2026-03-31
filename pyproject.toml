@@ -103,6 +103,12 @@ dev = [
   "mypy-protobuf>=3.6.0",
 ]
 
+[tool.uv]
+# Supply chain hardening: exclude packages published after this date.
+# This is a fixed date (not a rolling window) and must be bumped periodically.
+# See: https://docs.astral.sh/uv/reference/settings/#exclude-newer
+exclude-newer = "2026-03-24T00:00:00Z"
+
 [tool.mypy]
 warn_unused_configs = true
 

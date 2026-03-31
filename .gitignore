@@ -10,3 +10,5 @@ dev/
 _site/
 site_libs/
 docs/
+.kagent-context/**
+.claude/settings.local.json
