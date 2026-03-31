@@ -63,7 +63,6 @@ TEST_LLM_NAMES = {
     "deepseek-ai/deepseek-r1-0528",
     "deepseek-ai/deepseek-v3.2",
     "zai/glm-5",
-    "google/gemini-3.1-flash-lite-preview",
 }
 
 # Models to be used as judges for evaluation.
