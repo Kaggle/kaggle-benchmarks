@@ -31,7 +31,7 @@ class VideoContent(abc.ABC):
         """Returns the video payload for the OpenAI Chat Completions API format.
 
         The OpenAI Chat Completions spec has no dedicated video content part type,
-        so we use`image_url` as a generic file URL carrier.
+        so we use `image_url` as a generic file URL carrier.
         """
         return [{"type": "image_url", "image_url": {"url": self.url}}]
 
