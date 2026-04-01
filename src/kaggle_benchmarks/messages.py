@@ -56,6 +56,10 @@ class Message(Generic[T]):
     def tool_calls(self):
         return self._meta.get("tool_calls")
 
+    @tool_calls.setter
+    def tool_calls(self, value):
+        self._meta["tool_calls"] = value
+
     @property
     def usage(self):
         """Token usage and cost metadata for this message."""
