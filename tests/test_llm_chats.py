@@ -200,7 +200,10 @@ def test_video_message_payload():
 
     msg = messages.Message(sender=actors.user, content=video)
     assert msg.payload == [
-        {"type": "image_url", "image_url": {"url": "https://www.youtube.com/watch?v=abc123"}}
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://www.youtube.com/watch?v=abc123"},
+        }
     ]
 
 
