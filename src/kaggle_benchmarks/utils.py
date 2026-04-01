@@ -16,7 +16,6 @@ import difflib
 import enum
 import inspect
 import json
-import os
 import re
 from pathlib import Path
 
@@ -24,7 +23,6 @@ import hishel
 import hishel.httpx
 import httpx
 import pydantic
-from openai import OpenAI, OpenAIError
 
 
 class Status(enum.StrEnum):
@@ -160,50 +158,11 @@ def normalize_name(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]", "", name)
 
 
-def _get_model_proxy_env_vars() -> tuple[str, str]:
-    api_key = os.environ.get("MODEL_PROXY_API_KEY")
-    base_url = os.environ.get("MODEL_PROXY_URL")
-    if not api_key or not base_url:
-        raise ValueError(
-            "MODEL_PROXY_API_KEY and MODEL_PROXY_URL must be set in environment variables."
-        )
-    return api_key, base_url
-
-
-def get_openai_client() -> OpenAI:
-    api_key, base_url = _get_model_proxy_env_vars()
-    return OpenAI(api_key=api_key, base_url=base_url)
-
-
-def prompt_llm_with_openai_api(
-    prompt: str,
-    model: str,
-    client: OpenAI,
-    system_instruction: str | None = None,
-    **kwargs,
-) -> str:
-    messages = []
-    if system_instruction:
-        messages.append({"role": "system", "content": system_instruction})
-    messages.append({"role": "user", "content": prompt})
-
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            stream=False,
-            **kwargs,
-        )
-        return response.choices[0].message.content or ""
-    except OpenAIError as e:
-        print(f"LLM call for task_autopilot failed: {e}")
-        raise e
-
-
 def task_autopilot(
     task_description: str,
     assertion_description: str,
     model: str = "google/gemini-2.5-pro",
+    **kwargs,
 ) -> str:
     """
     Generate source code for a Kaggle benchmark task based on user inputs.
@@ -232,7 +191,8 @@ Your task is to write a complete, self-contained Python script based on a user's
 
 Follow these rules:
 1.  Define a task using the `@kbench.task()` decorator. The task name should be a short, descriptive string in quotes, derived from the user's request (e.g., "count 'r's in strawberry").
-2.  The function signature for the task should be simple, usually just `def your_task_name(llm):`. If it returns value, specify the return type.
+2.  The function signature for the task should be simple, usually just `def your_task_name(llm):`.
+If the task function returns a value, its return type annotation must be one of the supported types: `bool`, `int`, `float`, `tuple[int, int]`, `tuple[float, float]`, or `dict`.
 3.  Use `kbench.assertions` to check for correctness based on the user's assertion criteria.
 4.  The script must be complete and runnable. End the script with a call to run the task, like `your_task_name.run(kbench.llm)`.
 5.  Do not include any placeholders for the user to fill in; the script should be final.
@@ -258,7 +218,10 @@ Here are the user inputs
 ---
 ### GENERATED PYTHON SCRIPT:
     """
+    if isinstance(model, str):
+        from kaggle_benchmarks import llms
 
-    client = get_openai_client()
-    generated_code = prompt_llm_with_openai_api(prompt, model=model, client=client)
+        model = llms[model]
+
+    generated_code = model.prompt(prompt, **kwargs)
     return extract_code_block(generated_code, name="python", greedy=False)
