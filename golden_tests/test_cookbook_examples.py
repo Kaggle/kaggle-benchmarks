@@ -528,7 +528,7 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
 
 @benchmark_test()
 @kbench.task()
-def test_manual_tool_use(llm):
+def test_simple_tool_use(llm):
     problem = "What is 50 plus 25?"
     expected_answer = 75.0
 
@@ -557,4 +557,77 @@ def test_stateful_tool_double_execution(llm):
 
     kbench.assertions.assert_equal(
         1, increment_counter.count, expectation="Tool should be executed exactly once."
+    )
+
+
+# %%
+def add_tool(a: float, b: float) -> float:
+    """Adds two numbers."""
+    add_tool.calls += 1
+    return a + b
+
+
+def multiply_tool(a: float, b: float) -> float:
+    """Multiplies two numbers."""
+    multiply_tool.calls += 1
+    return a * b
+
+
+@benchmark_test()
+@kbench.task()
+def test_multiple_tool_selection(llm):
+    add_tool.calls = 0
+    multiply_tool.calls = 0
+
+    llm.prompt(
+        "What is 12 multiplied by 34? Use the multiply_tool.",
+        tools=[add_tool, multiply_tool],
+    )
+
+    kbench.assertions.assert_equal(
+        1, multiply_tool.calls, expectation="Multiply tool should be called once."
+    )
+    kbench.assertions.assert_equal(
+        0, add_tool.calls, expectation="Add tool should not be called."
+    )
+
+
+# %%
+def get_user_profile(user_id: str) -> dict:
+    """Returns user profile information as a dictionary."""
+    if user_id == "user_123":
+        return {"name": "Alice", "role": "Admin", "skills": ["Python", "SQL"]}
+    return {"name": "Unknown", "role": "User", "skills": []}
+
+
+@benchmark_test()
+@kbench.task()
+def test_complex_tool_return(llm):
+    response = llm.prompt(
+        "Get the profile for user_123 and tell me what their role is.",
+        tools=[get_user_profile],
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)admin", response, expectation="Model should identify the role as Admin."
+    )
+
+
+# %%
+def flaky_tool() -> str:
+    """This tool always fails with an error."""
+    raise ValueError("Tool execution failed simulated error.")
+
+
+@benchmark_test()
+@kbench.task()
+def test_tool_error_handling(llm):
+    response = llm.prompt(
+        "Call the flaky_tool and report what happens.", tools=[flaky_tool]
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)error|failed|valueerror",
+        response,
+        expectation="Model should report the tool failure.",
     )
