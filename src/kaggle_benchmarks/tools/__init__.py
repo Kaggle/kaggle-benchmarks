@@ -14,6 +14,7 @@
 
 from kaggle_benchmarks.tools import container, functions, python, search, web
 from kaggle_benchmarks.tools.base import (
+    UNKNOWN,
     ModelResponse,
     ToolCallModel,
     ToolInvocation,
