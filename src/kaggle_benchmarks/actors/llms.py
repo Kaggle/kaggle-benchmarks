@@ -286,6 +286,10 @@ class OpenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
+    def _should_remove_seed(self) -> bool:
+        unsupported_prefixes = ("google/", "openai/gpt-5.4-pro")
+        return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
+
     def invoke(
         self, messages: list[messages.Message], system: str | None, **kwargs
     ) -> LLMResponse | Iterator[LLMResponse]:
@@ -293,9 +297,9 @@ class OpenAI(LLMChat):
         if system:
             raw_messages = [{"role": "system", "content": system}] + raw_messages
 
-        if self.model.startswith("google/"):
+        if self._should_remove_seed():
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
-            # Temporarily do not send "seed" parameter for google models when using Model Proxy.
+            # Temporarily do not send "seed" parameter for models not supporting it in Model Proxy.
             kwargs.pop("seed", None)
 
         return self._call_api(raw_messages, **kwargs)
