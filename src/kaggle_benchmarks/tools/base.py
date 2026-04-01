@@ -19,6 +19,8 @@ from typing import Any, Callable, Generic, TypeVar
 import pydantic
 
 T = TypeVar("T")
+F = TypeVar("F")
+Name = TypeVar("Name", bound=str)
 
 
 @dataclasses.dataclass
@@ -29,6 +31,13 @@ class ToolInvocation:
     arguments: dict[str, Any]
     call_id: str | None = None
 
+    # Allows serialization as content message
+    def get_payload(self):
+        return dataclasses.asdict(self)
+
+
+UNKNOWN = object()
+
 
 @dataclasses.dataclass
 class ToolInvocationResult:
@@ -37,24 +46,40 @@ class ToolInvocationResult:
     name: str
     arguments: dict[str, Any]
     call_id: str | None = None
-    output: Any = None
+    output: Any = UNKNOWN
+    error: str | None = None
 
     def describe(self):
+        if self.error:
+            return f"{self.name}({self.arguments}): Error: {self.error}"
         return f"{self.name}({self.arguments}) -> {self.output}"
 
+    def get_payload(self):
+        return dataclasses.asdict(self)
 
-class ToolCallModel(pydantic.BaseModel):
-    """Represents a tool call in a structured response."""
-
-    name: str
-    arguments: dict[str, Any]
+    @property
+    def text(self):
+        return str(self.output if self.output is not UNKNOWN else self.error)
 
 
-class ModelResponse(pydantic.BaseModel, Generic[T]):
-    """A structured response from the LLM that may contain tool calls or a message."""
+class ToolCallModel(pydantic.BaseModel, Generic[Name, T]):
+    # Represents a tool call in a structured response.
+    # Generic Name allows for overwriting str with Literal['tool_name']
+    name: Name
+    arguments: T
 
-    tools: list[ToolCallModel] | None = None
+
+class ModelResponse(pydantic.BaseModel, Generic[T, F]):
+    # A structured response from the LLM that may contain tool calls or a message.
+
+    tools: list[F] | None = None
     message: T | None = None
+
+    model_config = pydantic.ConfigDict(
+        title="Response",
+        extra="forbid",
+        arbitrary_types_allowed=False,
+    )
 
 
 def describe_tools(tools: list[Callable]) -> str:
@@ -107,7 +132,7 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
             call_id=call.call_id,
         )
     try:
-        output = tool(**call.arguments)
+        output = tool(**(call.arguments or {}))
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
@@ -121,6 +146,16 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            output=error_message,
+            error=error_message,
             call_id=call.call_id,
         )
+
+
+def iter_invocations(chat):
+    from kaggle_benchmarks import llm_messages
+
+    for item in chat.messages:
+        if isinstance(item.content, ToolInvocationResult):
+            yield item.content
+        elif isinstance(item, llm_messages.LLMMessage):
+            yield from item.tool_calls or []
