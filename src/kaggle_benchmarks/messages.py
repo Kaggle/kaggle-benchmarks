@@ -17,6 +17,8 @@ import json
 import warnings
 from typing import TYPE_CHECKING, Any, Generic, Iterable, TypeVar
 
+import pydantic
+
 from kaggle_benchmarks import events, utils
 
 if TYPE_CHECKING:
@@ -75,6 +77,8 @@ class Message(Generic[T]):
     def payload(self) -> str | list[dict]:
         if hasattr(self.content, "get_payload"):
             return self.content.get_payload()
+        if isinstance(self.content, pydantic.BaseModel):
+            return self.content.model_dump_json()
         if dataclasses.is_dataclass(self.content) and not isinstance(
             self.content, type
         ):

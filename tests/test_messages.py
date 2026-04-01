@@ -15,6 +15,7 @@
 import json
 from dataclasses import dataclass
 
+import pydantic
 import pytest
 
 from kaggle_benchmarks import actors, chats, messages, user
@@ -52,6 +53,15 @@ def test_dataclass_payload():
 
     msg = messages.Message(Point(1, 2), sender=user)
     assert json.loads(msg.payload) == {"x": 1, "y": 2}
+
+
+def test_pydantic_payload():
+    class Point(pydantic.BaseModel):
+        x: float
+        y: float
+
+    msg = messages.Message(Point(x=1.5, y=2.5), sender=user)
+    assert json.loads(msg.payload) == {"x": 1.5, "y": 2.5}
 
 
 def test_class_payload():
