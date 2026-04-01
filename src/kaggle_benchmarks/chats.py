@@ -149,9 +149,17 @@ def new(
 
 
 @contextlib.contextmanager
-def fork(name: str = "Fork"):
-    parent = get_current_chat()
+def fork(name: str = "Fork", orphan: bool = False):
+    """
+    Creates and enters a new chat with the same history as the current one.
 
-    with new(name) as chat:
-        chat.history.extend(parent.messages)
+    Args:
+        name: The name of the new chat thread.
+        orphan: Controls whether the new chat will appear in the parent chat's history.
+    """
+    parent = get_current_chat()
+    messages = parent.messages
+
+    with new(name, orphan=orphan) as chat:
+        chat.history.extend(messages)
         yield chat

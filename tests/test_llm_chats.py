@@ -225,3 +225,26 @@ def test_prompt_with_image_and_video():
         assert isinstance(t.messages[0].content, images.ImageBase64)
         assert isinstance(t.messages[1].content, videos.VideoURL)
         assert t.messages[2].content == "Describe both"
+
+
+def test_chat_fork():
+    with chats.new("Parent") as p:
+        actors.user.send("Hello")
+
+        with chats.fork("Forked") as f:
+            assert f.name == "Forked"
+            assert len(f.history) == 1
+            assert f.history[0].content == "Hello"
+            actors.user.send("World")
+            assert len(f.history) == 2
+
+        assert len(p.history) == 2
+        assert p.history[1] is f
+
+        with chats.fork("Orphaned", orphan=True) as of:
+            assert of.name == "Orphaned"
+            assert len(of.history) == 1  # Only messages are copied to the fork
+            actors.user.send("Bye")
+            assert len(of.history) == 2
+
+        assert len(p.history) == 2
