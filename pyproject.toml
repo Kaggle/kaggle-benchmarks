@@ -25,7 +25,7 @@ dependencies = [
   "pandas",
   "tqdm",
   "python-dotenv>=1.0.1",
-  "protobuf>=5.29.3,<6.0",
+  "protobuf>=5.29.3,<8.0",
   "jupyter",
   "docker>=7.1.0",
   "panel>=1.6.3",
@@ -68,15 +68,15 @@ kaggle = [
   "nbdev>=2.4.2",
   "papermill>=2.6.0",
   # b/276358430: pin jupyter-lsp to 1.5.1 to match docker-python; newer versions freeze the server
-  "jupyter-lsp==1.5.1",
+  "jupyter-lsp==2.3.0",
   # b/333854354: pin jupyter-server to 2.12.5; later versions break LSP
-  "jupyter-server==2.12.5",
+  "jupyter-server==2.17.0",
   "python-lsp-server",
   "jupyterlab-lsp",
   "jedi",
   "notebook>=6.5.4",
   "nbconvert>=6.5.1",
-  "traitlets==5.9.0",
+  "traitlets==5.14.3",
   "jupyter-bokeh>=4.0.5",
 ]
 docs = [
@@ -99,7 +99,7 @@ dev = [
   "types-tqdm>=4.67.0.20241221",
   "pandas-stubs>=2.2.3.241126",
   "docker-stubs>=0.1.0",
-  "types-protobuf<6.0",
+  "types-protobuf<7.0",
   "pre-commit>=4.2.0",
   "mypy-protobuf>=3.6.0",
 ]
