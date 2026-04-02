@@ -18,28 +18,18 @@ from dataclasses import dataclass
 import pydantic
 import pytest
 
-from kaggle_benchmarks import actors, chats, messages, user
+from kaggle_benchmarks import chats, messages, user
 from kaggle_benchmarks.actors.llms import LLMResponse
-
-
-class Parrot(actors.LLMChat):
-    """Repeats last user message."""
-
-    def invoke(self, messages, **kwargs):
-        return next(
-            LLMResponse(content=m.payload)
-            for m in reversed(messages)
-            if m.sender == user
-        )
+from tests.mocks import MockedChat
 
 
 def test_raw_payload():
-    p = Parrot()
+    float_response = '{"value": 0.01}'
+    p = MockedChat.from_contents([float_response, '{"value": true}'])
     with chats.new() as chat:
-        raw_response = '{"value": 0.01}'
-        m = p.prompt(raw_response, schema=float)
+        m = p.prompt(float_response, schema=float)
         assert m == 0.01
-        assert chat.messages[-1].payload == raw_response
+        assert chat.messages[-1].payload == float_response
 
     r = p.prompt('{"value": true}', schema=bool)
     assert r

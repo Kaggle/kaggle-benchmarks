@@ -16,10 +16,10 @@ import pytest
 from google.protobuf import json_format
 from pydantic import BaseModel
 
-from kaggle_benchmarks import actors, assertions, chats, config, user
-from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks import assertions, chats, config, user
 from kaggle_benchmarks.kaggle import serialization
 from kaggle_benchmarks.tasks import task
+from tests.mocks import MockedChat
 
 
 @task(name="test", version=2, description="Test")
@@ -57,15 +57,6 @@ def task_with_docstring():
     pass
 
 
-class MockScoringLLM(actors.LLMChat):
-    def __init__(self, score_to_return: int, name="MockScoringLLM"):
-        super().__init__(name=name)
-        self.score_to_return = score_to_return
-
-    def invoke(self, messages, **kwargs):
-        return LLMResponse(content=f'{{"score": {self.score_to_return}}}')
-
-
 class BeautyScore(BaseModel):
     score: int
 
@@ -73,7 +64,9 @@ class BeautyScore(BaseModel):
 @task()
 def scoring_task(score_to_return: int, raises_exception: bool = False) -> int:
     """A task that returns a score and has an assertion."""
-    llm = MockScoringLLM(score_to_return)
+    llm = MockedChat.from_contents_data(
+        [{"score": score_to_return}], name="MockScoringLLM"
+    )
     eval_response = llm.prompt("Rate this", schema=BeautyScore)
     score = eval_response.score
     assertions.assert_true(score >= 4, f"Score {score} is less than 4.")
@@ -83,22 +76,10 @@ def scoring_task(score_to_return: int, raises_exception: bool = False) -> int:
     return score
 
 
-class MockLLM(actors.LLMChat):
-    def __init__(self, name="MockLLM"):
-        super().__init__(name=name)
-
-    def invoke(self, messages, **kwargs):
-        last_user_message = next(
-            (m.content for m in reversed(messages) if m.sender.role == "user"),
-            "No user message.",
-        )
-        return LLMResponse(content=f"I heard you say: {last_user_message}")
-
-
 @task()
-def chatty_task():
+def chatty_task(responses):
     """A task with a conversation."""
-    llm = MockLLM()
+    llm = MockedChat.from_contents(responses, name="MockLLM")
     user.send("Hello")
     llm.respond()
     user.send("How are you?")
@@ -110,7 +91,9 @@ def chatty_task():
 @task()
 def task_with_subchat():
     """A task with a sub-chat."""
-    llm = MockLLM()
+    llm = MockedChat.from_contents(
+        ["Outer hello", "Inner hello", "Outer goodbye"], name="MockLLM"
+    )
     user.send("Outer hello")
     llm.respond()
 
@@ -224,7 +207,7 @@ def test_combined_run_serialization():
 
 
 def test_chat_serialization():
-    run = chatty_task.run()
+    run = chatty_task.run(["one", "two"])
     message = serialization.dump_run(run)
     result = json_format.MessageToDict(message)
 
@@ -241,7 +224,7 @@ def test_chat_serialization():
     assert request1["contents"][0]["parts"][0]["text"] == "Hello"
     assert request1["contents"][0]["senderName"] == "User"
     assert request1["contents"][1]["role"] == "CONTENT_ROLE_ASSISTANT"
-    assert "I heard you say: Hello" in request1["contents"][1]["parts"][0]["text"]
+    assert request1["contents"][1]["parts"][0]["text"] == "one"
     assert request1["contents"][1]["senderName"] == "MockLLM"
 
     # Check second request
@@ -251,9 +234,7 @@ def test_chat_serialization():
     assert request2["contents"][0]["parts"][0]["text"] == "How are you?"
     assert request2["contents"][0]["senderName"] == "User"
     assert request2["contents"][1]["role"] == "CONTENT_ROLE_ASSISTANT"
-    assert (
-        "I heard you say: How are you?" in request2["contents"][1]["parts"][0]["text"]
-    )
+    assert request2["contents"][1]["parts"][0]["text"] == "two"
     assert request2["contents"][1]["senderName"] == "MockLLM"
 
     # Check assertion mapping

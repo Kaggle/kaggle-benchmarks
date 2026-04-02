@@ -18,14 +18,12 @@ import pytest
 
 from kaggle_benchmarks import (
     ExecutionMode,
-    actors,
     assertions,
     config,
     kaggle,
     task,
     utils,
 )
-from kaggle_benchmarks.actors.llms import LLMResponse
 
 
 @pytest.fixture
@@ -38,16 +36,6 @@ def client(monkeypatch):
         yield kaggle_client
 
         config.execution_mode = ExecutionMode.TESTING
-
-
-class Duck(actors.LLMChat):
-    def invoke(self, messages, system, **kwargs):
-        return LLMResponse(content="quack")
-
-
-@pytest.fixture
-def duck():
-    yield Duck()
 
 
 @task()

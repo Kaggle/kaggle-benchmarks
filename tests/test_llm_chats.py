@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import json
 
 import pytest
@@ -20,6 +21,7 @@ from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.prompting import handler
+from tests.mocks import MockedChat
 
 
 class Ferret(actors.LLMChat):
@@ -51,13 +53,18 @@ class Ferret(actors.LLMChat):
 
 
 def test_prompt_without_context():
-    llm = Ferret()
+    llm = MockedChat.from_contents(["mocked"])
     r = llm.prompt("A")
-    assert {"messages": [["user", "A"]], "system": None} == json.loads(r)
+    assert r == "mocked"
+    messages, kwargs = llm.invocations[0]
+    assert len(messages) == 1
+    assert messages[0].sender is actors.user
+    assert messages[0].content == "A"
+    assert kwargs.get("system") is None
 
 
 def test_respond():
-    llm = Ferret()
+    llm = MockedChat.from_contents(["mocked"])
 
     with chats.new("Test") as t:
         actors.user.send("A")
@@ -65,37 +72,51 @@ def test_respond():
 
         r = llm.respond()
         assert len(t.messages) == 2
-        assert {"messages": [["user", "A"]], "system": None} == json.loads(r.text)
+        assert r.text == "mocked"
+
+        messages, kwargs = llm.invocations[0]
+        assert len(messages) == 1
+        assert messages[0].sender is actors.user
+        assert messages[0].content == "A"
+        assert kwargs.get("system") is None
 
 
 def test_chat_context():
-    llm = Ferret()
+    llm = MockedChat.from_contents(["r1", "r2", "r3"])
     llm.prompt("<should not be visible in the context>")
 
     with chats.new(system_instructions="S") as t:
         assert t.status == utils.Status.RUNNING
 
         r = llm.prompt("A")
-        assert {
-            "messages": [["system", "S"], ["user", "A"]],
-            "system": None,
-        } == json.loads(r)
+        assert r == "r2"
+        messages, kwargs = llm.invocations[1]
+        assert len(messages) == 2
+        assert messages[0].sender is actors.system
+        assert messages[0].content == "S"
+        assert messages[1].sender is actors.user
+        assert messages[1].content == "A"
+        assert kwargs.get("system") is None
 
         r = llm.prompt("B")
-        response = json.loads(r)
-
-        assert response["system"] is None
-        assert 4 == len(response["messages"])
-        assert ["system", "S"] == response["messages"][0]
-        assert ["user", "A"] == response["messages"][1]
-        assert llm.name.lower() == response["messages"][2][0]
-        assert ["user", "B"] == response["messages"][3]
+        assert r == "r3"
+        messages, kwargs = llm.invocations[2]
+        assert len(messages) == 4
+        assert messages[0].sender is actors.system
+        assert messages[0].content == "S"
+        assert messages[1].sender is actors.user
+        assert messages[1].content == "A"
+        assert messages[2].sender is llm
+        assert messages[2].content == "r2"
+        assert messages[1].sender is actors.user
+        assert messages[3].content == "B"
+        assert kwargs.get("system") is None
 
     assert t.status == utils.Status.SUCCESS
 
 
 def test_structured():
-    llm = Ferret()
+    llm = MockedChat.from_contents([""])
 
     class F:
         pass
@@ -118,6 +139,7 @@ def test_structured():
             error="Bad response", schema=cls, value=value
         )
 
+    llm = MockedChat.from_contents(["test_value"])
     with chats.new() as t:
         with pytest.raises(prompting.ResponseParsingError):
             llm.prompt("test_value", schema=F)
@@ -131,6 +153,7 @@ def test_structured():
         yield "nonsense"
         return F()
 
+    llm = MockedChat.from_contents(["", "nonsense"])
     with pytest.raises(prompting.SchemaError):
         llm.prompt("Test", schema=F)
 
@@ -148,12 +171,12 @@ def test_streaming_prompt():
         last_message = t.messages[-1]
         assert last_message.content == "streaming..."
         assert last_message.sender is llm
-        assert last_message._meta["input_tokens"] == 10
-        assert last_message._meta["output_tokens"] == 2
+        assert last_message.usage.input_tokens == 10
+        assert last_message.usage.output_tokens == 2
 
 
 def test_nested_chat_id():
-    llm = Ferret()
+    llm = MockedChat.from_contents(["mocked"])
     with chats.new("root") as root:
         sub = chats.Chat(name="sub")
         chats.get_current_chat().append(sub)
@@ -169,15 +192,22 @@ def test_nested_chat_id():
 
 def test_chat_usage_aggregation():
     """Test that chat usage properties aggregate token usage from all assistant messages."""
-    llm = Ferret()
-    llm.stream_responses = True
+    from kaggle_benchmarks.llm_messages import LLMMessage
+    from kaggle_benchmarks.usage import Usage
+
+    msg1 = LLMMessage(
+        sender=None, content="first", usage=Usage(input_tokens=10, output_tokens=2)
+    )
+    msg2 = LLMMessage(
+        sender=None, content="second", usage=Usage(input_tokens=10, output_tokens=2)
+    )
+
+    llm = MockedChat([msg1, msg2])
 
     with chats.new("Test Usage") as t:
         llm.prompt("first")
         llm.prompt("second")
 
-        # Each streaming response yields: input_tokens=10, output_tokens=2
-        # Two prompts = 2 * 10 = 20 input tokens, 2 * 2 = 4 output tokens
         assert t.usage.input_tokens == 20
         assert t.usage.output_tokens == 4
 
@@ -200,7 +230,10 @@ def test_video_message_payload():
 
     msg = messages.Message(sender=actors.user, content=video)
     assert msg.payload == [
-        {"type": "image_url", "image_url": {"url": "https://www.youtube.com/watch?v=abc123"}}
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://www.youtube.com/watch?v=abc123"},
+        }
     ]
 
 
@@ -211,9 +244,6 @@ def test_prompt_with_image_and_video():
     video = videos.from_url("https://www.youtube.com/watch?v=abc123")
 
     with chats.new("image_and_video") as t:
-        # Manually send image and video, then prompt, to verify message ordering.
-        # We don't call llm.prompt() directly because Ferret's invoke() can't
-        # serialize image/video content to JSON.
         actors.user.send(img)
         actors.user.send(video)
         actors.user.send("Describe both")
