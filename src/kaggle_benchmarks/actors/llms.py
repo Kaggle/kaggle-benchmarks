@@ -91,7 +91,7 @@ import enum
 import json
 import mimetypes
 import typing
-from typing import Any, Iterator, TypeVar
+from typing import TYPE_CHECKING, Any, Iterator, TypeVar
 
 import openai
 from google import genai
@@ -100,6 +100,9 @@ from google.genai import types
 from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import images, videos
+
+if TYPE_CHECKING:
+    from kaggle_benchmarks import llm_messages
 
 T = TypeVar("T")
 
@@ -141,7 +144,7 @@ class LLMChat(actors.Actor):
 
     def invoke(
         self, messages: list[messages.Message], system: str | None, **kwargs
-    ) -> LLMResponse | Iterator[LLMResponse]:
+    ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
         raise NotImplementedError
 
@@ -186,7 +189,7 @@ class LLMChat(actors.Actor):
         schema: type[T] = str,
         **kwargs,
     ) -> messages.Message[T]:
-        from kaggle_benchmarks import contexts
+        from kaggle_benchmarks import contexts, llm_messages
 
         ctx = contexts.get_current()
         chat = ctx.chat
@@ -233,6 +236,8 @@ class LLMChat(actors.Actor):
             response._meta.update(invoke_response.meta)
         elif isinstance(invoke_response, Iterator):
             response.stream(invoke_response)
+        elif isinstance(invoke_response, llm_messages.LLMMessage):
+            response = invoke_response
         else:
             raise TypeError("Unknown response type from LLM.")
 
