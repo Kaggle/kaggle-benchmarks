@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
 from kaggle_benchmarks.content_types import videos
 
 
@@ -25,11 +27,9 @@ def test_from_url():
     assert video.mime_type == "video/*"
 
 
-def test_from_url_guesses_mime_type():
-    url = "https://example.com/video.mp4"
-    video = videos.from_url(url)
-    assert video.url == url
-    assert video.mime_type == "video/mp4"
+def test_from_url_rejects_non_youtube():
+    with pytest.raises(ValueError, match="Only YouTube URLs are currently supported"):
+        videos.from_url("https://example.com/video.mp4")
 
 
 def test_video_url_to_mime():
