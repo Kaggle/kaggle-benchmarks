@@ -31,6 +31,12 @@ Usage:
 """
 
 # %%
+<<<<<<< HEAD
+=======
+import base64
+import io
+import json
+>>>>>>> 1334913 (checkpoint)
 import os
 import tempfile
 from contextlib import contextmanager
@@ -43,7 +49,8 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks import messages
+from kaggle_benchmarks.content_types import audios, images, videos
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
@@ -503,6 +510,93 @@ def test_video_url(llm):
         r"(?i)bunny|rabbit|animal",
         response,
         expectation="LLM should identify the Big Buck Bunny video content.",
+    )
+
+
+# %%
+# --- Test Case: Audio inputs (base64) ---
+
+
+def generate_sine_wav(frequency: float = 440.0, duration: float = 1.0) -> bytes:
+    """Generates a mono 16-bit PCM WAV file with a sine wave tone."""
+    import math
+    import struct
+    import wave
+
+    sample_rate = 16000
+    n_samples = int(sample_rate * duration)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        frames = b"".join(
+            struct.pack(
+                "<h", int(32767 * 0.8 * math.sin(2 * math.pi * frequency * i / sample_rate))
+            )
+            for i in range(n_samples)
+        )
+        wav.writeframes(frames)
+    return buf.getvalue()
+
+
+@benchmark_test(
+    include={
+        "google/gemini-3-flash-preview",
+    }
+)
+@kbench.task()
+def test_audio_base64(llm):
+    """Sends a base64-encoded WAV audio clip to the model."""
+    wav_bytes = generate_sine_wav(frequency=440.0, duration=1.0)
+    audio_content = audio.from_base64(
+        base64.b64encode(wav_bytes).decode(), format="wav"
+    )
+
+    response = llm.prompt(
+        "Describe this audio. Is it speech, music, or a simple tone/beep?",
+        audio=audio_content,
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)tone|beep|sine|hz|pitch|sound|frequency|note",
+        response,
+        expectation="LLM should identify the audio as a tone or beep.",
+    )
+
+
+# %%
+# --- Test Case: Audio inputs (local file) ---
+
+
+@benchmark_test(
+    include={
+        "google/gemini-3-flash-preview",
+    }
+)
+@kbench.task()
+def test_audio_local_file(llm):
+    """Sends a WAV audio file loaded from disk to the model."""
+    wav_bytes = generate_sine_wav(frequency=440.0, duration=1.0)
+
+    fd, temp_path = tempfile.mkstemp(suffix=".wav")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(wav_bytes)
+
+        audio_content = audio.from_path(temp_path)
+        response = llm.prompt(
+            "What kind of audio is this? Answer in one sentence.",
+            audio=audio_content,
+        )
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)tone|beep|sine|hz|pitch|sound|frequency|note",
+        response,
+        expectation="LLM should identify the audio as a tone or beep.",
     )
 
 
