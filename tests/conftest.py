@@ -15,6 +15,7 @@
 import pytest
 
 from kaggle_benchmarks import ExecutionMode, clients, config, contexts, events
+from tests.mocks import MockedChat
 
 
 @pytest.fixture(autouse=True)
@@ -35,3 +36,13 @@ def cfg():
     yield config
     config.__dict__.update(before)
     config.apply()
+
+
+@pytest.fixture()
+def duck():
+    yield MockedChat.from_contents(["quack"], name="Duck", cycle=True)
+
+
+@pytest.fixture()
+def goose():
+    yield MockedChat.from_contents(["honk"], name="Goose", cycle=True)

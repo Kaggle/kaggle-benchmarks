@@ -18,27 +18,12 @@ import pandas as pd
 import panel as pn
 import pytest
 
-from kaggle_benchmarks import actors, chats, config, runs, tasks, utils
-from kaggle_benchmarks.actors.llms import LLMResponse
-
-
-class Duck(actors.LLMChat):
-    def invoke(self, messages, **kwargs):
-        return LLMResponse(content="quack")
+from kaggle_benchmarks import chats, config, runs, tasks, utils
 
 
 @tasks.task()
 def task_that_errors():
     raise ValueError("This is an intentional error")
-
-
-class Goose(actors.LLMChat):
-    "quack"
-
-
-@pytest.fixture
-def duck():
-    yield Duck()
 
 
 @tasks.task()
@@ -192,7 +177,9 @@ def test_run_with_subrun_on_exception(monkeypatch, continue_with_exceptions):
 
 
 @pytest.mark.parametrize("continue_with_exceptions", [True, False])
-def test_run_evaluating_subrun_on_exception(monkeypatch, continue_with_exceptions):
+def test_run_evaluating_subrun_on_exception(
+    duck, monkeypatch, continue_with_exceptions
+):
     monkeypatch.setattr(config, "continue_with_exceptions", continue_with_exceptions)
 
     @tasks.task()
@@ -213,7 +200,7 @@ def test_run_evaluating_subrun_on_exception(monkeypatch, continue_with_exception
         )
 
     if continue_with_exceptions:
-        run = wrapper_task.run(llm=Duck())
+        run = wrapper_task.run(llm=duck)
         assert not run.passed
         assert run.status == utils.Status.FAILED
         assert (
@@ -222,7 +209,7 @@ def test_run_evaluating_subrun_on_exception(monkeypatch, continue_with_exception
         )
     else:
         with pytest.raises(ValueError, match="This is an intentional error"):
-            wrapper_task.run(llm=Duck())
+            wrapper_task.run(llm=duck)
 
 
 @pytest.mark.parametrize("continue_with_exceptions", [True, False])
@@ -319,10 +306,10 @@ def test_bind_dataframe():
 
 
 @pytest.mark.parametrize("mode", ["tabs", "columns"])
-def test_pivot(duck, mode):
+def test_pivot(duck, goose, mode):
     index = ["a", "b", "c"]
     runs = bench.evaluate(
-        grid={"llm": [duck, Duck(name="goose")]},
+        grid={"llm": [duck, goose]},
         evaluation_data=pd.DataFrame({"message": ["meow", "howl", "moo"]}, index=index),
     )
 

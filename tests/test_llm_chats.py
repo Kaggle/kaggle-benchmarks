@@ -19,7 +19,9 @@ import pytest
 from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.prompting import handler
+from tests.mocks import MockedChat
 
 
 class Ferret(actors.LLMChat):
@@ -200,7 +202,10 @@ def test_video_message_payload():
 
     msg = messages.Message(sender=actors.user, content=video)
     assert msg.payload == [
-        {"type": "image_url", "image_url": {"url": "https://www.youtube.com/watch?v=abc123"}}
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://www.youtube.com/watch?v=abc123"},
+        }
     ]
 
 
@@ -245,3 +250,17 @@ def test_chat_fork():
             assert len(of.history) == 2
 
         assert len(p.history) == 2
+
+
+def test_invoke_llmmessage():
+    mocked_chat = MockedChat.from_contents(["test response"])
+    messages = [LLMMessage(sender=actors.user, content="hello")]
+
+    response = mocked_chat.invoke(messages=messages, temperature=0.5)
+
+    assert isinstance(response, LLMMessage)
+    assert response.content == "test response"
+    assert response.sender is mocked_chat
+    assert len(mocked_chat.invocations) == 1
+    assert mocked_chat.invocations[0][0] == messages
+    assert mocked_chat.invocations[0][1] == {"temperature": 0.5}

@@ -17,8 +17,8 @@ import re
 
 import pytest
 
-from kaggle_benchmarks import actors, assertions, tasks
-from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks import assertions, tasks
+from tests.mocks import MockedChat
 
 
 def assert_assertion_result_matches(
@@ -156,16 +156,6 @@ def test_regex_assertions():
             "source_code": "r_not_contains_fail_custom = assertions.assert_not_contains_regex(",
         },
     )
-
-
-class Duck(actors.LLMChat):
-    def invoke(self, messages, system, **kwargs):
-        return LLMResponse(content="quack")
-
-
-@pytest.fixture
-def duck():
-    yield Duck()
 
 
 @assertions.assertion_handler()
@@ -349,14 +339,6 @@ def test_assert_fail():
 
 
 def test_assess_response_with_judge():
-    class MockJudge(actors.LLMChat):
-        def __init__(self, return_value):
-            super().__init__(name="MockJudge")
-            self.return_value = return_value
-
-        def prompt(self, message, schema=None, **kwargs):
-            return self.return_value
-
     # Judge returns dict result
     report_dict = {
         "results": [
@@ -368,7 +350,7 @@ def test_assess_response_with_judge():
             }
         ]
     }
-    judge_pass = MockJudge(report_dict)
+    judge_pass = MockedChat.from_contents_data([report_dict], name="MockJudge")
 
     report = assertions.assess_response_with_judge(
         criteria=["some expectation"],
@@ -393,7 +375,9 @@ def test_assess_response_with_judge():
             )
         ]
     )
-    judge_obj = MockJudge(report_obj)
+    judge_obj = MockedChat.from_contents(
+        [report_obj.model_dump_json()], name="MockJudge"
+    )
     report = assertions.assess_response_with_judge(
         criteria=["some expectation"],
         response_text="some response",

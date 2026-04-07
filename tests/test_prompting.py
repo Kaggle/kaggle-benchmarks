@@ -19,9 +19,9 @@ from dataclasses import dataclass
 import pydantic
 import pytest
 
-from kaggle_benchmarks import actors, chats, messages, prompting
-from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks import chats, prompting
 from kaggle_benchmarks.prompting import ResponseParsingError
+from tests.mocks import MockedChat
 
 
 def test_str():
@@ -81,19 +81,17 @@ def test_llm():
         test_field: str = "default"
         another_field: int = 1
 
-    class LLM(actors.LLMChat):
-        def invoke(
-            self, messages: list[messages.Message], system: str | None, **kwargs
-        ) -> LLMResponse:
-            texts = "\n".join(m.text for m in messages) + str(system)
-            assert "test_field" in texts
-            assert "another_field" in texts
-            return LLMResponse(content='{"test_field": "a", "another_field": 2}')
-
+    llm = MockedChat.from_contents(['{"test_field": "a", "another_field": 2}'])
     with chats.new("test"):
-        response = LLM().prompt(message="?", schema=A)
+        response = llm.prompt(message="?", schema=A)
         assert isinstance(response, A)
         assert response == A("a", 2)
+
+        assert len(llm.invocations) == 1
+        invoked_messages, _ = llm.invocations[0]
+        instructions = invoked_messages[-1].content
+        assert "test_field" in instructions
+        assert "another_field" in instructions
 
 
 def test_pydantic_error():
