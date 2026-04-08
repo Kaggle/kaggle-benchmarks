@@ -109,10 +109,6 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
             ],
         }
 
-    def _dump_invocation(self, tool):
-        if False:
-            yield
-
     def _dump_message(self, message: messages.Message):
         """Fallback method, rendering unrecognized message objects safely."""
         logging.warning(
