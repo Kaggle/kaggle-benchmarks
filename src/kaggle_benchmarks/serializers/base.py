@@ -75,6 +75,8 @@ class BaseSerializer:
             yield from self.dump_video(message)
         elif isinstance(content, dict):
             yield from self.dump_json_message(message)
+        elif isinstance(content, tools.ToolInvocationResult):
+            yield from self.dump_tool_invocation(message)
         elif isinstance(content, pydantic.BaseModel):
             yield from self.dump_json_message(
                 _copy_replace(message, content=message.content.model_dump())
@@ -83,8 +85,6 @@ class BaseSerializer:
             yield from self.dump_json_message(
                 _copy_replace(message, content=dataclasses.asdict(content))
             )
-        elif isinstance(content, tools.ToolInvocationResult):
-            yield from self.dump_tool_invocation(message)
         else:
             yield from self._dump_message(message)
 

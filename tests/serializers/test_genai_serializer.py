@@ -153,6 +153,25 @@ MESSAGE_FORMATS = [
         ],
         id="pydantic_message",
     ),
+    pytest.param(
+        messages.Message(
+            content=ToolInvocationResult(
+                name="test_tool", call_id="123", arguments={}, output="result"
+            ),
+            sender=actors.user,
+        ),
+        [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(
+                        name="test_tool", response={"result": "result"}
+                    ),
+                ],
+            )
+        ],
+        id="message_with_tool_invocation_result",
+    ),
 ]
 
 

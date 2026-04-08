@@ -79,19 +79,12 @@ class GenAISerializer(BaseSerializer):
     def dump_llm_message(self, message: llm_messages.LLMMessage):
         """Serializes LLM Messages into appropriate GenAI Tool parts."""
         parts = []
+
         for call in message.tool_calls or []:
-            if isinstance(call, tool_utils.ToolInvocationResult):
-                parts.append(
-                    types.Part.from_function_response(
-                        name=call.name, response={"result": call.output}
-                    )
-                )
-            else:
-                args = call.arguments
-                parts.append(types.Part.from_function_call(name=call.name, args=args))
+            parts.extend(self._dump_invocation(call))
 
         if message.content:
-            parts.append(types.Part.from_text(text=message.content))
+            parts.append(types.Part.from_text(text=message.payload))
 
         if not parts:
             parts.append(types.Part.from_text(text=""))
@@ -106,3 +99,23 @@ class GenAISerializer(BaseSerializer):
         yield from self.dump_text_message(
             messages.Message(sender=message.sender, content=message.payload)
         )
+
+    def dump_tool_invocation(
+        self, message: messages.Message[tool_utils.ToolInvocationResult]
+    ):
+        yield types.Content(
+            role=self.get_role(message.sender),
+            parts=list(self._dump_invocation(message.content)),
+        )
+
+    def _dump_invocation(
+        self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
+    ):
+        if isinstance(call, tool_utils.ToolInvocationResult):
+            yield types.Part.from_function_response(
+                name=call.name, response={"result": call.output}
+            )
+
+        else:
+            args = call.arguments
+            yield types.Part.from_function_call(name=call.name, args=args)
