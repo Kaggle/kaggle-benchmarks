@@ -45,7 +45,7 @@ class GenAISerializer(BaseSerializer):
     def dump_text_message(self, message: messages.Message[str]):
         """Serializes a standard textual payload into a Part object."""
         yield types.Content(
-            role=self.get_role(message.sender), parts=[types.Part(text=message.text)]
+            role=self.get_role(message.sender), parts=[types.Part(text=message.content)]
         )
 
     def dump_image(self, message: messages.Message[images.ImageContent]):
@@ -104,5 +104,5 @@ class GenAISerializer(BaseSerializer):
             "Unrecognized message format encountered: %s", type(message.content)
         )
         yield from self.dump_text_message(
-            messages.Message(sender=message.sender, content=str(message.content))
+            messages.Message(sender=message.sender, content=message.payload)
         )

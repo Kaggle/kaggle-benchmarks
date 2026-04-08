@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
+
+import pydantic
 import pytest
 from google.genai import types
 
@@ -21,6 +24,18 @@ from kaggle_benchmarks.content_types import videos
 from kaggle_benchmarks.content_types.images import ImageBase64
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.tools import ToolInvocation, ToolInvocationResult
+
+
+@dataclasses.dataclass
+class DummyDataclass:
+    foo: str
+    bar: int
+
+
+class DummyPydantic(pydantic.BaseModel):
+    foo: str
+    bar: int
+
 
 # Pre-defined base64 string for reuse
 B64_STRING = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
@@ -108,13 +123,42 @@ MESSAGE_FORMATS = [
         ],
         id="llm_message_with_tool_invocation_result",
     ),
+    pytest.param(
+        messages.Message(
+            content=DummyDataclass(foo="baz", bar=42),
+            sender=actors.user,
+        ),
+        [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part(text='{"foo": "baz", "bar": 42}'),
+                ],
+            )
+        ],
+        id="dataclass_message",
+    ),
+    pytest.param(
+        messages.Message(
+            content=DummyPydantic(foo="baz", bar=42),
+            sender=actors.user,
+        ),
+        [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part(text='{"foo": "baz", "bar": 42}'),
+                ],
+            )
+        ],
+        id="pydantic_message",
+    ),
 ]
 
 
 @pytest.mark.parametrize("message, expected_raw_messages", MESSAGE_FORMATS)
 def test_dump_message(message, expected_raw_messages):
     serializer = genai_serializer.GenAISerializer()
-    # Pydantic models serialization equality
     actual = [c.model_dump() for c in serializer.dump_message(message)]
     expected = [c.model_dump() for c in expected_raw_messages]
     assert actual == expected

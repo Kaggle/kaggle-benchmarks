@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
+
+import pydantic
 import pytest
 
 from kaggle_benchmarks import chats, llm_messages, messages
@@ -20,6 +23,18 @@ from kaggle_benchmarks.content_types import videos
 from kaggle_benchmarks.content_types.images import ImageBase64, ImageURL
 from kaggle_benchmarks.serializers import openai as openai_serializer
 from kaggle_benchmarks.tools import ToolInvocation, ToolInvocationResult
+
+
+@dataclasses.dataclass
+class DummyDataclass:
+    foo: str
+    bar: int
+
+
+class DummyPydantic(pydantic.BaseModel):
+    foo: str
+    bar: int
+
 
 # A shared set of message formats and their expected outputs.
 # Each tuple is: (message, expected_raw_messages)
@@ -103,6 +118,32 @@ MESSAGE_FORMATS = [
             },
         ],
         id="llm_message_with_tool_invocation_result",
+    ),
+    pytest.param(
+        messages.Message(
+            content=DummyDataclass(foo="baz", bar=42),
+            sender=actors.user,
+        ),
+        [
+            {
+                "role": "user",
+                "content": '{"foo": "baz", "bar": 42}',
+            },
+        ],
+        id="dataclass_message",
+    ),
+    pytest.param(
+        messages.Message(
+            content=DummyPydantic(foo="baz", bar=42),
+            sender=actors.user,
+        ),
+        [
+            {
+                "role": "user",
+                "content": '{"foo": "baz", "bar": 42}',
+            },
+        ],
+        id="pydantic_message",
     ),
 ]
 

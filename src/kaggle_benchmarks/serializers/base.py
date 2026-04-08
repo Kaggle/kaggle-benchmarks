@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import copy
+import dataclasses
 import itertools
 import json
 
@@ -24,6 +25,13 @@ from kaggle_benchmarks.content_types import images, videos
 
 class UnsupportedMessageFormat(ValueError):
     pass
+
+
+def _copy_replace(message, **new_fields):
+    new = copy.copy(message)
+    for k, v in new_fields.items():
+        setattr(new, k, v)
+    return new
 
 
 class BaseSerializer:
@@ -68,9 +76,13 @@ class BaseSerializer:
         elif isinstance(content, dict):
             yield from self.dump_json_message(message)
         elif isinstance(content, pydantic.BaseModel):
-            msg = copy.copy(message)
-            msg.content = content.model_dump()
-            yield from self.dump_json_message(msg)
+            yield from self.dump_json_message(
+                _copy_replace(message, content=message.content.model_dump())
+            )
+        elif dataclasses.is_dataclass(content) and not isinstance(content, type):
+            yield from self.dump_json_message(
+                _copy_replace(message, content=dataclasses.asdict(content))
+            )
         elif isinstance(content, tools.ToolInvocationResult):
             yield from self.dump_tool_invocation(message)
         else:
@@ -96,13 +108,13 @@ class BaseSerializer:
     def dump_json_message(self, message: msg.Message[dict]):
         """Serializes a JSON dictionary message by stringifying it as text by default."""
         yield from self.dump_text_message(
-            message.copy(new_content=json.dumps(message.content))
+            _copy_replace(message, content=json.dumps(message.content))
         )
 
-    def dump_image(self, image: msg.Message[images.ImageContent]):
-        """Serializes an image content object."""
+    def dump_image(self, message: msg.Message[images.ImageContent]):
+        """Serializes an image message."""
         raise NotImplementedError()
 
-    def dump_video(self, video: msg.Message[videos.VideoContent]):
-        """Serializes a video content object."""
+    def dump_video(self, message: msg.Message[videos.VideoContent]):
+        """Serializes a video message."""
         raise NotImplementedError()

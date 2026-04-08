@@ -386,7 +386,7 @@ class GoogleGenAI(LLMChat):
         self.model = model
         self.client = client
         self.serializer = genai_serializer.GenAISerializer(
-            roles_mapping={"assistant": "model", "system": "user"}
+            roles_mapping={"assistant": "model", "system": "user", "tool": "user"}
         )
 
     def _get_usage_meta(self, usage: types.UsageMetadata | None) -> dict[str, Any]:

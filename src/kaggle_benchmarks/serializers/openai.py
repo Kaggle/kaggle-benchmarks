@@ -62,9 +62,6 @@ class OpenAICompletionSerializer(BaseSerializer):
             "content": message.content,
         }
 
-    def _dump_message(self, message: messages.Message):
-        return super()._dump_message(message)
-
     def dump_tool_invocation(
         self, message: messages.Message[tool_utils.ToolInvocationResult]
     ):
@@ -118,7 +115,7 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
         yield {
             "role": self.get_role(message.sender),
             "content": [
-                {"type": "video_url", "video_url": {"url": video.url}},
+                {"type": "image_url", "image_url": {"url": video.url}},
             ],
         }
 
