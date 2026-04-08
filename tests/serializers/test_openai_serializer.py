@@ -64,21 +64,6 @@ MESSAGE_FORMATS = [
         id="image_message",
     ),
     pytest.param(
-        messages.Message(
-            content=videos.VideoURL(url="https://youtube.com/watch?v=dummy"),
-            sender=actors.user,
-        ),
-        [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "https://youtube.com/watch?v=dummy"},
-                ],
-            }
-        ],
-        id="video_message",
-    ),
-    pytest.param(
         llm_messages.LLMMessage(
             content="",
             sender=actors.system,
@@ -203,7 +188,7 @@ def test_dump_chat():
     msgs = [
         messages.Message(content="Hello", sender=actors.user),
         messages.Message(
-            content=ImageURL(url="http://example.com/a.png", caption="A cat"),
+            content=ImageURL(url="http://example.com/a.png"),
             sender=actors.user,
         ),
     ]
@@ -213,7 +198,6 @@ def test_dump_chat():
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "A cat"},
                 {"type": "image_url", "image_url": {"url": "http://example.com/a.png"}},
             ],
         },
@@ -233,6 +217,26 @@ def test_dump_image_message_model_proxy():
                 {
                     "type": "image_url",
                     "image_url": {"url": "data:image/png;base64,..."},
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_video_message_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=videos.VideoURL(url="https://youtube.com/watch?v=dummy"),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://youtube.com/watch?v=dummy"},
                 },
             ],
         }

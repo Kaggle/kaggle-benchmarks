@@ -27,21 +27,12 @@ class OpenAICompletionSerializer(BaseSerializer):
     def dump_image(self, message: messages.Message[images.ImageContent]):
         """Serializes an image content object into the API's image_url format."""
         image = message.content
+        caption = [{"type": "text", "text": image.caption}] if image.caption else []
         yield {
             "role": self.get_role(message.sender),
-            "content": [
-                {"type": "text", "text": image.caption},
+            "content": caption
+            + [
                 {"type": "image_url", "image_url": {"url": image.url}},
-            ],
-        }
-
-    def dump_video(self, message: messages.Message[videos.VideoContent]):
-        """Serializes a video content object as input text representing its URL by default."""
-        video = message.content
-        yield {
-            "role": self.get_role(message.sender),
-            "content": [
-                {"type": "text", "text": video.url},
             ],
         }
 
@@ -94,11 +85,10 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
     def dump_image(self, message: messages.Message[images.ImageContent]):
         """Serializes images natively as base64-encoded data URLs compatible with Model Proxy."""
         image = message.content
+        caption = [{"type": "text", "text": image.caption}] if image.caption else []
         yield {
             "role": self.get_role(message.sender),
-            "content": [{"type": "text", "text": image.caption}]
-            if image.caption
-            else []
+            "content": caption
             + [
                 {
                     "type": "image_url",
