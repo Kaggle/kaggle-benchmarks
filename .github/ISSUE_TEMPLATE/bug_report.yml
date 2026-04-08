@@ -156,9 +156,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Important:** To help us troubleshoot your issue, please share any associated Kaggle assets (notebooks, tasks, benchmarks, models, datasets) with **kaggle-ai-resources-support@google.com** as a **Viewer**.
+        ### 🔒 Share Your Kaggle Assets (Required for Debugging)
 
-        To do this:
+        **We need access to your notebooks/assets to investigate your issue.** Without them, we cannot reproduce or debug the problem and your issue may be closed.
+
+        Sharing with `kaggle-ai-resources-support@google.com` grants **Viewer** access **only to the Kaggle support team**. Your code and data remain **private and confidential** — they will not be shared publicly, leaked, or used for any purpose other than troubleshooting your issue.
+
+        **Steps to share:**
         1. Go to your asset on Kaggle (notebook, dataset, model, etc.)
         2. Click the **Share** button
         3. Search for `kaggle-ai-resources-support@google.com`
@@ -171,11 +175,12 @@ body:
       label: Shared Asset Links
       description: |
         Paste links to any Kaggle assets you've shared with kaggle-ai-resources-support@google.com.
+        Sharing is required for us to debug your issue. Your assets will only be visible to the Kaggle support team and will remain fully confidential.
       placeholder: |
         - https://www.kaggle.com/code/yourusername/your-notebook
         - https://www.kaggle.com/datasets/yourusername/your-dataset
     validations:
-      required: false
+      required: true
 
   # ── Additional Context ────────────────────────────────────────
 
