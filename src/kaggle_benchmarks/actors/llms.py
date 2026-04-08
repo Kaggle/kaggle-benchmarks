@@ -85,11 +85,9 @@ print(outer_t)
 
 """
 
-import base64
 import dataclasses
 import enum
 import json
-import mimetypes
 import typing
 from typing import TYPE_CHECKING, Any, Iterator, TypeVar
 
@@ -100,6 +98,8 @@ from google.genai import types
 from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.serializers import genai as genai_serializer
+from kaggle_benchmarks.serializers import openai as openai_serializer
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -278,6 +278,9 @@ class OpenAI(LLMChat):
         super().__init__(**kwargs)
         self.model = model
         self.client = client
+        self.serializer = openai_serializer.ModelProxyOpenAISerializer(
+            roles_mapping={"tool": "system"}
+        )
 
     def _get_usage_meta(
         self, usage: openai.types.CompletionUsage | None
@@ -298,9 +301,12 @@ class OpenAI(LLMChat):
     def invoke(
         self, messages: list[messages.Message], system: str | None, **kwargs
     ) -> LLMResponse | Iterator[LLMResponse]:
-        raw_messages = self._get_raw_messages(messages)
         if system:
-            raw_messages = [{"role": "system", "content": system}] + raw_messages
+            from kaggle_benchmarks.messages import Message
+
+            messages = [Message(sender=actors.system, content=system)] + messages
+
+        raw_messages = list(self.serializer.dump_messages(messages))
 
         if self._should_remove_seed():
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
@@ -308,17 +314,6 @@ class OpenAI(LLMChat):
             kwargs.pop("seed", None)
 
         return self._call_api(raw_messages, **kwargs)
-
-    def _get_raw_messages(self, messages: list[messages.Message]):
-        return [
-            {
-                "role": message.sender.role
-                if message.sender.role != "tool"
-                else "system",  # TODO: Remove this renaming once ModelProxy supports tools
-                "content": message.payload,
-            }
-            for message in messages
-        ]
 
     def _get_stream_response(
         self, response_stream: openai.Stream
@@ -390,6 +385,9 @@ class GoogleGenAI(LLMChat):
         super().__init__(**kwargs)
         self.model = model
         self.client = client
+        self.serializer = genai_serializer.GenAISerializer(
+            roles_mapping={"assistant": "model", "system": "user", "tool": "user"}
+        )
 
     def _get_usage_meta(self, usage: types.UsageMetadata | None) -> dict[str, Any]:
         if usage is None:
@@ -399,60 +397,6 @@ class GoogleGenAI(LLMChat):
             "output_tokens": usage.candidates_token_count,
             **_extract_extra_usage_metadata(usage),
         }
-
-    def _get_raw_messages(self, messages: list[messages.Message]):
-        """Converts benchmark messages to Google GenAI's Content format."""
-        raw_messages = []
-        for message in messages:
-            role = "model" if message.sender.role == "assistant" else "user"
-            content = message.content
-            payload = message.payload
-
-            parts = []
-
-            # Video URLs are passed through directly for the model provider to resolve.
-            if isinstance(content, videos.VideoContent):
-                parts.append(
-                    types.Part.from_uri(
-                        file_uri=content.url, mime_type=content.mime_type
-                    )
-                )
-
-            elif isinstance(payload, str):
-                parts.append(types.Part(text=payload))
-
-            # Note: The Gemini API is smart enough to process image data URLs even when they are passed as part of a plain text string.
-            elif isinstance(payload, list) and payload and isinstance(payload[0], dict):
-                for item in payload:
-                    if item.get("type") == "image_url":
-                        url = item["image_url"]["url"]
-
-                        image_bytes = None
-                        mime_type = "image/jpeg"
-                        if url.startswith("data:"):
-                            # Handle base64 data URLs
-                            header, b64_string = url.split(",", 1)
-                            mime_type = header.split(";")[0].split(":")[1]
-                            image_bytes = base64.b64decode(b64_string)
-                        else:
-                            # Handle remote http/https URLs
-                            b64_string = images.image_url_to_base64(url)
-                            image_bytes = base64.b64decode(b64_string)
-                            mime_type = mimetypes.guess_type(url)[0] or "image/jpeg"
-
-                        if image_bytes:
-                            parts.append(
-                                types.Part.from_bytes(
-                                    data=image_bytes, mime_type=mime_type
-                                )
-                            )
-            else:
-                # Fallback for any other unexpected payload types
-                parts.append(types.Part(text=str(payload)))
-
-            raw_messages.append(types.Content(role=role, parts=parts))
-
-        return raw_messages
 
     def _get_stream_response(
         self, response_stream: Iterator[types.GenerateContentResponse]
@@ -467,7 +411,7 @@ class GoogleGenAI(LLMChat):
     def invoke(
         self, messages: list[messages.Message], system: str | None, **kwargs
     ) -> LLMResponse | Iterator[LLMResponse]:
-        raw_messages = self._get_raw_messages(messages)
+        raw_messages = list(self.serializer.dump_messages(messages))
 
         config_params = {}
         if system:

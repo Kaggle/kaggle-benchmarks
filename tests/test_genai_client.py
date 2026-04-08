@@ -153,10 +153,11 @@ def test_invoke_with_image_input():
         actors.user.send(mock_image)
         llm.prompt("What is in this image?")
 
-    assert len(llm.contents) == 2
+    assert len(llm.contents) == 1
+    assert len(llm.contents[0].parts) == 2
 
     image_part = llm.contents[0].parts[0]
     assert image_part.text is None or image_part.text == ""
     assert image_part.inline_data is not None
     assert image_part.inline_data.mime_type == "image/jpeg"
-    assert llm.contents[1].parts[0].text == "What is in this image?"
+    assert llm.contents[0].parts[1].text == "What is in this image?"
