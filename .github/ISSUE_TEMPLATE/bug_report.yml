@@ -158,7 +158,7 @@ body:
       value: |
         **Important:** To troubleshoot your issue, we need access to your Kaggle assets (notebooks, tasks, benchmarks, models, datasets). Please share them with **kaggle-ai-resources-support@google.com** as a **Viewer**.
 
-        **Privacy note:** This is a restricted Google Group used only by the Kaggle support team. Your code and data will not be shared publicly or with anyone outside the team. Access is used solely for debugging your issue.
+        **Privacy note:** This is a restricted group used only by the Kaggle support team. Your code and data will not be shared publicly or with anyone outside the team. Access is used solely for debugging your issue.
 
         **Without access to your assets, we may not be able to diagnose or resolve your issue.**
 
