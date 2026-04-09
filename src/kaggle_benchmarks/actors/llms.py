@@ -97,7 +97,7 @@ from google.genai import types
 
 from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
-from kaggle_benchmarks.content_types import audio, images, videos
+from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.content_types.audio import AudioContent
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
