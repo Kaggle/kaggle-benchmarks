@@ -14,9 +14,6 @@
 
 import base64
 import pathlib
-import wave
-
-import numpy as np
 
 from kaggle_benchmarks.content_types import audio
 
@@ -74,14 +71,6 @@ def test_from_base64_bytes():
 def test_url():
     a = audio.AudioContent(B64_STRING, mime_type="audio/mp3")
     assert a.url == f"data:audio/mp3;base64,{B64_STRING}"
-
-
-def test_get_payload():
-    a = audio.AudioContent(B64_STRING, mime_type="audio/mp3")
-    payload = a.get_payload()
-    assert payload == [
-        {"type": "input_audio", "input_audio": {"data": B64_STRING, "format": "mp3"}}
-    ]
 
 
 def test_from_path(tmp_path: pathlib.Path):

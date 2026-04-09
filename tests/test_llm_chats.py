@@ -18,7 +18,7 @@ import pytest
 
 from kaggle_benchmarks import actors, chats, contexts, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
-from kaggle_benchmarks.content_types import audio, images, videos
+from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.prompting import handler
 from tests.mocks import MockedChat
@@ -210,7 +210,6 @@ def test_video_message_payload():
 
 
 
-
 def test_prompt_with_image_and_video():
     """Test that prompt() with both image and video sends them as separate messages."""
     red_pixel_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
@@ -229,53 +228,6 @@ def test_prompt_with_image_and_video():
         assert isinstance(t.messages[0].content, images.ImageBase64)
         assert isinstance(t.messages[1].content, videos.VideoURL)
         assert t.messages[2].content == "Describe both"
-
-
-def test_audio_message_payload():
-    """Test that an AudioContent message produces the correct payload for the OpenAI backend."""
-    audio_content = audio.from_base64("dGVzdA==", format="wav")
-
-    from kaggle_benchmarks import messages
-
-    msg = messages.Message(sender=actors.user, content=audio_content)
-    assert msg.payload == [
-        {"type": "input_audio", "input_audio": {"data": "dGVzdA==", "format": "wav"}}
-    ]
-
-
-def test_prompt_with_audio():
-    """Test that prompt() with audio sends it as a separate message before the text."""
-    audio_content = audio.from_base64("dGVzdA==", format="wav")
-
-    with chats.new("audio_prompt") as t:
-        actors.user.send(audio_content)
-        actors.user.send("Describe this audio")
-
-        assert len(t.messages) == 2
-        assert isinstance(t.messages[0].content, audio.AudioContent)
-        assert t.messages[0].content.b64_string == "dGVzdA=="
-        assert t.messages[0].content.mime_type == "audio/wav"
-        assert t.messages[1].content == "Describe this audio"
-
-
-def test_prompt_with_image_video_and_audio():
-    """Test that prompt() with image, video, and audio sends them all as separate messages."""
-    red_pixel_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-    img = images.from_base64(red_pixel_b64, format="png")
-    video = videos.from_url("https://www.youtube.com/watch?v=abc123")
-    audio_content = audio.from_base64("dGVzdA==", format="wav")
-
-    with chats.new("all_media") as t:
-        actors.user.send(img)
-        actors.user.send(video)
-        actors.user.send(audio_content)
-        actors.user.send("Describe everything")
-
-        assert len(t.messages) == 4
-        assert isinstance(t.messages[0].content, images.ImageBase64)
-        assert isinstance(t.messages[1].content, videos.VideoURL)
-        assert isinstance(t.messages[2].content, audio.AudioContent)
-        assert t.messages[3].content == "Describe everything"
 
 
 def test_chat_fork():

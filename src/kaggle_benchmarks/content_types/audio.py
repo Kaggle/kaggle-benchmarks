@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import base64
-import io
 import mimetypes
 
 import httpx
@@ -43,15 +42,6 @@ class AudioContent:
     def _format(self) -> str:
         """Returns the short format name (e.g. 'mp3', 'wav') from the MIME type."""
         return self.mime_type.split("/")[-1]
-
-    def get_payload(self) -> list[dict[str, str | dict[str, str]]]:
-        """Returns the audio payload in the OpenAI input_audio format."""
-        return [
-            {
-                "type": "input_audio",
-                "input_audio": {"data": self.b64_string, "format": self._format},
-            }
-        ]
 
     def to_mime(self) -> dict[str, str]:
         return {

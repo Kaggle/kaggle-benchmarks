@@ -34,7 +34,6 @@ Usage:
 <<<<<<< HEAD
 =======
 import base64
-import io
 import json
 >>>>>>> 1334913 (checkpoint)
 import os
@@ -73,6 +72,18 @@ TEST_LLM_NAMES = {
 # Models to be used as judges for evaluation.
 JUDGE_LLM_NAMES = {
     "google/gemini-2.5-flash",
+}
+
+# Models that support audio input.
+AUDIO_LLM_NAMES = {
+    "google/gemini-2.0-flash",
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+    "google/gemini-3-flash-preview",
+    "google/gemini-3.1-flash-lite-preview",
+    "anthropic/claude-haiku-4-5@20251001",
+    "anthropic/claude-opus-4-5@20251101",
+    "anthropic/claude-sonnet-4-5@20250929",
 }
 
 
@@ -517,51 +528,23 @@ def test_video_url(llm):
 # --- Test Case: Audio inputs (base64) ---
 
 
-def generate_sine_wav(frequency: float = 440.0, duration: float = 1.0) -> bytes:
-    """Generates a mono 16-bit PCM WAV file with a sine wave tone."""
-    import math
-    import struct
-    import wave
-
-    sample_rate = 16000
-    n_samples = int(sample_rate * duration)
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        frames = b"".join(
-            struct.pack(
-                "<h", int(32767 * 0.8 * math.sin(2 * math.pi * frequency * i / sample_rate))
-            )
-            for i in range(n_samples)
-        )
-        wav.writeframes(frames)
-    return buf.getvalue()
+SPEECH_FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "speech.mp3")
+SPEECH_TRANSCRIPTION_PATTERN = r"(?i)quick\s+brown\s+fox|lazy\s+dog"
 
 
-@benchmark_test(
-    include={
-        "google/gemini-3-flash-preview",
-    }
-)
+@benchmark_test(include=AUDIO_LLM_NAMES)
 @kbench.task()
 def test_audio_base64(llm):
-    """Sends a base64-encoded WAV audio clip to the model."""
-    wav_bytes = generate_sine_wav(frequency=440.0, duration=1.0)
-    audio_content = audio.from_base64(
-        base64.b64encode(wav_bytes).decode(), format="wav"
-    )
+    """Sends a base64-encoded speech audio clip and asks the model to transcribe it."""
+    with open(SPEECH_FIXTURE, "rb") as f:
+        audio_content = audio.from_base64(base64.b64encode(f.read()).decode(), format="mp3")
 
-    response = llm.prompt(
-        "Describe this audio. Is it speech, music, or a simple tone/beep?",
-        audio=audio_content,
-    )
+    response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
 
     kbench.assertions.assert_contains_regex(
-        r"(?i)tone|beep|sine|hz|pitch|sound|frequency|note",
+        SPEECH_TRANSCRIPTION_PATTERN,
         response,
-        expectation="LLM should identify the audio as a tone or beep.",
+        expectation="LLM should transcribe the speech audio.",
     )
 
 
@@ -569,34 +552,61 @@ def test_audio_base64(llm):
 # --- Test Case: Audio inputs (local file) ---
 
 
-@benchmark_test(
-    include={
-        "google/gemini-3-flash-preview",
-    }
-)
+@benchmark_test(include=AUDIO_LLM_NAMES)
 @kbench.task()
 def test_audio_local_file(llm):
-    """Sends a WAV audio file loaded from disk to the model."""
-    wav_bytes = generate_sine_wav(frequency=440.0, duration=1.0)
+    """Sends a speech audio file loaded from disk and asks the model to transcribe it."""
+    audio_content = audio.from_path(SPEECH_FIXTURE)
 
-    fd, temp_path = tempfile.mkstemp(suffix=".wav")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(wav_bytes)
-
-        audio_content = audio.from_path(temp_path)
-        response = llm.prompt(
-            "What kind of audio is this? Answer in one sentence.",
-            audio=audio_content,
-        )
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
 
     kbench.assertions.assert_contains_regex(
-        r"(?i)tone|beep|sine|hz|pitch|sound|frequency|note",
+        SPEECH_TRANSCRIPTION_PATTERN,
         response,
-        expectation="LLM should identify the audio as a tone or beep.",
+        expectation="LLM should transcribe the speech audio.",
+    )
+
+
+# %%
+# --- Test Case: Audio inputs (URL) ---
+
+
+@benchmark_test(include=AUDIO_LLM_NAMES)
+@kbench.task()
+def test_audio_url(llm):
+    """Sends speech audio loaded from a URL and asks the model to transcribe it."""
+    import http.server
+    import threading
+
+    with open(SPEECH_FIXTURE, "rb") as f:
+        audio_bytes = f.read()
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.end_headers()
+            self.wfile.write(audio_bytes)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.handle_request)
+    thread.start()
+
+    try:
+        audio_content = audio.from_url(f"http://127.0.0.1:{port}/speech.mp3")
+        response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
+    finally:
+        server.server_close()
+        thread.join()
+
+    kbench.assertions.assert_contains_regex(
+        SPEECH_TRANSCRIPTION_PATTERN,
+        response,
+        expectation="LLM should transcribe the speech audio.",
     )
 
 

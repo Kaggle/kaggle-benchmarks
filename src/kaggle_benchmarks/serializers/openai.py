@@ -17,7 +17,7 @@ import logging
 
 from kaggle_benchmarks import llm_messages, messages
 from kaggle_benchmarks import tools as tool_utils
-from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.content_types import audio, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer
 
 
@@ -106,6 +106,24 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
             "role": self.get_role(message.sender),
             "content": [
                 {"type": "image_url", "image_url": {"url": video.url}},
+            ],
+        }
+
+    def dump_audio(self, message: messages.Message[audio.AudioContent]):
+        """Serializes audio as input_audio for the OpenAI Chat Completions API."""
+        audio_content = message.content
+        caption = [{"type": "text", "text": audio_content.caption}] if audio_content.caption else []
+        yield {
+            "role": self.get_role(message.sender),
+            "content": caption
+            + [
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": audio_content.b64_string,
+                        "format": audio_content._format,
+                    },
+                },
             ],
         }
 
