@@ -156,7 +156,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Important:** To help us troubleshoot your issue, please share any associated Kaggle assets (notebooks, tasks, benchmarks, models, datasets) with **kaggle-ai-resources-support@google.com** as a **Viewer**.
+        **Important:** To troubleshoot your issue, we need access to your Kaggle assets (notebooks, tasks, benchmarks, models, datasets). Please share them with **kaggle-ai-resources-support@google.com** as a **Viewer**.
+
+        **Privacy note:** This is a restricted group used only by the Kaggle support team. Your code and data will not be shared publicly or with anyone outside the team. Access is used solely for debugging your issue.
+
+        **Without access to your assets, we may not be able to diagnose or resolve your issue.**
 
         To do this:
         1. Go to your asset on Kaggle (notebook, dataset, model, etc.)
@@ -175,7 +179,7 @@ body:
         - https://www.kaggle.com/code/yourusername/your-notebook
         - https://www.kaggle.com/datasets/yourusername/your-dataset
     validations:
-      required: false
+      required: true
 
   # ── Additional Context ────────────────────────────────────────
 
@@ -201,3 +205,5 @@ body:
           required: true
         - label: I am using the latest version of kaggle-benchmarks (or have noted my version above).
           required: false
+        - label: I have shared my relevant Kaggle assets (notebooks, datasets, etc.) with kaggle-ai-resources-support@google.com as a Viewer, or I have explained in the issue why I cannot.
+          required: true
