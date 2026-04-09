@@ -66,8 +66,11 @@ class AudioContent:
 
 def from_url(url: str, caption: str | None = None) -> AudioContent:
     """Creates AudioContent from a URL by fetching and base64-encoding the audio."""
-    response = httpx.get(url, timeout=600)
-    response.raise_for_status()
+    try:
+        response = httpx.get(url, timeout=600)
+        response.raise_for_status()
+    except httpx.HTTPError as e:
+        raise ValueError(f"Failed to fetch audio from URL: {url}") from e
     mime_type = (
         response.headers.get("content-type", "").split(";")[0]
         or mimetypes.guess_type(url)[0]
@@ -96,4 +99,8 @@ def from_base64(
     """Creates AudioContent directly from a base64 string."""
     if isinstance(b64_string, bytes):
         b64_string = b64_string.decode("utf-8")
+    try:
+        base64.b64decode(b64_string, validate=True)
+    except Exception as e:
+        raise ValueError(f"Invalid base64 audio data: {e}") from e
     return AudioContent(b64_string, mime_type=f"audio/{format}", caption=caption)
