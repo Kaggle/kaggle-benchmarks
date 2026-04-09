@@ -81,9 +81,6 @@ AUDIO_LLM_NAMES = {
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
     "google/gemini-3.1-flash-lite-preview",
-    "anthropic/claude-haiku-4-5@20251001",
-    "anthropic/claude-opus-4-5@20251101",
-    "anthropic/claude-sonnet-4-5@20250929",
 }
 
 
