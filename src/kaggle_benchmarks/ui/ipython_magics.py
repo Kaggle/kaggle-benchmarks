@@ -14,6 +14,37 @@
 
 from IPython import core
 
+_TASK_DECORATOR_DOC_URL = "https://github.com/Kaggle/kaggle-benchmarks/blob/ci/user_guide.md#the-kbenchtask-decorator"
+_RUN_EVALUATE_DOC_URL = "https://github.com/Kaggle/kaggle-benchmarks/blob/ci/quick_start.md#basic-task"
+
+# Shared warning style: red text and code blocks at the same font size.
+_WARNING_STYLE = "color: #d32f2f; font-size: 13px;"
+_CODE_STYLE = (
+    "color: #d32f2f; font-size: 13px; font-family: monospace;"
+    " background-color: #fce4ec; padding: 2px 4px; border-radius: 3px;"
+)
+
+_NO_TASKS_HTML = (
+    f'<div style="{_WARNING_STYLE}">'
+    "⚠️ No tasks detected. Please create a task using the "
+    f'<a href="{_TASK_DECORATOR_DOC_URL}" target="_blank">'
+    f'<code style="{_CODE_STYLE}">@kbench.task</code></a> decorator.'
+    "</div>"
+)
+
+_NO_RUNS_HTML = (
+    f'<div style="{_WARNING_STYLE}">'
+    "⚠️ No run results found for this task. Please call "
+    f'<a href="{_RUN_EVALUATE_DOC_URL}" target="_blank">'
+    f'<code style="{_CODE_STYLE}">.run()</code></a> or '
+    f'<a href="{_RUN_EVALUATE_DOC_URL}" target="_blank">'
+    f'<code style="{_CODE_STYLE}">.evaluate()</code></a>'
+    " before saving."
+    "</div>"
+)
+
+_KAGGLE_WORKING_DIR = "/kaggle/working"
+
 
 def autopilot(line):
     """
@@ -161,13 +192,19 @@ def choose(line):
 
     normalized_task_name = _normalize_name(task_name)
 
-    working_dir = Path("/kaggle/working")
+    working_dir = Path(_KAGGLE_WORKING_DIR)
     if not working_dir.is_dir():
         print(f"Directory not found: {working_dir}")
         return
 
     all_run_files = list(working_dir.glob("*.run.json"))
     all_task_files = list(working_dir.glob("*.task.json"))
+
+    if not all_task_files:
+        from IPython.display import HTML, display
+
+        display(HTML(_NO_TASKS_HTML))
+        return
 
     files_to_keep = set()
 
@@ -197,6 +234,11 @@ def choose(line):
                 print(f"Error removing file {f.name}: {e}")
         else:
             print(f"Kept: {f.name}")
+
+    if not matching_run_files:
+        from IPython.display import HTML, display
+
+        display(HTML(_NO_RUNS_HTML))
 
 
 ip = core.getipython.get_ipython()
