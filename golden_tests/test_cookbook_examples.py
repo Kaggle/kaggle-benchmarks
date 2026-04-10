@@ -31,7 +31,6 @@ Usage:
 """
 
 # %%
-import json
 import os
 import tempfile
 from contextlib import contextmanager
@@ -44,7 +43,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import messages
 from kaggle_benchmarks.content_types import images, videos
 
 # Models to be tested as the primary subject.
@@ -516,6 +514,7 @@ def test_video_url(llm):
 
 
 def run_simple_calculator(a: float, b: float, operator: str) -> float:
+    """Supported operators are: + - * and /"""
     if operator == "+":
         return a + b
     if operator == "-":
@@ -527,74 +526,108 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
     raise ValueError(f"Unknown operator: {operator}")
 
 
-@benchmark_test(
-    exclude={
-        "anthropic/claude-haiku-4-5@20251001",
-        "anthropic/claude-opus-4-5@20251101",
-        "anthropic/claude-sonnet-4-5@20250929",
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "google/gemma-3-12b",
-        "google/gemini-3.1-flash-lite-preview",
-    }
-)
+@benchmark_test()
 @kbench.task()
-def test_manual_tool_use(llm):
+def test_simple_tool_use(llm):
     problem = "What is 50 plus 25?"
     expected_answer = 75.0
 
-    # Define the tool schema (JSON Schema format).
-    calculator_tool = {
-        "type": "function",
-        "function": {
-            "name": "simple_calculator",
-            "description": "Calculates the result of an arithmetic operation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "a": {"type": "number", "description": "The first number."},
-                    "b": {"type": "number", "description": "The second number."},
-                    "operator": {
-                        "type": "string",
-                        "description": "The operator (+, -, *, /).",
-                    },
-                },
-                "required": ["a", "b", "operator"],
-            },
-        },
-    }
-
-    # 1. Get the initial response from the LLM.
-    kbench.actors.user.send(problem)
-    tool_call_msg = llm.respond(tools=[calculator_tool])
-    tool_calls = tool_call_msg.tool_calls
-
-    kbench.assertions.assert_true(bool(tool_calls), "LLM was expected to call a tool.")
-
-    # 2. Parse the tool call arguments.
-    tool_call = tool_calls[0]
-    function_args = json.loads(tool_call["function"]["arguments"])
-    # Removes 'signature' parameter in thinking mode.
-    function_args.pop("signature", None)
-
-    # 3. Execute the actual Python function.
-    tool_result = run_simple_calculator(**function_args)
-
-    # 4. Send the tool result back to the LLM.
-    tool_actor = kbench.actors.Actor(name="Tool", role="tool", avatar="🛠️")
-    tool_actor.send(
-        messages.Message(
-            sender=tool_actor,
-            content=str(tool_result),
-            _meta={"tool_call_id": tool_call["id"]},
-        )
-    )
-
-    # 5. Get the final answer.
-    final_answer_msg = llm.respond()
-    final_answer = final_answer_msg.content
+    final_answer = llm.prompt(problem, tools=[run_simple_calculator])
+    kbench.assertions.assert_tool_was_invoked(run_simple_calculator)
 
     kbench.assertions.assert_true(
         str(int(expected_answer)) in final_answer,
         f"Expected '{expected_answer}' to be in the final answer, got '{final_answer}'.",
+    )
+
+
+# %%
+def increment_counter() -> int:
+    """Increments a counter and returns the value."""
+    increment_counter.count += 1
+    return increment_counter.count
+
+
+@benchmark_test()
+@kbench.task()
+def test_stateful_tool_double_execution(llm):
+    increment_counter.count = 0  # Reset for each test run
+
+    llm.prompt("Call the increment_counter tool.", tools=[increment_counter])
+
+    kbench.assertions.assert_equal(
+        1, increment_counter.count, expectation="Tool should be executed exactly once."
+    )
+
+
+# %%
+def add_tool(a: float, b: float) -> float:
+    """Adds two numbers."""
+    add_tool.calls += 1
+    return a + b
+
+
+def multiply_tool(a: float, b: float) -> float:
+    """Multiplies two numbers."""
+    multiply_tool.calls += 1
+    return a * b
+
+
+@benchmark_test()
+@kbench.task()
+def test_multiple_tool_selection(llm):
+    add_tool.calls = 0
+    multiply_tool.calls = 0
+
+    llm.prompt(
+        "What is 12 multiplied by 34? Use the multiply_tool.",
+        tools=[add_tool, multiply_tool],
+    )
+
+    kbench.assertions.assert_equal(
+        1, multiply_tool.calls, expectation="Multiply tool should be called once."
+    )
+    kbench.assertions.assert_equal(
+        0, add_tool.calls, expectation="Add tool should not be called."
+    )
+
+
+# %%
+def get_user_profile(user_id: str) -> dict:
+    """Returns user profile information as a dictionary."""
+    if user_id == "user_123":
+        return {"name": "Alice", "role": "Admin", "skills": ["Python", "SQL"]}
+    return {"name": "Unknown", "role": "User", "skills": []}
+
+
+@benchmark_test()
+@kbench.task()
+def test_complex_tool_return(llm):
+    response = llm.prompt(
+        "Get the profile for user_123 and tell me what their role is.",
+        tools=[get_user_profile],
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)admin", response, expectation="Model should identify the role as Admin."
+    )
+
+
+# %%
+def flaky_tool() -> str:
+    """This tool always fails with an error."""
+    raise ValueError("Tool execution failed simulated error.")
+
+
+@benchmark_test()
+@kbench.task()
+def test_tool_error_handling(llm):
+    response = llm.prompt(
+        "Call the flaky_tool and report what happens.", tools=[flaky_tool]
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)error|failed|valueerror",
+        response,
+        expectation="Model should report the tool failure.",
     )

@@ -104,6 +104,7 @@ describe_image.run(
     answer="Cavalier King Charles Spaniel",
 )
 
+
 # %%
 @kbench.task(name="describe_video")
 def describe_video(llm, video_url: str, question: str, answer: str):

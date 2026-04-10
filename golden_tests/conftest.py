@@ -62,7 +62,6 @@ def module_report_fixture(request):
                 test_result.outcome
             )
 
-
         base_name = Path(request.module.__file__).stem
         report_filename = f"{base_name}_report.yaml"
         report_path = Path(__file__).parent / report_filename
