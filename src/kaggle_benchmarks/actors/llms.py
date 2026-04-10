@@ -106,6 +106,9 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+# Module-level reference to avoid shadowing by the `audio` parameter in prompt().
+_AudioContent = audio.AudioContent
+
 
 # TODO: Figure out a more robust way to handle extra fields.
 def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
@@ -176,7 +179,7 @@ class LLMChat(actors.Actor):
             actors.user.send(video)
 
         if audio is not None:
-            if not isinstance(audio, audio.AudioContent):
+            if not isinstance(audio, _AudioContent):
                 raise ValueError(f"Unsupported audio type: {audio!r}")
             actors.user.send(audio)
 
