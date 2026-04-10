@@ -32,7 +32,7 @@ class OpenAICompletionSerializer(BaseSerializer):
             "role": self.get_role(message.sender),
             "content": caption
             + [
-                {"type": "image_url", "image_url": {"url": image.url}},
+                {"type": "image_url", "image_url": {"url": image.url, **image.api_params}},
             ],
         }
 
@@ -83,6 +83,7 @@ class OpenAICompletionSerializer(BaseSerializer):
                     "input_audio": {
                         "data": audio_content.b64_string,
                         "format": fmt,
+                        **audio_content.api_params,
                     },
                 },
             ],
@@ -123,7 +124,8 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:{image.mime_type};base64,{image.b64_string}"
+                        "url": f"data:{image.mime_type};base64,{image.b64_string}",
+                        **image.api_params,
                     },
                 },
             ],
@@ -135,7 +137,7 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
         yield {
             "role": self.get_role(message.sender),
             "content": [
-                {"type": "image_url", "image_url": {"url": video.url}},
+                {"type": "image_url", "image_url": {"url": video.url, **video.api_params}},
             ],
         }
 

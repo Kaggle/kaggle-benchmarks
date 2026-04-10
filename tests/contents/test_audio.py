@@ -119,6 +119,16 @@ def test_from_base64_invalid():
         audios.from_base64("!!!not-base64!!!")
 
 
+def test_extras_stored():
+    a = audios.from_base64(B64_STRING, format="mp3", some_param="value")
+    assert a.api_params == {"some_param": "value"}
+
+
+def test_extras_default_empty():
+    a = audios.from_base64(B64_STRING, format="mp3")
+    assert a.api_params == {}
+
+
 @pytest.mark.parametrize(
     "mime_type, expected_format",
     [

@@ -263,6 +263,75 @@ def test_dump_audio_message_model_proxy():
     ]
 
 
+def test_dump_image_message_with_extras_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    image_content = ImageBase64(b64_string="...", mime_type="image/png", detail="low")
+    message = messages.Message(content=image_content, sender=actors.user)
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,...", "detail": "low"},
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_video_message_with_extras_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=videos.VideoURL(
+            url="https://youtube.com/watch?v=dummy", max_frames=10
+        ),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://youtube.com/watch?v=dummy",
+                        "max_frames": 10,
+                    },
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_audio_message_with_extras_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=audios.AudioContent(
+            b64_string="abc123", mime_type="audio/wav", language="en"
+        ),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": "abc123",
+                        "format": "wav",
+                        "language": "en",
+                    },
+                },
+            ],
+        }
+    ]
+
+
 def test_dump_audio_message_with_caption_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(

@@ -23,8 +23,9 @@ import numpy as np
 
 
 class ImageContent(abc.ABC):
-    def __init__(self, caption: str | None = None):
+    def __init__(self, caption: str | None = None, **kwargs):
         self.caption = caption
+        self.api_params = kwargs
 
     @property
     @abc.abstractmethod
@@ -53,8 +54,8 @@ class ImageContent(abc.ABC):
 
 
 class ImageURL(ImageContent):
-    def __init__(self, url: str, caption: str | None = None):
-        super().__init__(caption=caption)
+    def __init__(self, url: str, caption: str | None = None, **kwargs):
+        super().__init__(caption=caption, **kwargs)
         self._url = url
 
     @property
@@ -84,8 +85,8 @@ class ImageURL(ImageContent):
 
 
 class ImageBase64(ImageContent):
-    def __init__(self, b64_string: str, mime_type: str, caption: str | None = None):
-        super().__init__(caption=caption)
+    def __init__(self, b64_string: str, mime_type: str, caption: str | None = None, **kwargs):
+        super().__init__(caption=caption, **kwargs)
         self._b64_string = b64_string
         self._mime_type = mime_type
 
@@ -109,31 +110,32 @@ class ImageBase64(ImageContent):
         }
 
 
-def from_path(path: str) -> ImageBase64:
+def from_path(path: str, **kwargs) -> ImageBase64:
     """Creates ImageContent from a local image file path."""
     with open(path, "rb") as image_file:
         return ImageBase64(
             base64.b64encode(image_file.read()).decode(),
             mimetypes.guess_type(path)[0],
+            **kwargs,
         )
 
 
-def from_url(url: str, caption: str | None = None) -> ImageURL:
+def from_url(url: str, caption: str | None = None, **kwargs) -> ImageURL:
     """Creates ImageContent from an image URL."""
-    return ImageURL(url, caption=caption)
+    return ImageURL(url, caption=caption, **kwargs)
 
 
 def from_base64(
-    base64: str | bytes, format: str = "jpeg", caption: str | None = None
+    base64: str | bytes, format: str = "jpeg", caption: str | None = None, **kwargs
 ) -> ImageBase64:
     """Creates ImageContent directly from a base64 string."""
     if isinstance(base64, bytes):
         base64 = base64.decode("utf-8")
 
-    return ImageBase64(base64, mime_type=f"image/{format}", caption=caption)
+    return ImageBase64(base64, mime_type=f"image/{format}", caption=caption, **kwargs)
 
 
-def from_array(array: np.ndarray) -> ImageBase64:
+def from_array(array: np.ndarray, **kwargs) -> ImageBase64:
     """Creates ImageContent from an image array."""
     from PIL import Image
 
@@ -141,14 +143,15 @@ def from_array(array: np.ndarray) -> ImageBase64:
     buff = io.BytesIO()
     pil_img.save(buff, format="JPEG")
     return ImageBase64(
-        base64.b64encode(buff.getvalue()).decode(), mime_type="image/jpeg"
+        base64.b64encode(buff.getvalue()).decode(), mime_type="image/jpeg", **kwargs
     )
 
 
 def from_image_url(image_url: ImageURL) -> ImageBase64:
     """Creates ImageBase64 from an ImageURL, downloading and encoding it."""
     return ImageBase64(
-        image_url.b64_string, image_url.mime_type, caption=image_url.caption
+        image_url.b64_string, image_url.mime_type, caption=image_url.caption,
+        **image_url.api_params,
     )
 
 

@@ -222,6 +222,77 @@ def test_dump_message(message, expected_raw_messages):
     assert actual == expected
 
 
+def test_dump_image_message_with_extras():
+    serializer = genai_serializer.GenAISerializer()
+    image_content = ImageBase64(
+        b64_string=B64_STRING,
+        mime_type="image/png",
+        media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+    )
+    message = messages.Message(content=image_content, sender=actors.user)
+    actual = [c.model_dump() for c in serializer.dump_message(message)]
+    expected = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    inline_data=types.Blob(data=B64_STRING, mime_type="image/png"),
+                    media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+                )
+            ],
+        ).model_dump()
+    ]
+    assert actual == expected
+
+
+def test_dump_video_message_with_extras():
+    serializer = genai_serializer.GenAISerializer()
+    video_content = videos.VideoURL(
+        url="https://youtube.com/watch?v=dummy",
+        video_metadata={"fps": 1.0, "start_offset": "0s", "end_offset": "10s"},
+    )
+    message = messages.Message(content=video_content, sender=actors.user)
+    actual = [c.model_dump() for c in serializer.dump_message(message)]
+    expected = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    file_data=types.FileData(
+                        file_uri="https://youtube.com/watch?v=dummy",
+                        mime_type="video/*",
+                    ),
+                    video_metadata={"fps": 1.0, "start_offset": "0s", "end_offset": "10s"},
+                )
+            ],
+        ).model_dump()
+    ]
+    assert actual == expected
+
+
+def test_dump_audio_message_with_extras():
+    serializer = genai_serializer.GenAISerializer()
+    audio_content = audios.AudioContent(
+        b64_string="dGVzdA==",
+        mime_type="audio/wav",
+        media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+    )
+    message = messages.Message(content=audio_content, sender=actors.user)
+    actual = [c.model_dump() for c in serializer.dump_message(message)]
+    expected = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    inline_data=types.Blob(data=b"test", mime_type="audio/wav"),
+                    media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+                )
+            ],
+        ).model_dump()
+    ]
+    assert actual == expected
+
+
 def test_dump_messages():
     serializer = genai_serializer.GenAISerializer()
     msgs = [

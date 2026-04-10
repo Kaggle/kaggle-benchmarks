@@ -64,7 +64,8 @@ class GenAISerializer(BaseSerializer):
                         # The API expects the raw base64 string, not bytes.
                         data=image.b64_string,
                         mime_type=image.mime_type,
-                    )
+                    ),
+                    **image.api_params,
                 )
             ],
         )
@@ -74,7 +75,10 @@ class GenAISerializer(BaseSerializer):
         video = message.content
         yield types.Content(
             role=self.get_role(message.sender),
-            parts=[types.Part.from_uri(file_uri=video.url, mime_type=video.mime_type)],
+            parts=[types.Part(
+                file_data=types.FileData(file_uri=video.url, mime_type=video.mime_type),
+                **video.api_params,
+            )],
         )
 
     def dump_audio(self, message: messages.Message[audios.AudioContent]):
@@ -84,9 +88,12 @@ class GenAISerializer(BaseSerializer):
         if audio_content.caption:
             parts.append(types.Part.from_text(text=audio_content.caption))
         parts.append(
-            types.Part.from_bytes(
-                data=base64.b64decode(audio_content.b64_string),
-                mime_type=audio_content.mime_type,
+            types.Part(
+                inline_data=types.Blob(
+                    data=base64.b64decode(audio_content.b64_string),
+                    mime_type=audio_content.mime_type,
+                ),
+                **audio_content.api_params,
             )
         )
         yield types.Content(

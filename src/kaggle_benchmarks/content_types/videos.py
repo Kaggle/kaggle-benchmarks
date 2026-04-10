@@ -22,6 +22,9 @@ _YOUTUBE_URL_PATTERN = re.compile(
 
 
 class VideoContent(abc.ABC):
+    def __init__(self, **kwargs):
+        self.api_params = kwargs
+
     @property
     @abc.abstractmethod
     def url(self) -> str: ...
@@ -40,7 +43,8 @@ class VideoContent(abc.ABC):
 
 
 class VideoURL(VideoContent):
-    def __init__(self, url: str):
+    def __init__(self, url: str, **kwargs):
+        super().__init__(**kwargs)
         self._url = url
 
     @property
@@ -64,7 +68,7 @@ class VideoURL(VideoContent):
         }
 
 
-def from_url(url: str) -> VideoURL:
+def from_url(url: str, **kwargs) -> VideoURL:
     """Creates VideoContent from a video URL (e.g. a YouTube link).
 
     Currently only YouTube URLs are supported.
@@ -75,4 +79,4 @@ def from_url(url: str) -> VideoURL:
             "Only YouTube URLs are currently supported "
             "(e.g. https://www.youtube.com/watch?v=aqz-KE-bpKQ)."
         )
-    return VideoURL(url)
+    return VideoURL(url, **kwargs)

@@ -106,6 +106,33 @@ def test_from_image_url(mocker):
     assert img_base64.mime_type == "image/png"
 
 
+def test_extras_stored_on_content_types():
+    img = images.from_base64(B64_STRING, format="png", detail="low")
+    assert img.api_params == {"detail": "low"}
+
+    img_url = images.from_url("https://example.com/image.jpg", detail="high")
+    assert img_url.api_params == {"detail": "high"}
+
+    array = np.zeros((5, 5, 3), dtype=np.uint8)
+    img_array = images.from_array(array, detail="low")
+    assert img_array.api_params == {"detail": "low"}
+
+
+def test_extras_default_empty():
+    img = images.from_base64(B64_STRING, format="png")
+    assert img.api_params == {}
+
+
+def test_extras_preserved_by_from_image_url(mocker):
+    mocker.patch(
+        "kaggle_benchmarks.content_types.images.image_url_to_base64",
+        return_value=B64_STRING,
+    )
+    img_url = images.ImageURL("https://example.com/image.png", detail="low")
+    img_base64 = images.from_image_url(img_url)
+    assert img_base64.api_params == {"detail": "low"}
+
+
 def test_image_url_to_base64_success(mocker):
     """Tests successful fetching and base64 encoding of an image from a URL."""
     # The content of the mock response will be the raw bytes of our test image.

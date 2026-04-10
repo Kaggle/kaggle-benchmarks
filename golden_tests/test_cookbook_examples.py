@@ -651,6 +651,82 @@ def test_reasoning_captures_traces(llm):
 
 
 # %%
+# --- Test Case: Image with detail parameter ---
+
+
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+        "deepseek-ai/deepseek-v3.2",
+        "qwen/qwen3-235b-a22b-instruct-2507",
+        "qwen/qwen3-next-80b-a3b-instruct",
+        "google/gemma-3-12b",
+        "zai/glm-5",
+    }
+)
+@kbench.task()
+def test_image_with_detail(llm):
+    """Tests that detail parameter on images is forwarded to the model."""
+    red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+    image = images.from_base64(red_dot_b64, format="png", detail="low")
+
+    response = llm.prompt("What color is this image?", image=image)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)red|pink|salmon|coral",
+        response,
+        expectation="LLM should identify the color red.",
+    )
+
+
+# %%
+# --- Test Case: Image with media_resolution parameter (GenAI only) ---
+
+MEDIA_RESOLUTION_LLM_NAMES = {
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+    "google/gemini-3-flash-preview",
+}
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(
+            kbench.kaggle.load_model(key, api="genai"),
+            "genai",
+            id=f"genai-{key}",
+        )
+        for key in sorted(MEDIA_RESOLUTION_LLM_NAMES)
+    ],
+)
+def test_image_with_media_resolution(llm, api):
+    """Tests that media_resolution parameter on images is forwarded via GenAI."""
+
+    @kbench.task()
+    def _task(llm):
+        red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+        image = images.from_base64(
+            red_dot_b64,
+            format="png",
+            media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+        )
+
+        response = llm.prompt("What color is this image?", image=image)
+
+        kbench.assertions.assert_contains_regex(
+            r"(?i)red|pink|salmon|coral",
+            response,
+            expectation="LLM should identify the color red.",
+        )
+
+    run = _task.run(llm)
+    assert run.passed
+
+
+# %%
 # --- Test Case: Tool Use ---
 # This doesn't work with "genai" API for now
 # So test it with `-k "openai"` only.
