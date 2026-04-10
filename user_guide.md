@@ -202,6 +202,35 @@ response = kbench.llm.prompt(
 > models support video inputs. Models that don't support video will
 > return an error.
 
+You can also include audio using the `audio` parameter. Audio can be
+loaded from a file, a URL, or a base64-encoded string.
+
+``` python
+from kaggle_benchmarks.content_types import audio
+
+# From a local file
+response = kbench.llm.prompt(
+    "Transcribe this audio.",
+    audio=audio.from_path("speech.mp3")
+)
+
+# From a URL
+response = kbench.llm.prompt(
+    "Transcribe this audio.",
+    audio=audio.from_url("https://example.com/speech.mp3")
+)
+
+# From base64
+response = kbench.llm.prompt(
+    "Transcribe this audio.",
+    audio=audio.from_base64(b64_string, format="mp3")
+)
+```
+
+> **Note:** Audio support depends on the model. Currently, only select
+> models support audio inputs. Models that don't support audio will
+> return an error.
+
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them
