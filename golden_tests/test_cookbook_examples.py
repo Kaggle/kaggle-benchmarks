@@ -31,11 +31,7 @@ Usage:
 """
 
 # %%
-<<<<<<< HEAD
-=======
 import base64
-import json
->>>>>>> 1334913 (checkpoint)
 import os
 import tempfile
 from contextlib import contextmanager
@@ -48,7 +44,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import messages
 from kaggle_benchmarks.content_types import audios, images, videos
 
 # Models to be tested as the primary subject.
