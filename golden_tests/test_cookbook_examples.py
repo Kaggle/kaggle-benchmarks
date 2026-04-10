@@ -31,6 +31,7 @@ Usage:
 """
 
 # %%
+import base64
 import os
 import tempfile
 from contextlib import contextmanager
@@ -43,7 +44,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.content_types import audios, images, videos
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
@@ -66,6 +67,15 @@ TEST_LLM_NAMES = {
 # Models to be used as judges for evaluation.
 JUDGE_LLM_NAMES = {
     "google/gemini-2.5-flash",
+}
+
+# Models that support audio input.
+AUDIO_LLM_NAMES = {
+    "google/gemini-2.0-flash",
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+    "google/gemini-3-flash-preview",
+    "google/gemini-3.1-flash-lite-preview",
 }
 
 
@@ -503,6 +513,80 @@ def test_video_url(llm):
         r"(?i)bunny|rabbit|animal",
         response,
         expectation="LLM should identify the Big Buck Bunny video content.",
+    )
+
+
+# %%
+# --- Test Case: Audio inputs (base64) ---
+
+
+SPEECH_FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "speech.mp3")
+SPEECH_TRANSCRIPTION_PATTERN = r"(?i)quick\s+brown\s+fox|lazy\s+dog"
+
+
+@benchmark_test(include=AUDIO_LLM_NAMES)
+@kbench.task()
+def test_audio_base64(llm):
+    """Sends a base64-encoded speech audio clip and asks the model to transcribe it."""
+    with open(SPEECH_FIXTURE, "rb") as f:
+        audio_content = audios.from_base64(
+            base64.b64encode(f.read()).decode(), format="mp3"
+        )
+
+    response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
+
+    kbench.assertions.assert_contains_regex(
+        SPEECH_TRANSCRIPTION_PATTERN,
+        response,
+        expectation="LLM should transcribe the speech audio.",
+    )
+
+
+# %%
+# --- Test Case: Audio inputs (local file) ---
+
+
+@benchmark_test(include=AUDIO_LLM_NAMES)
+@kbench.task()
+def test_audio_local_file(llm):
+    """Sends a speech audio file loaded from disk and asks the model to transcribe it."""
+    audio_content = audios.from_path(SPEECH_FIXTURE)
+
+    response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
+
+    kbench.assertions.assert_contains_regex(
+        SPEECH_TRANSCRIPTION_PATTERN,
+        response,
+        expectation="LLM should transcribe the speech audio.",
+    )
+
+
+# %%
+# --- Test Case: Audio inputs (URL) ---
+
+
+@benchmark_test(include=AUDIO_LLM_NAMES)
+@kbench.task()
+def test_audio_url(llm):
+    """Sends speech audio loaded from a URL and asks the model to transcribe it."""
+    import respx
+
+    with open(SPEECH_FIXTURE, "rb") as f:
+        audio_bytes = f.read()
+
+    url = "https://example.com/speech.mp3"
+    with respx.mock:
+        respx.get(url).respond(
+            200, content=audio_bytes, headers={"Content-Type": "audio/mpeg"}
+        )
+        audio_content = audios.from_url(url)
+
+    response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
+
+    kbench.assertions.assert_contains_regex(
+        SPEECH_TRANSCRIPTION_PATTERN,
+        response,
+        expectation="LLM should transcribe the speech audio.",
     )
 
 

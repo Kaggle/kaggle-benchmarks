@@ -20,7 +20,7 @@ from google.genai import types
 
 from kaggle_benchmarks import chats, llm_messages, messages
 from kaggle_benchmarks.actors import base as actors
-from kaggle_benchmarks.content_types import videos
+from kaggle_benchmarks.content_types import audios, videos
 from kaggle_benchmarks.content_types.images import ImageBase64
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.tools import ToolInvocation, ToolInvocationResult
@@ -84,6 +84,45 @@ MESSAGE_FORMATS = [
             )
         ],
         id="video_message",
+    ),
+    pytest.param(
+        messages.Message(
+            content=audios.AudioContent(b64_string="dGVzdA==", mime_type="audio/wav"),
+            sender=actors.user,
+        ),
+        [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_bytes(
+                        data=b"test",
+                        mime_type="audio/wav",
+                    ),
+                ],
+            )
+        ],
+        id="audio_message",
+    ),
+    pytest.param(
+        messages.Message(
+            content=audios.AudioContent(
+                b64_string="dGVzdA==", mime_type="audio/mp3", caption="A speech clip"
+            ),
+            sender=actors.user,
+        ),
+        [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(text="A speech clip"),
+                    types.Part.from_bytes(
+                        data=b"test",
+                        mime_type="audio/mp3",
+                    ),
+                ],
+            )
+        ],
+        id="audio_message_with_caption",
     ),
     pytest.param(
         llm_messages.LLMMessage(

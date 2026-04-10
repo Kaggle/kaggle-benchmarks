@@ -494,6 +494,40 @@ response = llm.prompt("What is this video about?", video=video)
 > models support video inputs, and only YouTube URLs are
 > supported. Models that don't support video will return an error.
 
+### Recipe: Sending Audio to Multimodal Models
+
+Some models (currently select Gemini models) support audio inputs. The
+SDK provides an `audio` module for this, following the same pattern as
+images and videos.
+
+**Constructing Audio Objects:**
+
+``` python
+from kaggle_benchmarks.content_types import audios
+
+# From a local file
+audio_content = audios.from_path("speech.mp3")
+
+# From a URL
+audio_content = audios.from_url("https://example.com/speech.mp3")
+
+# From a base64-encoded string
+audio_content = audios.from_base64(b64_string, format="mp3")
+```
+
+**Sending Audio with `llm.prompt`:**
+
+``` python
+from kaggle_benchmarks.content_types import audios
+
+audio_content = audios.from_path("speech.mp3")
+response = llm.prompt("Transcribe this audio.", audio=audio_content)
+```
+
+> **Note:** Audio support depends on the model. Currently, only select
+> models support audio inputs. Models that don't support audio will
+> return an error.
+
 ------------------------------------------------------------------------
 
 ## Advanced Patterns

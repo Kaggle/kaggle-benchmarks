@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import logging
 
 from google.genai import types
 
 from kaggle_benchmarks import llm_messages, messages
 from kaggle_benchmarks import tools as tool_utils
-from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer
 
 
@@ -74,6 +75,23 @@ class GenAISerializer(BaseSerializer):
         yield types.Content(
             role=self.get_role(message.sender),
             parts=[types.Part.from_uri(file_uri=video.url, mime_type=video.mime_type)],
+        )
+
+    def dump_audio(self, message: messages.Message[audios.AudioContent]):
+        """Serializes audio as inline bytes for the GenAI client."""
+        audio_content = message.content
+        parts = []
+        if audio_content.caption:
+            parts.append(types.Part.from_text(text=audio_content.caption))
+        parts.append(
+            types.Part.from_bytes(
+                data=base64.b64decode(audio_content.b64_string),
+                mime_type=audio_content.mime_type,
+            )
+        )
+        yield types.Content(
+            role=self.get_role(message.sender),
+            parts=parts,
         )
 
     def dump_llm_message(self, message: llm_messages.LLMMessage):

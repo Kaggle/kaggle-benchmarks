@@ -97,7 +97,7 @@ from google.genai import types
 
 from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
-from kaggle_benchmarks.content_types import images, videos
+from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
 
@@ -157,6 +157,7 @@ class LLMChat(actors.Actor):
         tools: list[Any] | None = None,
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
+        audio: audios.AudioContent | None = None,
     ) -> T:
         if image is not None:
             match image:
@@ -173,6 +174,11 @@ class LLMChat(actors.Actor):
             if not isinstance(video, videos.VideoContent):
                 raise ValueError(f"Unsupported video type: {video!r}")
             actors.user.send(video)
+
+        if audio is not None:
+            if not isinstance(audio, audios.AudioContent):
+                raise ValueError(f"Unsupported audio type: {audio!r}")
+            actors.user.send(audio)
 
         actors.user.send(message)
         return self.respond(

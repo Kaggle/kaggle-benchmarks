@@ -19,7 +19,7 @@ import pytest
 
 from kaggle_benchmarks import chats, llm_messages, messages
 from kaggle_benchmarks.actors import base as actors
-from kaggle_benchmarks.content_types import videos
+from kaggle_benchmarks.content_types import audios, videos
 from kaggle_benchmarks.content_types.images import ImageBase64, ImageURL
 from kaggle_benchmarks.serializers import openai as openai_serializer
 from kaggle_benchmarks.tools import ToolInvocation, ToolInvocationResult
@@ -237,6 +237,49 @@ def test_dump_video_message_model_proxy():
                 {
                     "type": "image_url",
                     "image_url": {"url": "https://youtube.com/watch?v=dummy"},
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_audio_message_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=audios.AudioContent(b64_string="abc123", mime_type="audio/wav"),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_audio",
+                    "input_audio": {"data": "abc123", "format": "wav"},
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_audio_message_with_caption_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=audios.AudioContent(
+            b64_string="abc123", mime_type="audio/mp3", caption="A speech clip"
+        ),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "A speech clip"},
+                {
+                    "type": "input_audio",
+                    "input_audio": {"data": "abc123", "format": "mp3"},
                 },
             ],
         }
