@@ -15,6 +15,9 @@
 import base64
 import pathlib
 
+import httpx
+import pytest
+
 from kaggle_benchmarks.content_types import audio
 
 # A trivial base64 string for testing
@@ -95,3 +98,36 @@ def test_repr_markdown_with_caption():
     md = a._repr_markdown_()
     assert "My audio" in md
     assert "<audio controls" in md
+
+
+def test_to_mime():
+    a = audio.AudioContent(B64_STRING, mime_type="audio/mp3")
+    assert a.to_mime() == {"mime_type": "audio/mp3", "content": B64_STRING}
+
+
+def test_from_url_http_error(mocker):
+    mocker.patch(
+        "kaggle_benchmarks.content_types.audio.httpx.get",
+        side_effect=httpx.HTTPError("connection failed"),
+    )
+    with pytest.raises(ValueError, match="Failed to fetch audio from URL"):
+        audio.from_url("https://example.com/bad.mp3")
+
+
+def test_from_base64_invalid():
+    with pytest.raises(ValueError, match="Invalid base64 audio data"):
+        audio.from_base64("!!!not-base64!!!")
+
+
+@pytest.mark.parametrize(
+    "mime_type, expected_format",
+    [
+        ("audio/mpeg", "mp3"),
+        ("audio/wav", "wav"),
+        ("audio/mp3", "mp3"),
+        ("audio/x-custom", "custom"),
+    ],
+)
+def test_format_property(mime_type, expected_format):
+    a = audio.AudioContent(B64_STRING, mime_type=mime_type)
+    assert a._format == expected_format

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import base64
+import binascii
 import mimetypes
 
 import httpx
@@ -41,7 +42,10 @@ class AudioContent:
     @property
     def _format(self) -> str:
         """Returns the short format name (e.g. 'mp3', 'wav') from the MIME type."""
-        return self.mime_type.split("/")[-1]
+        ext = mimetypes.guess_extension(self.mime_type)
+        if ext:
+            return ext.lstrip(".")
+        return self.mime_type.split("/")[-1].removeprefix("x-")
 
     def to_mime(self) -> dict[str, str]:
         return {
@@ -64,10 +68,10 @@ class AudioContent:
         return pn.pane.HTML(html)
 
 
-def from_url(url: str, caption: str | None = None) -> AudioContent:
+def from_url(url: str, caption: str | None = None, timeout: float = 30.0) -> AudioContent:
     """Creates AudioContent from a URL by fetching and base64-encoding the audio."""
     try:
-        response = httpx.get(url, timeout=600)
+        response = httpx.get(url, timeout=timeout)
         response.raise_for_status()
     except httpx.HTTPError as e:
         raise ValueError(f"Failed to fetch audio from URL: {url}") from e
@@ -101,6 +105,6 @@ def from_base64(
         b64_string = b64_string.decode("utf-8")
     try:
         base64.b64decode(b64_string, validate=True)
-    except Exception as e:
+    except binascii.Error as e:
         raise ValueError(f"Invalid base64 audio data: {e}") from e
     return AudioContent(b64_string, mime_type=f"audio/{format}", caption=caption)

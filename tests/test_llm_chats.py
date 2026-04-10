@@ -209,7 +209,6 @@ def test_video_message_payload():
     ]
 
 
-
 def test_prompt_with_image_and_video():
     """Test that prompt() with both image and video sends them as separate messages."""
     red_pixel_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="

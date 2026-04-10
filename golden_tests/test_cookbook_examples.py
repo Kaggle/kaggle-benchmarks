@@ -572,33 +572,17 @@ def test_audio_local_file(llm):
 @kbench.task()
 def test_audio_url(llm):
     """Sends speech audio loaded from a URL and asks the model to transcribe it."""
-    import http.server
-    import threading
+    import respx
 
     with open(SPEECH_FIXTURE, "rb") as f:
         audio_bytes = f.read()
 
-    class _Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.send_header("Content-Type", "audio/mpeg")
-            self.end_headers()
-            self.wfile.write(audio_bytes)
+    url = "https://example.com/speech.mp3"
+    with respx.mock:
+        respx.get(url).respond(200, content=audio_bytes, headers={"Content-Type": "audio/mpeg"})
+        audio_content = audio.from_url(url)
 
-        def log_message(self, *args):
-            pass
-
-    server = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
-    port = server.server_address[1]
-    thread = threading.Thread(target=server.handle_request)
-    thread.start()
-
-    try:
-        audio_content = audio.from_url(f"http://127.0.0.1:{port}/speech.mp3")
-        response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
-    finally:
-        server.server_close()
-        thread.join()
+    response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
 
     kbench.assertions.assert_contains_regex(
         SPEECH_TRANSCRIPTION_PATTERN,
