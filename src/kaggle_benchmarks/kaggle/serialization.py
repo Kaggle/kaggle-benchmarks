@@ -242,7 +242,10 @@ def _message_to_proto_content(message: benchmark_messages.Message) -> dict[str, 
             "file_uri": mime["location"],
             "mime_type": mime["mime_type"],
         }
-    elif isinstance(message.content, (content_types.images.ImageBase64, content_types.audio.AudioContent)):
+    elif isinstance(
+        message.content,
+        (content_types.images.ImageBase64, content_types.audios.AudioContent),
+    ):
         mime = message.content.to_mime()
         part_value["inline_data"] = {
             "data": mime["content"],

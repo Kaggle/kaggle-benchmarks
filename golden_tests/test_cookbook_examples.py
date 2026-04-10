@@ -534,7 +534,9 @@ SPEECH_TRANSCRIPTION_PATTERN = r"(?i)quick\s+brown\s+fox|lazy\s+dog"
 def test_audio_base64(llm):
     """Sends a base64-encoded speech audio clip and asks the model to transcribe it."""
     with open(SPEECH_FIXTURE, "rb") as f:
-        audio_content = audio.from_base64(base64.b64encode(f.read()).decode(), format="mp3")
+        audio_content = audios.from_base64(
+            base64.b64encode(f.read()).decode(), format="mp3"
+        )
 
     response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
 
@@ -553,7 +555,7 @@ def test_audio_base64(llm):
 @kbench.task()
 def test_audio_local_file(llm):
     """Sends a speech audio file loaded from disk and asks the model to transcribe it."""
-    audio_content = audio.from_path(SPEECH_FIXTURE)
+    audio_content = audios.from_path(SPEECH_FIXTURE)
 
     response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
 
@@ -579,8 +581,10 @@ def test_audio_url(llm):
 
     url = "https://example.com/speech.mp3"
     with respx.mock:
-        respx.get(url).respond(200, content=audio_bytes, headers={"Content-Type": "audio/mpeg"})
-        audio_content = audio.from_url(url)
+        respx.get(url).respond(
+            200, content=audio_bytes, headers={"Content-Type": "audio/mpeg"}
+        )
+        audio_content = audios.from_url(url)
 
     response = llm.prompt("Transcribe this audio exactly.", audio=audio_content)
 

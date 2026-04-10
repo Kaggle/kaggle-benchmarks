@@ -18,7 +18,7 @@ import pathlib
 import httpx
 import pytest
 
-from kaggle_benchmarks.content_types import audio
+from kaggle_benchmarks.content_types import audios
 
 # A trivial base64 string for testing
 B64_STRING = base64.b64encode(b"\x00\x01\x02\x03").decode()
@@ -32,12 +32,12 @@ def test_from_url(mocker):
     mock_response.raise_for_status.return_value = None
 
     mocker.patch(
-        "kaggle_benchmarks.content_types.audio.httpx.get",
+        "kaggle_benchmarks.content_types.audios.httpx.get",
         return_value=mock_response,
     )
 
-    a = audio.from_url("https://example.com/speech.mp3")
-    assert isinstance(a, audio.AudioContent)
+    a = audios.from_url("https://example.com/speech.mp3")
+    assert isinstance(a, audios.AudioContent)
     assert a.mime_type == "audio/mpeg"
     assert base64.b64decode(a.b64_string) == audio_bytes
 
@@ -48,75 +48,75 @@ def test_from_url_with_caption(mocker):
     mock_response.headers = {"content-type": "audio/mpeg"}
     mock_response.raise_for_status.return_value = None
     mocker.patch(
-        "kaggle_benchmarks.content_types.audio.httpx.get",
+        "kaggle_benchmarks.content_types.audios.httpx.get",
         return_value=mock_response,
     )
 
-    a = audio.from_url("https://example.com/speech.mp3", caption="A speech clip.")
+    a = audios.from_url("https://example.com/speech.mp3", caption="A speech clip.")
     assert a.caption == "A speech clip."
 
 
 def test_from_base64():
-    a = audio.from_base64(B64_STRING, format="mp3")
-    assert isinstance(a, audio.AudioContent)
+    a = audios.from_base64(B64_STRING, format="mp3")
+    assert isinstance(a, audios.AudioContent)
     assert a.b64_string == B64_STRING
     assert a.mime_type == "audio/mp3"
     assert a.caption is None
 
 
 def test_from_base64_bytes():
-    a = audio.from_base64(B64_STRING.encode(), format="wav")
-    assert isinstance(a, audio.AudioContent)
+    a = audios.from_base64(B64_STRING.encode(), format="wav")
+    assert isinstance(a, audios.AudioContent)
     assert a.b64_string == B64_STRING
     assert a.mime_type == "audio/wav"
 
 
 def test_url():
-    a = audio.AudioContent(B64_STRING, mime_type="audio/mp3")
+    a = audios.AudioContent(B64_STRING, mime_type="audio/mp3")
     assert a.url == f"data:audio/mp3;base64,{B64_STRING}"
 
 
 def test_from_path(tmp_path: pathlib.Path):
-    file_path = tmp_path / "test_audio.mp3"
+    file_path = tmp_path / "test_audios.mp3"
     file_path.write_bytes(b"\xff\xfb\x90\x00")
 
-    a = audio.from_path(str(file_path))
-    assert isinstance(a, audio.AudioContent)
+    a = audios.from_path(str(file_path))
+    assert isinstance(a, audios.AudioContent)
     assert a.mime_type == "audio/mpeg"
     assert base64.b64decode(a.b64_string) == b"\xff\xfb\x90\x00"
 
 
 def test_repr_markdown():
-    a = audio.AudioContent(B64_STRING, mime_type="audio/mp3")
+    a = audios.AudioContent(B64_STRING, mime_type="audio/mp3")
     md = a._repr_markdown_()
     assert "<audio controls" in md
     assert a.url in md
 
 
 def test_repr_markdown_with_caption():
-    a = audio.AudioContent(B64_STRING, mime_type="audio/mp3", caption="My audio")
+    a = audios.AudioContent(B64_STRING, mime_type="audio/mp3", caption="My audio")
     md = a._repr_markdown_()
     assert "My audio" in md
     assert "<audio controls" in md
 
 
 def test_to_mime():
-    a = audio.AudioContent(B64_STRING, mime_type="audio/mp3")
+    a = audios.AudioContent(B64_STRING, mime_type="audio/mp3")
     assert a.to_mime() == {"mime_type": "audio/mp3", "content": B64_STRING}
 
 
 def test_from_url_http_error(mocker):
     mocker.patch(
-        "kaggle_benchmarks.content_types.audio.httpx.get",
+        "kaggle_benchmarks.content_types.audios.httpx.get",
         side_effect=httpx.HTTPError("connection failed"),
     )
     with pytest.raises(ValueError, match="Failed to fetch audio from URL"):
-        audio.from_url("https://example.com/bad.mp3")
+        audios.from_url("https://example.com/bad.mp3")
 
 
 def test_from_base64_invalid():
     with pytest.raises(ValueError, match="Invalid base64 audio data"):
-        audio.from_base64("!!!not-base64!!!")
+        audios.from_base64("!!!not-base64!!!")
 
 
 @pytest.mark.parametrize(
@@ -129,5 +129,5 @@ def test_from_base64_invalid():
     ],
 )
 def test_format_property(mime_type, expected_format):
-    a = audio.AudioContent(B64_STRING, mime_type=mime_type)
+    a = audios.AudioContent(B64_STRING, mime_type=mime_type)
     assert a._format == expected_format

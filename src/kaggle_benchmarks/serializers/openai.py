@@ -17,7 +17,7 @@ import logging
 
 from kaggle_benchmarks import llm_messages, messages
 from kaggle_benchmarks import tools as tool_utils
-from kaggle_benchmarks.content_types import audio, images, videos
+from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer, UnsupportedMessageFormat
 
 
@@ -60,7 +60,7 @@ class OpenAICompletionSerializer(BaseSerializer):
 
     _SUPPORTED_AUDIO_FORMATS = {"mp3", "wav"}
 
-    def dump_audio(self, message: messages.Message[audio.AudioContent]):
+    def dump_audio(self, message: messages.Message[audios.AudioContent]):
         """Serializes audio as input_audio for the OpenAI Chat Completions API."""
         audio_content = message.content
         fmt = audio_content._format
@@ -69,7 +69,11 @@ class OpenAICompletionSerializer(BaseSerializer):
                 f"OpenAI API only supports {self._SUPPORTED_AUDIO_FORMATS} audio formats, "
                 f"got '{fmt}' (from mime_type='{audio_content.mime_type}')"
             )
-        caption = [{"type": "text", "text": audio_content.caption}] if audio_content.caption else []
+        caption = (
+            [{"type": "text", "text": audio_content.caption}]
+            if audio_content.caption
+            else []
+        )
         yield {
             "role": self.get_role(message.sender),
             "content": caption

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import base64
-import binascii
 import mimetypes
 
 import httpx
@@ -68,7 +67,9 @@ class AudioContent:
         return pn.pane.HTML(html)
 
 
-def from_url(url: str, caption: str | None = None, timeout: float = 30.0) -> AudioContent:
+def from_url(
+    url: str, caption: str | None = None, timeout: float = 30.0
+) -> AudioContent:
     """Creates AudioContent from a URL by fetching and base64-encoding the audio."""
     try:
         response = httpx.get(url, timeout=timeout)
@@ -105,6 +106,6 @@ def from_base64(
         b64_string = b64_string.decode("utf-8")
     try:
         base64.b64decode(b64_string, validate=True)
-    except binascii.Error as e:
+    except ValueError as e:
         raise ValueError(f"Invalid base64 audio data: {e}") from e
     return AudioContent(b64_string, mime_type=f"audio/{format}", caption=caption)

@@ -20,7 +20,7 @@ import pydantic
 
 from kaggle_benchmarks import actors, chats, llm_messages, tools
 from kaggle_benchmarks import messages as msg
-from kaggle_benchmarks.content_types import audio, images, videos
+from kaggle_benchmarks.content_types import audios, images, videos
 
 
 class UnsupportedMessageFormat(ValueError):
@@ -73,7 +73,7 @@ class BaseSerializer:
             yield from self.dump_image(message)
         elif isinstance(content, videos.VideoContent):
             yield from self.dump_video(message)
-        elif isinstance(content, audio.AudioContent):
+        elif isinstance(content, audios.AudioContent):
             yield from self.dump_audio(message)
         elif isinstance(content, dict):
             yield from self.dump_json_message(message)
@@ -121,6 +121,6 @@ class BaseSerializer:
         """Serializes a video message."""
         raise NotImplementedError()
 
-    def dump_audio(self, message: msg.Message[audio.AudioContent]):
+    def dump_audio(self, message: msg.Message[audios.AudioContent]):
         """Serializes an audio message."""
         raise NotImplementedError()

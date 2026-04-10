@@ -19,7 +19,7 @@ from google.genai import types
 
 from kaggle_benchmarks import llm_messages, messages
 from kaggle_benchmarks import tools as tool_utils
-from kaggle_benchmarks.content_types import audio, images, videos
+from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer
 
 
@@ -77,7 +77,7 @@ class GenAISerializer(BaseSerializer):
             parts=[types.Part.from_uri(file_uri=video.url, mime_type=video.mime_type)],
         )
 
-    def dump_audio(self, message: messages.Message[audio.AudioContent]):
+    def dump_audio(self, message: messages.Message[audios.AudioContent]):
         """Serializes audio as inline bytes for the GenAI client."""
         audio_content = message.content
         parts = []

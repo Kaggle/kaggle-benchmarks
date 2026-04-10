@@ -206,24 +206,24 @@ You can also include audio using the `audio` parameter. Audio can be
 loaded from a file, a URL, or a base64-encoded string.
 
 ``` python
-from kaggle_benchmarks.content_types import audio
+from kaggle_benchmarks.content_types import audios
 
 # From a local file
 response = kbench.llm.prompt(
     "Transcribe this audio.",
-    audio=audio.from_path("speech.mp3")
+    audio=audios.from_path("speech.mp3")
 )
 
 # From a URL
 response = kbench.llm.prompt(
     "Transcribe this audio.",
-    audio=audio.from_url("https://example.com/speech.mp3")
+    audio=audios.from_url("https://example.com/speech.mp3")
 )
 
 # From base64
 response = kbench.llm.prompt(
     "Transcribe this audio.",
-    audio=audio.from_base64(b64_string, format="mp3")
+    audio=audios.from_base64(b64_string, format="mp3")
 )
 ```
 

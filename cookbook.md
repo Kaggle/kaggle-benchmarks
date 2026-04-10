@@ -503,24 +503,24 @@ images and videos.
 **Constructing Audio Objects:**
 
 ``` python
-from kaggle_benchmarks.content_types import audio
+from kaggle_benchmarks.content_types import audios
 
 # From a local file
-audio_content = audio.from_path("speech.mp3")
+audio_content = audios.from_path("speech.mp3")
 
 # From a URL
-audio_content = audio.from_url("https://example.com/speech.mp3")
+audio_content = audios.from_url("https://example.com/speech.mp3")
 
 # From a base64-encoded string
-audio_content = audio.from_base64(b64_string, format="mp3")
+audio_content = audios.from_base64(b64_string, format="mp3")
 ```
 
 **Sending Audio with `llm.prompt`:**
 
 ``` python
-from kaggle_benchmarks.content_types import audio
+from kaggle_benchmarks.content_types import audios
 
-audio_content = audio.from_path("speech.mp3")
+audio_content = audios.from_path("speech.mp3")
 response = llm.prompt("Transcribe this audio.", audio=audio_content)
 ```
 
