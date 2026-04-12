@@ -222,7 +222,7 @@ def test_dump_message(message, expected_raw_messages):
     assert actual == expected
 
 
-def test_dump_image_message_with_extras():
+def test_dump_image_message_with_api_params():
     serializer = genai_serializer.GenAISerializer()
     image_content = ImageBase64(
         b64_string=B64_STRING,
@@ -245,7 +245,7 @@ def test_dump_image_message_with_extras():
     assert actual == expected
 
 
-def test_dump_video_message_with_extras():
+def test_dump_video_message_with_api_params():
     serializer = genai_serializer.GenAISerializer()
     video_content = videos.VideoURL(
         url="https://youtube.com/watch?v=dummy",
@@ -270,7 +270,7 @@ def test_dump_video_message_with_extras():
     assert actual == expected
 
 
-def test_dump_audio_message_with_extras():
+def test_dump_audio_message_with_api_params():
     serializer = genai_serializer.GenAISerializer()
     audio_content = audios.AudioContent(
         b64_string="dGVzdA==",

@@ -263,7 +263,7 @@ def test_dump_audio_message_model_proxy():
     ]
 
 
-def test_dump_image_message_with_extras_model_proxy():
+def test_dump_image_message_with_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     image_content = ImageBase64(b64_string="...", mime_type="image/png", detail="low")
     message = messages.Message(content=image_content, sender=actors.user)
@@ -281,7 +281,7 @@ def test_dump_image_message_with_extras_model_proxy():
     ]
 
 
-def test_dump_video_message_with_extras_model_proxy():
+def test_dump_video_message_with_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=videos.VideoURL(
@@ -306,7 +306,7 @@ def test_dump_video_message_with_extras_model_proxy():
     ]
 
 
-def test_dump_audio_message_with_extras_model_proxy():
+def test_dump_audio_message_with_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=audios.AudioContent(

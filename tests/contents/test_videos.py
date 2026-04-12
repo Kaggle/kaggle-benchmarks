@@ -45,13 +45,13 @@ def test_video_url_get_payload():
     assert payload == [{"type": "image_url", "image_url": {"url": url}}]
 
 
-def test_extras_stored():
+def test_api_params_stored():
     url = "https://www.youtube.com/watch?v=abc123"
     video = videos.from_url(url, video_metadata={"fps": 1.0})
     assert video.api_params == {"video_metadata": {"fps": 1.0}}
 
 
-def test_extras_default_empty():
+def test_api_params_default_empty():
     url = "https://www.youtube.com/watch?v=abc123"
     video = videos.from_url(url)
     assert video.api_params == {}

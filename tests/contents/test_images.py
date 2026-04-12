@@ -106,7 +106,7 @@ def test_from_image_url(mocker):
     assert img_base64.mime_type == "image/png"
 
 
-def test_extras_stored_on_content_types():
+def test_api_params_stored():
     img = images.from_base64(B64_STRING, format="png", detail="low")
     assert img.api_params == {"detail": "low"}
 
@@ -118,12 +118,12 @@ def test_extras_stored_on_content_types():
     assert img_array.api_params == {"detail": "low"}
 
 
-def test_extras_default_empty():
+def test_api_params_default_empty():
     img = images.from_base64(B64_STRING, format="png")
     assert img.api_params == {}
 
 
-def test_extras_preserved_by_from_image_url(mocker):
+def test_api_params_preserved_by_from_image_url(mocker):
     mocker.patch(
         "kaggle_benchmarks.content_types.images.image_url_to_base64",
         return_value=B64_STRING,

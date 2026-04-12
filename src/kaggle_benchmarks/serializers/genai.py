@@ -71,7 +71,7 @@ class GenAISerializer(BaseSerializer):
         )
 
     def dump_video(self, message: messages.Message[videos.VideoContent]):
-        """Serializes video URLs natively via types.Part.from_uri for the GenAI client."""
+        """Serializes video URLs natively as FileData parts for the GenAI client."""
         video = message.content
         yield types.Content(
             role=self.get_role(message.sender),
