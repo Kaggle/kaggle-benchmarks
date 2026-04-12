@@ -14,6 +14,7 @@
 
 import base64
 import logging
+from typing import Any
 
 from google.genai import types
 
@@ -24,6 +25,19 @@ from kaggle_benchmarks.serializers.base import BaseSerializer
 
 
 _PART_FIELDS = set(types.Part.model_fields.keys())
+
+
+def _filter_part_params(api_params: dict[str, Any]) -> dict[str, Any]:
+    """Filters api_params to only valid Part fields, warning on unsupported ones."""
+    unsupported = set(api_params) - _PART_FIELDS
+    if unsupported:
+        logging.warning(
+            "Ignoring unsupported api_params for GenAI Part: %s. "
+            "Supported fields: %s",
+            unsupported,
+            _PART_FIELDS,
+        )
+    return {k: v for k, v in api_params.items() if k in _PART_FIELDS}
 
 
 class GenAISerializer(BaseSerializer):
@@ -68,7 +82,7 @@ class GenAISerializer(BaseSerializer):
                         data=image.b64_string,
                         mime_type=image.mime_type,
                     ),
-                    **{k: v for k, v in image.api_params.items() if k in _PART_FIELDS},
+                    **_filter_part_params(image.api_params),
                 )
             ],
         )
@@ -80,7 +94,7 @@ class GenAISerializer(BaseSerializer):
             role=self.get_role(message.sender),
             parts=[types.Part(
                 file_data=types.FileData(file_uri=video.url, mime_type=video.mime_type),
-                **{k: v for k, v in video.api_params.items() if k in _PART_FIELDS},
+                **_filter_part_params(video.api_params),
             )],
         )
 
@@ -96,7 +110,7 @@ class GenAISerializer(BaseSerializer):
                     data=base64.b64decode(audio_content.b64_string),
                     mime_type=audio_content.mime_type,
                 ),
-                **{k: v for k, v in audio_content.api_params.items() if k in _PART_FIELDS},
+                **_filter_part_params(audio_content.api_params),
             )
         )
         yield types.Content(
