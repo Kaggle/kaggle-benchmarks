@@ -215,6 +215,17 @@ def test_thinking_captured_in_response(mocker):
     assert last_message.reasoning_traces == "Let me count the letters..."
 
 
+def test_prompt_forwards_thinking_config():
+    """Tests that thinking_config is forwarded to GenerateContentConfig."""
+    llm = MockedGoogleGenAI()
+    llm.prompt(
+        "Think hard",
+        thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+    )
+
+    assert llm.config.thinking_config.thinking_level == "LOW"
+
+
 @pytest.mark.parametrize("streaming", [True, False])
 def test_streaming_and_non_streaming_responses(streaming):
     """Tests both streaming and non-streaming modes and checks metadata."""

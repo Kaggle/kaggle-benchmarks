@@ -23,6 +23,9 @@ from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer
 
 
+_PART_FIELDS = set(types.Part.model_fields.keys())
+
+
 class GenAISerializer(BaseSerializer):
     """Serializer mapping generic messages to the Google GenAI SDK (Gemini) format."""
 
@@ -65,7 +68,7 @@ class GenAISerializer(BaseSerializer):
                         data=image.b64_string,
                         mime_type=image.mime_type,
                     ),
-                    **image.api_params,
+                    **{k: v for k, v in image.api_params.items() if k in _PART_FIELDS},
                 )
             ],
         )
@@ -77,7 +80,7 @@ class GenAISerializer(BaseSerializer):
             role=self.get_role(message.sender),
             parts=[types.Part(
                 file_data=types.FileData(file_uri=video.url, mime_type=video.mime_type),
-                **video.api_params,
+                **{k: v for k, v in video.api_params.items() if k in _PART_FIELDS},
             )],
         )
 
@@ -93,7 +96,7 @@ class GenAISerializer(BaseSerializer):
                     data=base64.b64decode(audio_content.b64_string),
                     mime_type=audio_content.mime_type,
                 ),
-                **audio_content.api_params,
+                **{k: v for k, v in audio_content.api_params.items() if k in _PART_FIELDS},
             )
         )
         yield types.Content(

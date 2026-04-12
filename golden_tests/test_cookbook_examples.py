@@ -620,6 +620,86 @@ def test_reasoning_param(llm):
 
 
 # %%
+# --- Test Case: Prompt kwargs passthrough (reasoning_effort / thinking_config) ---
+# OpenAI uses reasoning_effort, GenAI uses thinking_config — users pass the
+# provider-native param directly.
+
+THINKING_LLM_NAMES = TEST_LLM_NAMES - {
+    "google/gemma-3-12b",
+    "google/gemini-2.0-flash",
+    "deepseek-ai/deepseek-r1-0528",
+    "deepseek-ai/deepseek-v3.2",
+    "qwen/qwen3-235b-a22b-instruct-2507",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "zai/glm-5",
+    "google/gemini-3.1-flash-lite-preview",
+}
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(
+            kbench.kaggle.load_model(key, api="openai"),
+            "openai",
+            id=f"openai-{key}",
+        )
+        for key in sorted(THINKING_LLM_NAMES)
+    ],
+)
+def test_prompt_with_reasoning_effort(llm, api):
+    """Tests that reasoning_effort is forwarded via the OpenAI endpoint."""
+
+    @kbench.task()
+    def _task(llm):
+        response = llm.prompt(
+            "What is 2 + 2? Reply with just the number.",
+            reasoning_effort="low",
+        )
+
+        kbench.assertions.assert_contains_regex(
+            r"4",
+            response,
+            expectation="Model should answer 4.",
+        )
+
+    run = _task.run(llm)
+    assert run.passed
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(
+            kbench.kaggle.load_model(key, api="genai"),
+            "genai",
+            id=f"genai-{key}",
+        )
+        for key in sorted(THINKING_LLM_NAMES)
+    ],
+)
+def test_prompt_with_thinking_config(llm, api):
+    """Tests that thinking_config is forwarded via the GenAI endpoint."""
+    from google.genai import types
+
+    @kbench.task()
+    def _task(llm):
+        response = llm.prompt(
+            "What is 2 + 2? Reply with just the number.",
+            thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+        )
+
+        kbench.assertions.assert_contains_regex(
+            r"4",
+            response,
+            expectation="Model should answer 4.",
+        )
+
+    run = _task.run(llm)
+    assert run.passed
+
+
+# %%
 # --- Test Case: Reasoning traces ---
 # Tests that reasoning traces are automatically captured on the message
 # when reasoning is enabled, accessible via message.reasoning_traces.
@@ -661,6 +741,7 @@ def test_reasoning_captures_traces(llm):
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
         "google/gemma-3-12b",
+        "anthropic/claude-sonnet-4-5@20250929",
         "zai/glm-5",
     }
 )
@@ -684,8 +765,6 @@ def test_image_with_detail(llm):
 # --- Test Case: Image with media_resolution parameter (GenAI only) ---
 
 MEDIA_RESOLUTION_LLM_NAMES = {
-    "google/gemini-2.5-flash",
-    "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
 }
 

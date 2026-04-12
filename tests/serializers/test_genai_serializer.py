@@ -293,6 +293,29 @@ def test_dump_audio_message_with_api_params():
     assert actual == expected
 
 
+def test_dump_image_filters_unsupported_api_params():
+    """Verifies that provider-specific params like 'detail' are silently dropped."""
+    serializer = genai_serializer.GenAISerializer()
+    image_content = ImageBase64(
+        b64_string=B64_STRING,
+        mime_type="image/png",
+        detail="low",
+    )
+    message = messages.Message(content=image_content, sender=actors.user)
+    actual = [c.model_dump() for c in serializer.dump_message(message)]
+    expected = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    inline_data=types.Blob(data=B64_STRING, mime_type="image/png"),
+                )
+            ],
+        ).model_dump()
+    ]
+    assert actual == expected
+
+
 def test_dump_messages():
     serializer = genai_serializer.GenAISerializer()
     msgs = [
