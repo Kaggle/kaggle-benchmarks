@@ -636,6 +636,21 @@ THINKING_LLM_NAMES = TEST_LLM_NAMES - {
 }
 
 
+@kbench.task()
+def _reasoning_effort_task(llm):
+    """Tests that reasoning_effort is forwarded via the OpenAI endpoint."""
+    response = llm.prompt(
+        "What is 2 + 2? Reply with just the number.",
+        reasoning_effort="low",
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"4",
+        response,
+        expectation="Model should answer 4.",
+    )
+
+
 @pytest.mark.parametrize(
     "llm, api",
     [
@@ -648,23 +663,25 @@ THINKING_LLM_NAMES = TEST_LLM_NAMES - {
     ],
 )
 def test_prompt_with_reasoning_effort(llm, api):
-    """Tests that reasoning_effort is forwarded via the OpenAI endpoint."""
-
-    @kbench.task()
-    def _task(llm):
-        response = llm.prompt(
-            "What is 2 + 2? Reply with just the number.",
-            reasoning_effort="low",
-        )
-
-        kbench.assertions.assert_contains_regex(
-            r"4",
-            response,
-            expectation="Model should answer 4.",
-        )
-
-    run = _task.run(llm)
+    run = _reasoning_effort_task.run(llm)
     assert run.passed
+
+
+@kbench.task()
+def _thinking_config_task(llm):
+    """Tests that thinking_config is forwarded via the GenAI endpoint."""
+    from google.genai import types
+
+    response = llm.prompt(
+        "What is 2 + 2? Reply with just the number.",
+        thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"4",
+        response,
+        expectation="Model should answer 4.",
+    )
 
 
 @pytest.mark.parametrize(
@@ -679,23 +696,7 @@ def test_prompt_with_reasoning_effort(llm, api):
     ],
 )
 def test_prompt_with_thinking_config(llm, api):
-    """Tests that thinking_config is forwarded via the GenAI endpoint."""
-    from google.genai import types
-
-    @kbench.task()
-    def _task(llm):
-        response = llm.prompt(
-            "What is 2 + 2? Reply with just the number.",
-            thinking_config=types.ThinkingConfig(thinking_level="LOW"),
-        )
-
-        kbench.assertions.assert_contains_regex(
-            r"4",
-            response,
-            expectation="Model should answer 4.",
-        )
-
-    run = _task.run(llm)
+    run = _thinking_config_task.run(llm)
     assert run.passed
 
 
@@ -769,6 +770,26 @@ MEDIA_RESOLUTION_LLM_NAMES = {
 }
 
 
+@kbench.task()
+def _media_resolution_task(llm):
+    """Tests that media_resolution parameter on images is forwarded via GenAI."""
+    red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+    image = images.from_base64(
+        red_dot_b64,
+        format="png",
+        media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+    )
+
+    response = llm.prompt("What color is this image?", image=image)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)red|pink|salmon|coral",
+        response,
+        expectation="LLM should identify the color red.",
+    )
+
+
 @pytest.mark.parametrize(
     "llm, api",
     [
@@ -781,27 +802,7 @@ MEDIA_RESOLUTION_LLM_NAMES = {
     ],
 )
 def test_image_with_media_resolution(llm, api):
-    """Tests that media_resolution parameter on images is forwarded via GenAI."""
-
-    @kbench.task()
-    def _task(llm):
-        red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-
-        image = images.from_base64(
-            red_dot_b64,
-            format="png",
-            media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
-        )
-
-        response = llm.prompt("What color is this image?", image=image)
-
-        kbench.assertions.assert_contains_regex(
-            r"(?i)red|pink|salmon|coral",
-            response,
-            expectation="LLM should identify the color red.",
-        )
-
-    run = _task.run(llm)
+    run = _media_resolution_task.run(llm)
     assert run.passed
 
 
