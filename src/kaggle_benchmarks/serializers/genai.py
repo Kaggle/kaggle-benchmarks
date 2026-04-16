@@ -23,7 +23,6 @@ from kaggle_benchmarks import tools as tool_utils
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer
 
-
 _PART_FIELDS = set(types.Part.model_fields.keys())
 
 
