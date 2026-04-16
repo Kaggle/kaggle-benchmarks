@@ -76,9 +76,11 @@ MESSAGE_FORMATS = [
             types.Content(
                 role="user",
                 parts=[
-                    types.Part.from_uri(
-                        file_uri="https://youtube.com/watch?v=dummy",
-                        mime_type="video/*",
+                    types.Part(
+                        file_data=types.FileData(
+                            file_uri="https://youtube.com/watch?v=dummy",
+                            mime_type="video/*",
+                        ),
                     ),
                 ],
             )
@@ -94,9 +96,8 @@ MESSAGE_FORMATS = [
             types.Content(
                 role="user",
                 parts=[
-                    types.Part.from_bytes(
-                        data=b"test",
-                        mime_type="audio/wav",
+                    types.Part(
+                        inline_data=types.Blob(data=b"test", mime_type="audio/wav"),
                     ),
                 ],
             )
@@ -114,10 +115,9 @@ MESSAGE_FORMATS = [
             types.Content(
                 role="user",
                 parts=[
-                    types.Part.from_text(text="A speech clip"),
-                    types.Part.from_bytes(
-                        data=b"test",
-                        mime_type="audio/mp3",
+                    types.Part(text="A speech clip"),
+                    types.Part(
+                        inline_data=types.Blob(data=b"test", mime_type="audio/mp3"),
                     ),
                 ],
             )
@@ -262,7 +262,11 @@ def test_dump_video_message_with_api_params():
                         file_uri="https://youtube.com/watch?v=dummy",
                         mime_type="video/*",
                     ),
-                    video_metadata={"fps": 1.0, "start_offset": "0s", "end_offset": "10s"},
+                    video_metadata={
+                        "fps": 1.0,
+                        "start_offset": "0s",
+                        "end_offset": "10s",
+                    },
                 )
             ],
         ).model_dump()
@@ -294,7 +298,7 @@ def test_dump_audio_message_with_api_params():
 
 
 def test_dump_image_filters_unsupported_api_params():
-    """Verifies that provider-specific params like 'detail' are silently dropped."""
+    """Verifies that provider-specific params like 'detail' are dropped with a warning."""
     serializer = genai_serializer.GenAISerializer()
     image_content = ImageBase64(
         b64_string=B64_STRING,
