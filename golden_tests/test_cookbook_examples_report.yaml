@@ -13,9 +13,8 @@ genai://anthropic/claude-haiku-4-5@20251001:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_thinking_config: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -34,9 +33,8 @@ genai://anthropic/claude-opus-4-5@20251101:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_thinking_config: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -55,7 +53,7 @@ genai://anthropic/claude-sonnet-4-5@20250929:
     test_image_local_file: passed
     test_image_url: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_thinking_config: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -66,7 +64,7 @@ genai://deepseek-ai/deepseek-r1-0528:
     test_complex_tool_return: failed
     test_dataset_eval: passed
     test_extract_bool: passed
-    test_extract_composite_pydantic: passed
+    test_extract_composite_pydantic: failed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
@@ -109,7 +107,6 @@ genai://google/gemini-2.0-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -132,9 +129,9 @@ genai://google/gemini-2.5-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
+    test_include_thoughts: passed
     test_multiple_tool_selection: passed
-    test_prompt_with_thinking_config: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -157,9 +154,9 @@ genai://google/gemini-2.5-pro:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
+    test_include_thoughts: passed
     test_multiple_tool_selection: passed
-    test_prompt_with_thinking_config: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -182,10 +179,9 @@ genai://google/gemini-3-flash-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_image_with_media_resolution: passed
     test_multiple_tool_selection: passed
-    test_prompt_with_thinking_config: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -208,7 +204,6 @@ genai://google/gemini-3.1-flash-lite-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -289,9 +284,8 @@ openai://anthropic/claude-haiku-4-5@20251001:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_reasoning_effort: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -310,9 +304,8 @@ openai://anthropic/claude-opus-4-5@20251101:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_reasoning_effort: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -331,7 +324,7 @@ openai://anthropic/claude-sonnet-4-5@20250929:
     test_image_local_file: passed
     test_image_url: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_reasoning_effort: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -344,7 +337,7 @@ openai://deepseek-ai/deepseek-r1-0528:
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
-    test_extract_dict: passed
+    test_extract_dict: failed
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
@@ -385,7 +378,6 @@ openai://google/gemini-2.0-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -408,9 +400,9 @@ openai://google/gemini-2.5-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
+    test_include_thoughts: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_reasoning_effort: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -433,9 +425,9 @@ openai://google/gemini-2.5-pro:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
+    test_include_thoughts: failed
     test_multiple_tool_selection: failed
-    test_prompt_with_reasoning_effort: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -458,9 +450,8 @@ openai://google/gemini-3-flash-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
-    test_prompt_with_reasoning_effort: passed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -483,7 +474,6 @@ openai://google/gemini-3.1-flash-lite-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_image_with_detail: passed
     test_multiple_tool_selection: failed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -541,7 +531,7 @@ openai://zai/glm-5:
     test_dataset_eval: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
-    test_extract_dataclass: failed
+    test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed

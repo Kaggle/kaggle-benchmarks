@@ -542,7 +542,7 @@ underlying API via an explicit `api_params` dictionary.
 response = llm.prompt("Solve this math problem.", reasoning="high")
 ```
 
-Valid values: `"low"`, `"medium"`, `"high"`, `"disabled"`.
+Valid values: `"low"`, `"medium"`, `"high"`.
 
 **Thinking traces**: include the model's internal reasoning in the
 response:

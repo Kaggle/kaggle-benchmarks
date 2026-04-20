@@ -144,7 +144,9 @@ def _validate_reasoning(reasoning: str | None) -> None:
     Note: GenAI validates these values automatically via ThinkingConfig,
     but OpenAI does not, so we validate here for both backends.
     """
-    valid = {"low", "medium", "high", "disabled"}
+
+    # TODO: Add "disabled" once Model Proxy supports reasoning_effort="none".
+    valid = {"low", "medium", "high"}
     if reasoning is not None and reasoning not in valid:
         raise ValueError(
             f"Invalid reasoning level: {reasoning!r}. "
