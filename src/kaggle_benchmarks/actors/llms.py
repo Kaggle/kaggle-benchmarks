@@ -279,11 +279,20 @@ class LLMChat(actors.Actor):
 
 
 class OpenAI(LLMChat):
-    def __init__(self, client: openai.OpenAI, model: str, **kwargs):
+    def __init__(
+        self,
+        client: openai.OpenAI,
+        model: str,
+        reasoning_level: str | None = None,
+        include_thoughts: bool | None = None,
+        **kwargs,
+    ):
         kwargs.setdefault("name", model)
         super().__init__(**kwargs)
         self.model = model
         self.client = client
+        self.reasoning_level = reasoning_level
+        self.include_thoughts = include_thoughts
         self.serializer = openai_serializer.ModelProxyOpenAISerializer(
             roles_mapping={"tool": "system"}
         )
@@ -366,6 +375,19 @@ class OpenAI(LLMChat):
                 kwargs["stream"] = True
 
             method = self.client.chat.completions.create
+
+        if self.reasoning_level:
+            kwargs.setdefault("reasoning_effort", self.reasoning_level)
+        if self.include_thoughts:
+            # The Model Proxy expects a literal "extra_body" key in the
+            # request body.  The OpenAI SDK's extra_body parameter merges
+            # its dict into the top level, so we nest one level deeper.
+            kwargs.setdefault("extra_body", {})
+            kwargs["extra_body"].setdefault("extra_body", {})
+            kwargs["extra_body"]["extra_body"].setdefault("google", {})
+            kwargs["extra_body"]["extra_body"]["google"].setdefault(
+                "thinking_config", {"include_thoughts": True}
+            )
 
         response = method(
             model=self.model,

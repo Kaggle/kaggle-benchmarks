@@ -49,7 +49,12 @@ def load_available_models() -> dict[str, LLMChat]:
     }
 
 
-def load_model(model_name: str, api: str = "openai") -> LLMChat:
+def load_model(
+    model_name: str,
+    api: str = "openai",
+    reasoning_level: str | None = None,
+    include_thoughts: bool | None = None,
+) -> LLMChat:
     if "MODEL_PROXY_API_KEY" not in os.environ:
         raise RuntimeError(
             "The MODEL_PROXY_API_KEY environment variable should be provided"
@@ -63,4 +68,6 @@ def load_model(model_name: str, api: str = "openai") -> LLMChat:
         api_key=os.environ["MODEL_PROXY_API_KEY"],
         base_url=os.environ["MODEL_PROXY_URL"],
         api=api,
+        reasoning_level=reasoning_level,
+        include_thoughts=include_thoughts,
     )

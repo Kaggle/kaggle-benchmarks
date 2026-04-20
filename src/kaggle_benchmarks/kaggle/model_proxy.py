@@ -30,6 +30,8 @@ class ModelProxy:
         api: str = "openai",
         api_key: str | None = None,
         base_url: str | None = None,
+        reasoning_level: str | None = None,
+        include_thoughts: bool | None = None,
         **kwargs,
     ) -> LLMChat:
         resolved_api_key = api_key or os.getenv("MODEL_PROXY_API_KEY")
@@ -65,7 +67,13 @@ class ModelProxy:
 
             # TODO (b/439876083): Disable temperature parameter till this is resolved.
             kwargs.setdefault("support_temperature", False)
-            llm_instance = OpenAI(client, model, **kwargs)
+            llm_instance = OpenAI(
+                client,
+                model,
+                reasoning_level=reasoning_level,
+                include_thoughts=include_thoughts,
+                **kwargs,
+            )
 
         else:
             raise ValueError(f"Unsupported API: '{api}'. Must be 'openai' or 'genai'.")
