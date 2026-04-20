@@ -138,15 +138,17 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
-_VALID_REASONING_LEVELS = {"low", "medium", "high", "disabled"}
-
-
 def _validate_reasoning(reasoning: str | None) -> None:
-    """Raises if reasoning is not a valid level."""
-    if reasoning is not None and reasoning not in _VALID_REASONING_LEVELS:
+    """Raises if reasoning is not a valid level.
+
+    Note: GenAI validates these values automatically via ThinkingConfig,
+    but OpenAI does not, so we validate here for both backends.
+    """
+    valid = {"low", "medium", "high", "disabled"}
+    if reasoning is not None and reasoning not in valid:
         raise ValueError(
             f"Invalid reasoning level: {reasoning!r}. "
-            f"Must be one of: {sorted(_VALID_REASONING_LEVELS)}"
+            f"Must be one of: {sorted(valid)}"
         )
 
 

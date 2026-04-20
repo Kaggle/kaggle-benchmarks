@@ -532,23 +532,35 @@ response = llm.prompt("Transcribe this audio.", audio=audio_content)
 
 ### Recipe: Passing Provider-Specific API Parameters
 
-The SDK supports passing provider-specific parameters through to the
-underlying API via an explicit `api_params` dictionary. There are two
-levels:
+The SDK provides unified parameters that work across providers, plus
+passing provider-specific parameters through to the
+underlying API via an explicit `api_params` dictionary.
 
-**Request-level parameters** are passed via `api_params` on
-`llm.prompt()`:
+**Reasoning**: control how much reasoning the model performs:
 
 ```python
-# OpenAI: reduce reasoning effort for faster, cheaper responses
-response = llm.prompt("What is 2+2?", api_params={"reasoning_effort": "low"})
-
-# GenAI: control thinking level
-response = llm.prompt(
-    "What is 2+2?",
-    api_params={"thinking_config": {"thinking_level": "LOW"}},
-)
+response = llm.prompt("Solve this math problem.", reasoning="high")
 ```
+
+Valid values: `"low"`, `"medium"`, `"high"`, `"disabled"`.
+
+**Thinking traces**: include the model's internal reasoning in the
+response:
+
+```python
+response = llm.prompt("How many r's in strawberry?", reasoning="high", include_thoughts=True)
+```
+
+**Provider-specific parameters**: for advanced use cases, pass an
+`api_params` dictionary:
+
+```python
+response = llm.prompt("Generate something.", api_params={"max_tokens": 500})
+```
+
+> **Note:** Parameters that have explicit SDK equivalents (e.g.,
+> `reasoning_effort`, `thinking_config`) are blocked from `api_params`.
+> Use the corresponding `prompt()` parameter instead.
 
 **Content-level parameters** are passed via `api_params` when
 constructing image, video, or audio objects:
@@ -568,9 +580,9 @@ image = images.from_path(
 response = llm.prompt("What color is this?", image=image)
 ```
 
-> **Note:** You are responsible for using the correct parameter names
-> for your target API provider. Parameters that are not recognized by the
-> backend will be dropped (with a warning on GenAI) or may cause errors.
+> **Note:** Content-level parameters are provider-specific. Parameters
+> not recognized by the backend will be dropped (with a warning on GenAI)
+> or may cause errors.
 
 ---
 
