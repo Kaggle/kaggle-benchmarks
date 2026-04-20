@@ -14,6 +14,7 @@
 
 import base64
 import logging
+import warnings
 from typing import Any
 
 from google.genai import types
@@ -30,11 +31,10 @@ def _filter_part_params(api_params: dict[str, Any]) -> dict[str, Any]:
     """Filters api_params to only valid Part fields, warning on unsupported ones."""
     unsupported = set(api_params) - _PART_FIELDS
     if unsupported:
-        logging.warning(
-            "Ignoring unsupported api_params for GenAI Part: %s. "
-            "Supported fields: %s",
-            unsupported,
-            _PART_FIELDS,
+        warnings.warn(
+            f"Ignoring unsupported api_params for GenAI Part: {unsupported}. "
+            f"Supported fields: {_PART_FIELDS}",
+            stacklevel=2,
         )
     return {k: v for k, v in api_params.items() if k in _PART_FIELDS}
 
@@ -91,10 +91,14 @@ class GenAISerializer(BaseSerializer):
         video = message.content
         yield types.Content(
             role=self.get_role(message.sender),
-            parts=[types.Part(
-                file_data=types.FileData(file_uri=video.url, mime_type=video.mime_type),
-                **_filter_part_params(video.api_params),
-            )],
+            parts=[
+                types.Part(
+                    file_data=types.FileData(
+                        file_uri=video.url, mime_type=video.mime_type
+                    ),
+                    **_filter_part_params(video.api_params),
+                )
+            ],
         )
 
     def dump_audio(self, message: messages.Message[audios.AudioContent]):
