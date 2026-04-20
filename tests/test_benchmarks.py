@@ -356,6 +356,54 @@ def test_partial():
     assert partial.run(x=1, y=2).result == 3
 
 
+def test_task_name_too_long_raises():
+    long_name = "x" * (tasks.TASK_NAME_MAX_LENGTH + 1)
+    with pytest.raises(ValueError, match=r"Task name is \d+ characters"):
+
+        @tasks.task(name=long_name)
+        def too_long_name():
+            pass
+
+
+def test_task_description_too_long_raises():
+    long_description = "y" * (tasks.TASK_DESCRIPTION_MAX_LENGTH + 1)
+    with pytest.raises(ValueError, match=r"Task description is \d+ characters"):
+
+        @tasks.task(description=long_description)
+        def too_long_description():
+            pass
+
+
+def test_task_name_and_description_at_limit_accepted():
+    name_at_limit = "n" * tasks.TASK_NAME_MAX_LENGTH
+    description_at_limit = "d" * tasks.TASK_DESCRIPTION_MAX_LENGTH
+
+    @tasks.task(name=name_at_limit, description=description_at_limit)
+    def at_limit():
+        pass
+
+    assert at_limit.name == name_at_limit
+    assert at_limit.description == description_at_limit
+
+
+def test_task_omitted_name_and_description_accepted():
+    @tasks.task()
+    def no_name_or_description():
+        pass
+
+    assert no_name_or_description.name == "No Name Or Description"
+    assert no_name_or_description.description == ""
+
+
+def test_task_short_name_and_description_pass():
+    @tasks.task(name="short", description="a short description")
+    def short_values():
+        pass
+
+    assert short_values.name == "short"
+    assert short_values.description == "a short description"
+
+
 def test_nested_task_evaluate_with_retries_fails(duck):
     @tasks.task()
     def single_task(llm, x):

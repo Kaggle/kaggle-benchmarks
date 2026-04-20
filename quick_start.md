@@ -61,6 +61,9 @@ Here are some core concepts for using the library effectively:
   can optionally return a value. If no value is returned, the task is
   graded Pass/Fail based on its assertions. The first parameter must
   always be the LLM being tested; additional parameters are optional.
+  The `name` and `description` arguments to `@kbench.task(...)` are each
+  limited to 255 characters. If `description` is omitted, the function's
+  docstring is used and is subject to the same limit.
 - **`LLM`**: An object representing a large language model you can
   interact with. You can access available Kaggle models via
   `kbench.llms["vendor/model-name"]`.

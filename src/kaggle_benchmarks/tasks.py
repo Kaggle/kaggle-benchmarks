@@ -31,6 +31,13 @@ T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
+# Maximum lengths for task metadata, matching the backend's nvarchar(255)
+# columns in BenchmarkTaskVersions. Exceeding these causes a SQL truncation
+# error when the kernel session is persisted, which surfaces to users only as
+# an opaque "try again" message in Active Events.
+TASK_NAME_MAX_LENGTH = 255
+TASK_DESCRIPTION_MAX_LENGTH = 255
+
 
 class NonRecoverableError(Exception):
     """Custom exception for non-recoverable errors during task running."""
@@ -50,6 +57,20 @@ class Task(Generic[T]):
 
     def __post_init__(self):
         from kaggle_benchmarks import client
+
+        if len(self.name) > TASK_NAME_MAX_LENGTH:
+            raise ValueError(
+                f"Task name is {len(self.name)} characters; the maximum "
+                f"allowed is {TASK_NAME_MAX_LENGTH}. Please shorten the "
+                f"'name' argument to @kbench.task(...)."
+            )
+        if len(self.description) > TASK_DESCRIPTION_MAX_LENGTH:
+            raise ValueError(
+                f"Task description is {len(self.description)} characters; "
+                f"the maximum allowed is {TASK_DESCRIPTION_MAX_LENGTH}. "
+                f"Please shorten the 'description' argument to "
+                f"@kbench.task(...)."
+            )
 
         client.register_task(self)
         events.manager.dispatch("new_task", self)
