@@ -610,7 +610,7 @@ THINKING_LLM_NAMES = TEST_LLM_NAMES - {
 
 
 @benchmark_test(
-    llm_names=THINKING_LLM_NAMES,
+    include=THINKING_LLM_NAMES,
 )
 @kbench.task()
 def test_reasoning_param(llm):
