@@ -211,6 +211,12 @@ def test_prompt_reasoning_sets_effort_and_thinking_config(model):
     assert extra["include_thoughts"] is True
 
 
+def test_prompt_forwards_api_params():
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Hi", api_params={"max_tokens": 500})
+    assert llm.kwargs["max_tokens"] == 500
+
+
 def test_reasoning_content_captured_in_response(mocker):
     """Tests that reasoning_content is captured as reasoning_traces.
 

@@ -260,11 +260,11 @@ traces = kbench.last_reasoning_traces()  # model's internal reasoning
 
 ### Provider-Specific API Parameters
 
-The `llm.prompt()` method accepts `api_params` that are forwarded directly
-to the underlying API provider. This allows you to use provider-specific
-parameters.
+The `llm.prompt()` method accepts an `api_params` dictionary that is
+forwarded directly to the underlying API provider. This allows you to
+use provider-specific parameters.
 
-**Request-level parameters** are passed via `api_params` to
+**Request-level parameters** are passed via `api_params` on
 `llm.prompt()`:
 
 ```python
@@ -278,7 +278,7 @@ response = llm.prompt(
 )
 ```
 
-**Content-level parameters** are passed as keyword arguments when
+**Content-level parameters** are passed via `api_params` when
 constructing content objects (images, videos, audio):
 
 ```python
@@ -289,21 +289,26 @@ image = images.from_url("https://example.com/photo.jpg", api_params={"detail": "
 response = llm.prompt("Describe this image.", image=image)
 
 # GenAI: control media resolution
-image = images.from_url("https://example.com/photo.jpg",
-    api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}})
+image = images.from_url(
+    "https://example.com/photo.jpg",
+    api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
+)
 response = llm.prompt("Describe this image.", image=image)
 
 # GenAI: control video metadata
-video = videos.from_url("https://youtube.com/watch?v=example",
-    api_params={"video_metadata": {"fps": 1.0, "start_offset": "0s", "end_offset": "10s"}})
+video = videos.from_url(
+    "https://youtube.com/watch?v=example",
+    api_params={"video_metadata": {"fps": 1.0, "start_offset": "0s", "end_offset": "10s"}},
+)
 response = llm.prompt("Summarize this video.", video=video)
 ```
 
 > **Note:** These parameters are provider-specific. You are responsible
 > for using the correct parameter names for your chosen API. For example,
 > `detail` is an OpenAI parameter and `media_resolution` is a GenAI
-> parameter. Parameters not recognized by the provider will be silently
-> ignored or may cause an error depending on the backend.
+> parameter. Parameters not recognized by the provider will be dropped
+> (with a warning on GenAI) or may cause an error depending on the
+> backend.
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them

@@ -265,7 +265,9 @@ def test_dump_audio_message_model_proxy():
 
 def test_dump_image_message_with_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
-    image_content = ImageBase64(b64_string="...", mime_type="image/png", detail="low")
+    image_content = ImageBase64(
+        b64_string="...", mime_type="image/png", api_params={"detail": "low"}
+    )
     message = messages.Message(content=image_content, sender=actors.user)
     raw_messages = list(serializer.dump_message(message))
     assert raw_messages == [
@@ -285,7 +287,7 @@ def test_dump_video_message_with_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=videos.VideoURL(
-            url="https://youtube.com/watch?v=dummy", max_frames=10
+            url="https://youtube.com/watch?v=dummy", api_params={"max_frames": 10}
         ),
         sender=actors.user,
     )
@@ -310,7 +312,7 @@ def test_dump_audio_message_with_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=audios.AudioContent(
-            b64_string="abc123", mime_type="audio/wav", language="en"
+            b64_string="abc123", mime_type="audio/wav", api_params={"language": "en"}
         ),
         sender=actors.user,
     )

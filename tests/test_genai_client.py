@@ -107,6 +107,15 @@ def test_prompt_thinking_config(reasoning, expected_level):
     assert tc.include_thoughts is True
 
 
+def test_prompt_forwards_api_params():
+    """Tests that api_params from prompt() reach the config."""
+    llm = MockedGoogleGenAI()
+    llm.prompt("Think hard", api_params={"top_p": 0.95, "max_output_tokens": 500})
+
+    assert llm.config.top_p == 0.95
+    assert llm.config.max_output_tokens == 500
+
+
 def test_split_response_separates_content_and_thinking():
     """Tests that _split_response separates content from thought parts."""
     llm = MockedGoogleGenAI()
@@ -216,11 +225,11 @@ def test_thinking_captured_in_response(mocker):
 
 
 def test_prompt_forwards_thinking_config():
-    """Tests that thinking_config is forwarded to GenerateContentConfig."""
+    """Tests that thinking_config is forwarded to GenerateContentConfig via api_params."""
     llm = MockedGoogleGenAI()
     llm.prompt(
         "Think hard",
-        thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+        api_params={"thinking_config": types.ThinkingConfig(thinking_level="LOW")},
     )
 
     assert llm.config.thinking_config.thinking_level == "LOW"

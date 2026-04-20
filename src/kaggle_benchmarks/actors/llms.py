@@ -183,6 +183,7 @@ class LLMChat(actors.Actor):
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
+        api_params: dict[str, Any] | None = None,
     ) -> T:
         if image is not None:
             match image:
@@ -212,6 +213,7 @@ class LLMChat(actors.Actor):
             temperature=temperature if self.support_temperature else None,
             tools=tools if tools is not None else [],
             reasoning=reasoning,
+            **(api_params or {}),
         ).content
 
     @chats.emits_message

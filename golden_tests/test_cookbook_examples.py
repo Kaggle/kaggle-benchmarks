@@ -641,7 +641,7 @@ def _reasoning_effort_task(llm):
     """Tests that reasoning_effort is forwarded via the OpenAI endpoint."""
     response = llm.prompt(
         "What is 2 + 2? Reply with just the number.",
-        reasoning_effort="low",
+        api_params={"reasoning_effort": "low"},
     )
 
     kbench.assertions.assert_contains_regex(
@@ -674,7 +674,7 @@ def _thinking_config_task(llm):
 
     response = llm.prompt(
         "What is 2 + 2? Reply with just the number.",
-        thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+        api_params={"thinking_config": types.ThinkingConfig(thinking_level="LOW")},
     )
 
     kbench.assertions.assert_contains_regex(
@@ -751,7 +751,7 @@ def test_image_with_detail(llm):
     """Tests that detail parameter on images is forwarded to the model."""
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
-    image = images.from_base64(red_dot_b64, format="png", detail="low")
+    image = images.from_base64(red_dot_b64, format="png", api_params={"detail": "low"})
 
     response = llm.prompt("What color is this image?", image=image)
 
@@ -778,7 +778,7 @@ def _media_resolution_task(llm):
     image = images.from_base64(
         red_dot_b64,
         format="png",
-        media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+        api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
     )
 
     response = llm.prompt("What color is this image?", image=image)

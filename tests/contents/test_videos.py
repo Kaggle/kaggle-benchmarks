@@ -47,7 +47,7 @@ def test_video_url_get_payload():
 
 def test_api_params_stored():
     url = "https://www.youtube.com/watch?v=abc123"
-    video = videos.from_url(url, video_metadata={"fps": 1.0})
+    video = videos.from_url(url, api_params={"video_metadata": {"fps": 1.0}})
     assert video.api_params == {"video_metadata": {"fps": 1.0}}
 
 

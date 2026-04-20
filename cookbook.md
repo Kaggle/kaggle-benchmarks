@@ -533,34 +533,38 @@ response = llm.prompt("Transcribe this audio.", audio=audio_content)
 ### Recipe: Passing Provider-Specific API Parameters
 
 The SDK supports passing provider-specific parameters through to the
-underlying API. There are two levels:
+underlying API via an explicit `api_params` dictionary. There are two
+levels:
 
-**Request-level parameters** are passed as `**kwargs` to `llm.prompt()`:
+**Request-level parameters** are passed via `api_params` on
+`llm.prompt()`:
 
 ```python
 # OpenAI: reduce reasoning effort for faster, cheaper responses
-response = llm.prompt("What is 2+2?", reasoning_effort="low")
+response = llm.prompt("What is 2+2?", api_params={"reasoning_effort": "low"})
 
 # GenAI: control thinking level
 response = llm.prompt(
     "What is 2+2?",
-    thinking_config={"thinking_level": "LOW"},
+    api_params={"thinking_config": {"thinking_level": "LOW"}},
 )
 ```
 
-**Content-level parameters** are passed as `**kwargs` when constructing
-image, video, or audio objects:
+**Content-level parameters** are passed via `api_params` when
+constructing image, video, or audio objects:
 
 ```python
 from kaggle_benchmarks.content_types import images
 
 # OpenAI: use low-detail mode for cheaper image processing
-image = images.from_path("photo.png", detail="low")
+image = images.from_path("photo.png", api_params={"detail": "low"})
 response = llm.prompt("What color is this?", image=image)
 
 # GenAI: use low media resolution
-image = images.from_path("photo.png",
-    media_resolution={"level": "MEDIA_RESOLUTION_LOW"})
+image = images.from_path(
+    "photo.png",
+    api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
+)
 response = llm.prompt("What color is this?", image=image)
 ```
 

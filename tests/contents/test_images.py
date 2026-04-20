@@ -107,14 +107,16 @@ def test_from_image_url(mocker):
 
 
 def test_api_params_stored():
-    img = images.from_base64(B64_STRING, format="png", detail="low")
+    img = images.from_base64(B64_STRING, format="png", api_params={"detail": "low"})
     assert img.api_params == {"detail": "low"}
 
-    img_url = images.from_url("https://example.com/image.jpg", detail="high")
+    img_url = images.from_url(
+        "https://example.com/image.jpg", api_params={"detail": "high"}
+    )
     assert img_url.api_params == {"detail": "high"}
 
     array = np.zeros((5, 5, 3), dtype=np.uint8)
-    img_array = images.from_array(array, detail="low")
+    img_array = images.from_array(array, api_params={"detail": "low"})
     assert img_array.api_params == {"detail": "low"}
 
 
@@ -128,7 +130,9 @@ def test_api_params_preserved_by_from_image_url(mocker):
         "kaggle_benchmarks.content_types.images.image_url_to_base64",
         return_value=B64_STRING,
     )
-    img_url = images.ImageURL("https://example.com/image.png", detail="low")
+    img_url = images.ImageURL(
+        "https://example.com/image.png", api_params={"detail": "low"}
+    )
     img_base64 = images.from_image_url(img_url)
     assert img_base64.api_params == {"detail": "low"}
 

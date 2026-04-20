@@ -227,7 +227,7 @@ def test_dump_image_message_with_api_params():
     image_content = ImageBase64(
         b64_string=B64_STRING,
         mime_type="image/png",
-        media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+        api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
     )
     message = messages.Message(content=image_content, sender=actors.user)
     actual = [c.model_dump() for c in serializer.dump_message(message)]
@@ -249,7 +249,9 @@ def test_dump_video_message_with_api_params():
     serializer = genai_serializer.GenAISerializer()
     video_content = videos.VideoURL(
         url="https://youtube.com/watch?v=dummy",
-        video_metadata={"fps": 1.0, "start_offset": "0s", "end_offset": "10s"},
+        api_params={
+            "video_metadata": {"fps": 1.0, "start_offset": "0s", "end_offset": "10s"}
+        },
     )
     message = messages.Message(content=video_content, sender=actors.user)
     actual = [c.model_dump() for c in serializer.dump_message(message)]
@@ -279,7 +281,7 @@ def test_dump_audio_message_with_api_params():
     audio_content = audios.AudioContent(
         b64_string="dGVzdA==",
         mime_type="audio/wav",
-        media_resolution={"level": "MEDIA_RESOLUTION_LOW"},
+        api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
     )
     message = messages.Message(content=audio_content, sender=actors.user)
     actual = [c.model_dump() for c in serializer.dump_message(message)]
@@ -303,7 +305,7 @@ def test_dump_image_filters_unsupported_api_params():
     image_content = ImageBase64(
         b64_string=B64_STRING,
         mime_type="image/png",
-        detail="low",
+        api_params={"detail": "low"},
     )
     message = messages.Message(content=image_content, sender=actors.user)
     actual = [c.model_dump() for c in serializer.dump_message(message)]
