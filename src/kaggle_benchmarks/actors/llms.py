@@ -570,12 +570,6 @@ class GoogleGenAI(LLMChat):
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
 
-    _REASONING_LEVEL_MAP = {
-        "low": "LOW",
-        "medium": "MEDIUM",
-        "high": "HIGH",
-    }
-
     def invoke(
         self,
         messages: list[messages.Message],
@@ -589,19 +583,24 @@ class GoogleGenAI(LLMChat):
         if system:
             config_params["system_instruction"] = system
 
-        kwargs.pop("include_thoughts", None)
+        include_thoughts = kwargs.pop("include_thoughts", False)
 
         if reasoning is not None:
             level = self._REASONING_LEVEL_MAP[reasoning]
             if level is None:
                 config_params["thinking_config"] = types.ThinkingConfig(
                     thinking_budget=0,
+                    include_thoughts=include_thoughts or None,
                 )
             else:
                 config_params["thinking_config"] = types.ThinkingConfig(
                     thinking_level=level,
-                    include_thoughts=True,
+                    include_thoughts=include_thoughts or None,
                 )
+        elif include_thoughts:
+            config_params["thinking_config"] = types.ThinkingConfig(
+                include_thoughts=True,
+            )
 
         if "response_format" in kwargs:
             schema = kwargs.pop("response_format")

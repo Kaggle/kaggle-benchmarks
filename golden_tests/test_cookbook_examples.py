@@ -656,9 +656,9 @@ def test_reasoning_captures_traces(llm):
 
 
 # %%
-# --- Test Case: Include thoughts (OpenAI backend only) ---
+# --- Test Case: Include thoughts ---
 # Tests that thinking traces are returned when include_thoughts=True is passed.
-# GenAI backend is not yet supported for include_thoughts.
+# Both backends wrap thoughts in <think> tags.
 
 INCLUDE_THOUGHTS_LLM_NAMES = {
     "google/gemini-2.5-flash",
@@ -686,11 +686,12 @@ def _include_thoughts_task(llm):
     "llm, api",
     [
         pytest.param(
-            kbench.kaggle.load_model(key, api="openai"),
-            "openai",
-            id=f"openai-{key}",
+            kbench.kaggle.load_model(key, api=api),
+            api,
+            id=f"{api}-{key}",
         )
         for key in sorted(INCLUDE_THOUGHTS_LLM_NAMES)
+        for api in ["openai", "genai"]
     ],
 )
 def test_include_thoughts(llm, api):

@@ -232,6 +232,60 @@ def test_prompt_reasoning_none():
     assert llm.config.thinking_config.thinking_budget == 0
 
 
+def test_prompt_include_thoughts():
+    """Tests that include_thoughts is passed into thinking_config."""
+    llm = MockedGoogleGenAI()
+    llm.prompt("Think hard", include_thoughts=True)
+
+    assert llm.config.thinking_config.include_thoughts is True
+
+
+def test_prompt_reasoning_with_include_thoughts():
+    """Tests that reasoning and include_thoughts are merged into one thinking_config."""
+    llm = MockedGoogleGenAI()
+    llm.prompt("Think hard", reasoning="high", include_thoughts=True)
+
+    assert llm.config.thinking_config.thinking_level == "HIGH"
+    assert llm.config.thinking_config.include_thoughts is True
+
+
+def test_extract_text_wraps_thought_parts():
+    """Tests that _extract_text wraps thought parts in <think> tags."""
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[
+                        types.Part(text="I need to count...", thought=True),
+                        types.Part(text="There are 3 r's."),
+                    ]
+                )
+            )
+        ]
+    )
+    text = GoogleGenAI._extract_text(response)
+    assert "<think>" in text
+    assert "I need to count..." in text
+    assert "</think>" in text
+    assert "There are 3 r's." in text
+
+
+def test_extract_text_no_thought_parts():
+    """Tests that _extract_text returns plain text when no thought parts."""
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[types.Part(text="Hello world")]
+                )
+            )
+        ]
+    )
+    text = GoogleGenAI._extract_text(response)
+    assert text == "Hello world"
+    assert "<think>" not in text
+
+
 def test_prompt_rejects_invalid_reasoning():
     """Tests that an invalid reasoning level raises ValueError."""
     llm = MockedGoogleGenAI()
