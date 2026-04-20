@@ -183,6 +183,29 @@ def test_dump_messages():
     assert list(serializer.dump_messages(msgs)) == expected_raw_messages
 
 
+def test_dump_image_message_with_api_params():
+    serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
+    image_content = ImageURL(
+        url="http://example.com/a.png", api_params={"detail": "low"}
+    )
+    message = messages.Message(content=image_content, sender=actors.user)
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "http://example.com/a.png",
+                        "detail": "low",
+                    },
+                },
+            ],
+        }
+    ]
+
+
 def test_dump_chat():
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     msgs = [

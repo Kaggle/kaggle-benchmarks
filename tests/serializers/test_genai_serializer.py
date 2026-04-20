@@ -308,7 +308,8 @@ def test_dump_image_filters_unsupported_api_params():
         api_params={"detail": "low"},
     )
     message = messages.Message(content=image_content, sender=actors.user)
-    actual = [c.model_dump() for c in serializer.dump_message(message)]
+    with pytest.warns(UserWarning, match="Ignoring unsupported api_params"):
+        actual = [c.model_dump() for c in serializer.dump_message(message)]
     expected = [
         types.Content(
             role="user",

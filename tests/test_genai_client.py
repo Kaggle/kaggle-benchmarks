@@ -232,6 +232,13 @@ def test_prompt_reasoning_none():
     assert llm.config.thinking_config.thinking_budget == 0
 
 
+def test_prompt_rejects_invalid_reasoning():
+    """Tests that an invalid reasoning level raises ValueError."""
+    llm = MockedGoogleGenAI()
+    with pytest.raises(ValueError, match="Invalid reasoning level"):
+        llm.prompt("Think hard", reasoning="hgih")
+
+
 def test_prompt_rejects_thinking_config_in_api_params():
     """Tests that thinking_config in api_params raises an error."""
     llm = MockedGoogleGenAI()

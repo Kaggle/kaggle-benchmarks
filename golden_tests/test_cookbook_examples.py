@@ -448,7 +448,7 @@ def test_image_base64(llm):
     # This is a 1x1 red pixel in PNG format
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
-    image = images.from_base64(red_dot_b64, format="png")
+    image = images.from_base64(red_dot_b64, format="png", api_params={"detail": "low"})
 
     response = llm.prompt("What color is this image?", image=image)
 
@@ -597,20 +597,17 @@ def test_audio_url(llm):
 # trace capture is verified in test_reasoning_captures_traces for models that
 # support it (not all models return traces).
 
-THINKING_LLM_NAMES = TEST_LLM_NAMES - {
-    "google/gemma-3-12b",
-    "google/gemini-2.0-flash",
-    "deepseek-ai/deepseek-r1-0528",
-    "deepseek-ai/deepseek-v3.2",
-    "qwen/qwen3-235b-a22b-instruct-2507",
-    "qwen/qwen3-next-80b-a3b-instruct",
-    "zai/glm-5",
-    "google/gemini-3.1-flash-lite-preview",
-}
-
-
 @benchmark_test(
-    include=THINKING_LLM_NAMES,
+    exclude={
+        "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
+        "deepseek-ai/deepseek-r1-0528",
+        "deepseek-ai/deepseek-v3.2",
+        "qwen/qwen3-235b-a22b-instruct-2507",
+        "qwen/qwen3-next-80b-a3b-instruct",
+        "zai/glm-5",
+        "google/gemini-3.1-flash-lite-preview",
+    },
 )
 @kbench.task()
 def test_reasoning_param(llm):
@@ -659,34 +656,46 @@ def test_reasoning_captures_traces(llm):
 
 
 # %%
-# --- Test Case: Image with detail parameter ---
+# --- Test Case: Include thoughts (OpenAI backend only) ---
+# Tests that thinking traces are returned when include_thoughts=True is passed.
+# GenAI backend is not yet supported for include_thoughts.
+
+INCLUDE_THOUGHTS_LLM_NAMES = {
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+}
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-        "google/gemma-3-12b",
-        "anthropic/claude-sonnet-4-5@20250929",
-        "zai/glm-5",
-    }
-)
 @kbench.task()
-def test_image_with_detail(llm):
-    """Tests that detail parameter on images is forwarded to the model."""
-    red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-
-    image = images.from_base64(red_dot_b64, format="png", api_params={"detail": "low"})
-
-    response = llm.prompt("What color is this image?", image=image)
+def _include_thoughts_task(llm):
+    """Tests that include_thoughts returns thinking traces."""
+    response = llm.prompt(
+        "How many r's are in the word 'strawberry'? Think step by step.",
+        reasoning="high",
+        include_thoughts=True,
+    )
 
     kbench.assertions.assert_contains_regex(
-        r"(?i)red|pink|salmon|coral",
+        r"(?i)<think>",
         response,
-        expectation="LLM should identify the color red.",
+        expectation="Response should contain thinking traces in <think> tags.",
     )
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(
+            kbench.kaggle.load_model(key, api="openai"),
+            "openai",
+            id=f"openai-{key}",
+        )
+        for key in sorted(INCLUDE_THOUGHTS_LLM_NAMES)
+    ],
+)
+def test_include_thoughts(llm, api):
+    run = _include_thoughts_task.run(llm)
+    assert run.passed
 
 
 # %%

@@ -87,6 +87,7 @@ print(outer_t)
 
 import dataclasses
 import enum
+import inspect
 import json
 import re
 import typing
@@ -137,25 +138,27 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
-_EXPLICIT_PARAMS = {
-    "reasoning_effort": "reasoning",
-    "thinking_config": "reasoning",
-    "temperature": "temperature",
-    "seed": "seed",
-    "tools": "tools",
-    "response_format": "schema",
-}
+_VALID_REASONING_LEVELS = {"low", "medium", "high", "disabled"}
 
 
-def _validate_api_params(api_params: dict[str, Any] | None) -> None:
+def _validate_reasoning(reasoning: str | None) -> None:
+    """Raises if reasoning is not a valid level."""
+    if reasoning is not None and reasoning not in _VALID_REASONING_LEVELS:
+        raise ValueError(
+            f"Invalid reasoning level: {reasoning!r}. "
+            f"Must be one of: {sorted(_VALID_REASONING_LEVELS)}"
+        )
+
+
+def _validate_api_params(api_params: dict[str, Any] | None, prompt_params: set[str]) -> None:
     """Raises if api_params contains keys that have explicit SDK parameters."""
     if not api_params:
         return
-    for key, param_name in _EXPLICIT_PARAMS.items():
-        if key in api_params:
+    for key in api_params:
+        if key in prompt_params:
             raise ValueError(
                 f"{key!r} is not allowed in api_params. "
-                f"Use the {param_name!r} parameter on prompt() instead."
+                f"Use the {key!r} parameter on prompt() instead."
             )
 
 
@@ -205,9 +208,11 @@ class LLMChat(actors.Actor):
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
+        include_thoughts: bool = False,
         api_params: dict[str, Any] | None = None,
     ) -> T:
-        _validate_api_params(api_params)
+        _validate_reasoning(reasoning)
+        _validate_api_params(api_params, _PROMPT_PARAMS)
 
         if image is not None:
             match image:
@@ -237,6 +242,7 @@ class LLMChat(actors.Actor):
             temperature=temperature if self.support_temperature else None,
             tools=tools if tools is not None else [],
             reasoning=reasoning,
+            include_thoughts=include_thoughts,
             **(api_params or {}),
         ).content
 
@@ -340,6 +346,13 @@ class LLMChat(actors.Actor):
         return f"{type(self).__name__}({name=})"
 
 
+# Auto-derived from prompt()'s signature. If someone adds a new param
+# to prompt(), it's automatically blocked from api_params.
+_PROMPT_PARAMS = set(inspect.signature(LLMChat.prompt).parameters.keys()) - {
+    "self", "message", "image", "video", "audio", "api_params",
+}
+
+
 class OpenAI(LLMChat):
     def __init__(self, client: openai.OpenAI, model: str, **kwargs):
         kwargs.setdefault("name", model)
@@ -399,6 +412,15 @@ class OpenAI(LLMChat):
                 kwargs["extra_body"]["extra_body"]["google"].setdefault(
                     "thinking_config", {"include_thoughts": True}
                 )
+
+        include_thoughts = kwargs.pop("include_thoughts", False)
+        if include_thoughts:
+            kwargs.setdefault("extra_body", {})
+            kwargs["extra_body"].setdefault("extra_body", {})
+            kwargs["extra_body"]["extra_body"].setdefault("google", {})
+            kwargs["extra_body"]["extra_body"]["google"].setdefault(
+                "thinking_config", {"include_thoughts": True}
+            )
 
         return self._call_api(raw_messages, **kwargs)
 
@@ -566,6 +588,8 @@ class GoogleGenAI(LLMChat):
         config_params = {}
         if system:
             config_params["system_instruction"] = system
+
+        kwargs.pop("include_thoughts", None)
 
         if reasoning is not None:
             level = self._REASONING_LEVEL_MAP[reasoning]

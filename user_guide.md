@@ -242,6 +242,7 @@ automatically (`reasoning_effort` for OpenAI, `thinking_config` for
 GenAI).
 
 ```python
+# Works across all providers — no need to worry about the backend
 response = llm.prompt("Solve this math problem.", reasoning="high")
 ```
 
@@ -258,25 +259,32 @@ response = llm.prompt("How many r's are in 'strawberry'?", reasoning="high")
 traces = kbench.last_reasoning_traces()  # model's internal reasoning
 ```
 
-### Provider-Specific API Parameters
+### Thinking Traces
 
-The `llm.prompt()` method accepts an `api_params` dictionary that is
-forwarded directly to the underlying API provider. This allows you to
-use provider-specific parameters.
-
-**Request-level parameters** are passed via `api_params` on
-`llm.prompt()`:
+Set `include_thoughts=True` to receive the model's internal reasoning
+traces in the response (wrapped in `<think>` tags on the OpenAI backend):
 
 ```python
-# OpenAI: control reasoning effort
-response = llm.prompt("Solve this math problem.", api_params={"reasoning_effort": "low"})
-
-# GenAI: control thinking level
 response = llm.prompt(
-    "Solve this math problem.",
-    api_params={"thinking_config": {"thinking_level": "LOW"}},
+    "How many r's are in 'strawberry'?",
+    reasoning="high",
+    include_thoughts=True,
 )
 ```
+
+### Provider-Specific API Parameters
+
+For advanced use cases, `llm.prompt()` accepts an `api_params`
+dictionary that is forwarded directly to the underlying API provider.
+
+```python
+# Pass provider-specific request parameters
+response = llm.prompt("Generate something.", api_params={"max_tokens": 500})
+```
+
+> **Note:** Parameters that have explicit SDK equivalents (e.g.,
+> `reasoning_effort`, `thinking_config`, `temperature`) are blocked
+> from `api_params`. Use the corresponding `prompt()` parameter instead.
 
 **Content-level parameters** are passed via `api_params` when
 constructing content objects (images, videos, audio):
@@ -303,8 +311,7 @@ video = videos.from_url(
 response = llm.prompt("Summarize this video.", video=video)
 ```
 
-> **Note:** These parameters are provider-specific. You are responsible
-> for using the correct parameter names for your chosen API. For example,
+> **Note:** Content-level parameters are provider-specific. For example,
 > `detail` is an OpenAI parameter and `media_resolution` is a GenAI
 > parameter. Parameters not recognized by the provider will be dropped
 > (with a warning on GenAI) or may cause an error depending on the

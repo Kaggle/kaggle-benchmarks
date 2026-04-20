@@ -389,6 +389,27 @@ def test_prompt_rejects_reasoning_effort_in_api_params():
         llm.prompt("Hi", api_params={"reasoning_effort": "high"})
 
 
+def test_prompt_include_thoughts():
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Hi", include_thoughts=True)
+    extra_body = llm.kwargs["extra_body"]["extra_body"]
+    assert extra_body["google"]["thinking_config"]["include_thoughts"] is True
+
+
+def test_prompt_include_thoughts_with_reasoning():
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Hi", reasoning="high", include_thoughts=True)
+    assert llm.kwargs["reasoning_effort"] == "high"
+    extra_body = llm.kwargs["extra_body"]["extra_body"]
+    assert extra_body["google"]["thinking_config"]["include_thoughts"] is True
+
+
+def test_prompt_rejects_invalid_reasoning():
+    llm = MockedOpenAI(model="test-model")
+    with pytest.raises(ValueError, match="Invalid reasoning level"):
+        llm.prompt("Hi", reasoning="hgih")
+
+
 def test_invoke_prompt():
     llm = MockedOpenAI(model="test-model")
     llm.support_structured_outputs = False
