@@ -137,6 +137,28 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
+_EXPLICIT_PARAMS = {
+    "reasoning_effort": "reasoning",
+    "thinking_config": "reasoning",
+    "temperature": "temperature",
+    "seed": "seed",
+    "tools": "tools",
+    "response_format": "schema",
+}
+
+
+def _validate_api_params(api_params: dict[str, Any] | None) -> None:
+    """Raises if api_params contains keys that have explicit SDK parameters."""
+    if not api_params:
+        return
+    for key, param_name in _EXPLICIT_PARAMS.items():
+        if key in api_params:
+            raise ValueError(
+                f"{key!r} is not allowed in api_params. "
+                f"Use the {param_name!r} parameter on prompt() instead."
+            )
+
+
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str
@@ -185,6 +207,8 @@ class LLMChat(actors.Actor):
         reasoning: ReasoningLevel | None = None,
         api_params: dict[str, Any] | None = None,
     ) -> T:
+        _validate_api_params(api_params)
+
         if image is not None:
             match image:
                 case images.ImageURL():
@@ -523,6 +547,12 @@ class GoogleGenAI(LLMChat):
                 else (chunk.text or ""),
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
+
+    _REASONING_LEVEL_MAP = {
+        "low": "LOW",
+        "medium": "MEDIUM",
+        "high": "HIGH",
+    }
 
     def invoke(
         self,

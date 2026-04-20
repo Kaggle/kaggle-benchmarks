@@ -383,6 +383,12 @@ def test_think_tags_captured_in_response(mocker):
     assert last_message.reasoning_traces == "Counting the letters..."
 
 
+def test_prompt_rejects_reasoning_effort_in_api_params():
+    llm = MockedOpenAI(model="test-model")
+    with pytest.raises(ValueError, match="reasoning_effort.*not allowed in api_params"):
+        llm.prompt("Hi", api_params={"reasoning_effort": "high"})
+
+
 def test_invoke_prompt():
     llm = MockedOpenAI(model="test-model")
     llm.support_structured_outputs = False

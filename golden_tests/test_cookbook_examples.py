@@ -597,12 +597,20 @@ def test_audio_url(llm):
 # trace capture is verified in test_reasoning_captures_traces for models that
 # support it (not all models return traces).
 
+THINKING_LLM_NAMES = TEST_LLM_NAMES - {
+    "google/gemma-3-12b",
+    "google/gemini-2.0-flash",
+    "deepseek-ai/deepseek-r1-0528",
+    "deepseek-ai/deepseek-v3.2",
+    "qwen/qwen3-235b-a22b-instruct-2507",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "zai/glm-5",
+    "google/gemini-3.1-flash-lite-preview",
+}
+
 
 @benchmark_test(
-    exclude={
-        "google/gemini-2.0-flash",
-        "google/gemma-3-12b",
-    },
+    llm_names=THINKING_LLM_NAMES,
 )
 @kbench.task()
 def test_reasoning_param(llm):
@@ -617,87 +625,6 @@ def test_reasoning_param(llm):
         response,
         expectation="Model should answer 4.",
     )
-
-
-# %%
-# --- Test Case: Prompt kwargs passthrough (reasoning_effort / thinking_config) ---
-# OpenAI uses reasoning_effort, GenAI uses thinking_config — users pass the
-# provider-native param directly.
-
-THINKING_LLM_NAMES = TEST_LLM_NAMES - {
-    "google/gemma-3-12b",
-    "google/gemini-2.0-flash",
-    "deepseek-ai/deepseek-r1-0528",
-    "deepseek-ai/deepseek-v3.2",
-    "qwen/qwen3-235b-a22b-instruct-2507",
-    "qwen/qwen3-next-80b-a3b-instruct",
-    "zai/glm-5",
-    "google/gemini-3.1-flash-lite-preview",
-}
-
-
-@kbench.task()
-def _reasoning_effort_task(llm):
-    """Tests that reasoning_effort is forwarded via the OpenAI endpoint."""
-    response = llm.prompt(
-        "What is 2 + 2? Reply with just the number.",
-        api_params={"reasoning_effort": "low"},
-    )
-
-    kbench.assertions.assert_contains_regex(
-        r"4",
-        response,
-        expectation="Model should answer 4.",
-    )
-
-
-@pytest.mark.parametrize(
-    "llm, api",
-    [
-        pytest.param(
-            kbench.kaggle.load_model(key, api="openai"),
-            "openai",
-            id=f"openai-{key}",
-        )
-        for key in sorted(THINKING_LLM_NAMES)
-    ],
-)
-def test_prompt_with_reasoning_effort(llm, api):
-    run = _reasoning_effort_task.run(llm)
-    assert run.passed
-
-
-@kbench.task()
-def _thinking_config_task(llm):
-    """Tests that thinking_config is forwarded via the GenAI endpoint."""
-    from google.genai import types
-
-    response = llm.prompt(
-        "What is 2 + 2? Reply with just the number.",
-        api_params={"thinking_config": types.ThinkingConfig(thinking_level="LOW")},
-    )
-
-    kbench.assertions.assert_contains_regex(
-        r"4",
-        response,
-        expectation="Model should answer 4.",
-    )
-
-
-@pytest.mark.parametrize(
-    "llm, api",
-    [
-        pytest.param(
-            kbench.kaggle.load_model(key, api="genai"),
-            "genai",
-            id=f"genai-{key}",
-        )
-        for key in sorted(THINKING_LLM_NAMES)
-    ],
-)
-def test_prompt_with_thinking_config(llm, api):
-    run = _thinking_config_task.run(llm)
-    assert run.passed
 
 
 # %%

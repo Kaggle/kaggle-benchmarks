@@ -224,15 +224,22 @@ def test_thinking_captured_in_response(mocker):
     assert last_message.reasoning_traces == "Let me count the letters..."
 
 
-def test_prompt_forwards_thinking_config():
-    """Tests that thinking_config is forwarded to GenerateContentConfig via api_params."""
+def test_prompt_reasoning_none():
+    """Tests that reasoning='none' maps to thinking_budget=0."""
     llm = MockedGoogleGenAI()
-    llm.prompt(
-        "Think hard",
-        api_params={"thinking_config": types.ThinkingConfig(thinking_level="LOW")},
-    )
+    llm.prompt("Think hard", reasoning="none")
 
-    assert llm.config.thinking_config.thinking_level == "LOW"
+    assert llm.config.thinking_config.thinking_budget == 0
+
+
+def test_prompt_rejects_thinking_config_in_api_params():
+    """Tests that thinking_config in api_params raises an error."""
+    llm = MockedGoogleGenAI()
+    with pytest.raises(ValueError, match="thinking_config.*not allowed in api_params"):
+        llm.prompt(
+            "Think hard",
+            api_params={"thinking_config": types.ThinkingConfig(thinking_level="LOW")},
+        )
 
 
 @pytest.mark.parametrize("streaming", [True, False])
