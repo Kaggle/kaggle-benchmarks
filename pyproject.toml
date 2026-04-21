@@ -24,7 +24,7 @@ dependencies = [
   "openai>=1.66",
   "pandas",
   "tqdm",
-  "python-dotenv>=1.0.1",
+  "python-dotenv>=1.2.2",
   "protobuf>=5.29.3,<6.0",
   "jupyter",
   "docker>=7.1.0",
