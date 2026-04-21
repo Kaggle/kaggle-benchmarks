@@ -196,6 +196,7 @@ class LLMChat(actors.Actor):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
@@ -388,6 +389,7 @@ class OpenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
@@ -417,7 +419,6 @@ class OpenAI(LLMChat):
                     "thinking_config", {"include_thoughts": True}
                 )
 
-        include_thoughts = kwargs.pop("include_thoughts", False)
         if include_thoughts:
             kwargs.setdefault("extra_body", {})
             kwargs["extra_body"].setdefault("extra_body", {})
@@ -579,6 +580,7 @@ class GoogleGenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
