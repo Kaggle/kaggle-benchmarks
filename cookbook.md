@@ -530,13 +530,9 @@ response = llm.prompt("Transcribe this audio.", audio=audio_content)
 
 ---
 
-### Recipe: Passing Provider-Specific API Parameters
+### Recipe: Controlling Reasoning
 
-The SDK provides unified parameters that work across providers, plus
-passing provider-specific parameters through to the
-underlying API via an explicit `api_params` dictionary.
-
-**Reasoning**: control how much reasoning the model performs:
+Control how much reasoning the model performs:
 
 ```python
 response = llm.prompt("Solve this math problem.", reasoning="high")
@@ -544,15 +540,18 @@ response = llm.prompt("Solve this math problem.", reasoning="high")
 
 Valid values: `"low"`, `"medium"`, `"high"`.
 
-**Thinking traces**: include the model's internal reasoning in the
-response:
+Include the model's internal reasoning in the response:
 
 ```python
 response = llm.prompt("How many r's in strawberry?", reasoning="high", include_thoughts=True)
 ```
 
-**Provider-specific parameters**: for advanced use cases, pass an
-`api_params` dictionary:
+---
+
+### Recipe: Passing Provider-Specific API Parameters
+
+For advanced use cases, `llm.prompt()` accepts an `api_params`
+dictionary that is forwarded directly to the underlying API provider:
 
 ```python
 response = llm.prompt("Generate something.", api_params={"max_tokens": 500})
@@ -581,8 +580,7 @@ response = llm.prompt("What color is this?", image=image)
 ```
 
 > **Note:** Content-level parameters are provider-specific. Parameters
-> not recognized by the backend will be dropped (with a warning on GenAI)
-> or may cause errors.
+> not recognized by the backend may be ignored or cause errors.
 
 ---
 
