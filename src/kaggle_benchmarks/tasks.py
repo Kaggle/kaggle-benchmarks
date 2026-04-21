@@ -17,7 +17,6 @@ import datetime  # For Run start_time and end_time
 import functools
 import inspect
 import logging
-import os
 import time
 from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, Self, TypeVar
 
@@ -31,27 +30,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
-
-# Env vars the host platform (e.g. Kaggle) can set to enforce its own
-# column-width limits on task name and description without baking those
-# limits into the SDK itself. Unset or 0 means "no limit", so non-Kaggle
-# users of the SDK are unaffected.
-TASK_NAME_MAX_LENGTH_ENV = "KAGGLE_BENCHMARK_MAX_NAME_LENGTH"
-TASK_DESCRIPTION_MAX_LENGTH_ENV = "KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH"
-
-
-def _max_length_from_env(env_var: str) -> int | None:
-    raw = os.environ.get(env_var)
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning(
-            f"Ignoring non-integer value for {env_var}={raw!r}; treating as no limit."
-        )
-        return None
-    return value if value > 0 else None
 
 
 class NonRecoverableError(Exception):
@@ -72,23 +50,27 @@ class Task(Generic[T]):
 
     def __post_init__(self):
         from kaggle_benchmarks import client
+        from kaggle_benchmarks._config import config
 
-        name_limit = _max_length_from_env(TASK_NAME_MAX_LENGTH_ENV)
-        if name_limit is not None and len(self.name) > name_limit:
+        if (
+            config.task_name_max_length > 0
+            and len(self.name) > config.task_name_max_length
+        ):
             raise ValueError(
                 f"Task name is {len(self.name)} characters; the maximum "
-                f"allowed is {name_limit} (set via "
-                f"{TASK_NAME_MAX_LENGTH_ENV}). Please shorten the 'name' "
-                f"argument to @kbench.task(...)."
+                f"allowed is {config.task_name_max_length}. Please shorten "
+                f"the 'name' argument to @kbench.task(...)."
             )
 
-        description_limit = _max_length_from_env(TASK_DESCRIPTION_MAX_LENGTH_ENV)
-        if description_limit is not None and len(self.description) > description_limit:
+        if (
+            config.task_description_max_length > 0
+            and len(self.description) > config.task_description_max_length
+        ):
             raise ValueError(
                 f"Task description is {len(self.description)} characters; "
-                f"the maximum allowed is {description_limit} (set via "
-                f"{TASK_DESCRIPTION_MAX_LENGTH_ENV}). Please shorten the "
-                f"'description' argument to @kbench.task(...)."
+                f"the maximum allowed is {config.task_description_max_length}. "
+                f"Please shorten the 'description' argument to "
+                f"@kbench.task(...)."
             )
 
         client.register_task(self)

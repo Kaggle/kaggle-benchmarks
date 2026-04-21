@@ -37,6 +37,19 @@ def string_to_bool(s: str) -> bool:
     return s.lower() in ("true", "1", "t", "y", "yes")
 
 
+def _parse_int_env(name: str, default: int = 0) -> int:
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            f"Ignoring non-integer value for {name}={raw!r}; using {default}."
+        )
+        return default
+
+
 class ExecutionMode(enum.Enum):
     NOTEBOOK = 0
     INTERACTIVE = 0
@@ -94,6 +107,19 @@ class Config:
     )
     render_subruns: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("RENDER_SUBRUNS", "True"))
+    )
+
+    # Maximum length the host platform allows for `@kbench.task(...)` `name`
+    # and `description` arguments. The Kaggle notebook runtime sets these to
+    # match its backend column widths so users get fast feedback before a
+    # wasted run; non-Kaggle users leave them unset (or `0`) for no limit.
+    task_name_max_length: int = dataclasses.field(
+        default_factory=lambda: _parse_int_env("KAGGLE_BENCHMARK_MAX_NAME_LENGTH")
+    )
+    task_description_max_length: int = dataclasses.field(
+        default_factory=lambda: _parse_int_env(
+            "KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH"
+        )
     )
 
     show_message_details: bool = False

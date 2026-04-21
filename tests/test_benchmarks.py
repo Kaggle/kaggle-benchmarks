@@ -356,14 +356,10 @@ def test_partial():
     assert partial.run(x=1, y=2).result == 3
 
 
-@pytest.mark.parametrize("env_value", [None, "0"])
-def test_task_name_unbounded_when_env_unset_or_zero(monkeypatch, env_value):
-    if env_value is None:
-        monkeypatch.delenv(tasks.TASK_NAME_MAX_LENGTH_ENV, raising=False)
-        monkeypatch.delenv(tasks.TASK_DESCRIPTION_MAX_LENGTH_ENV, raising=False)
-    else:
-        monkeypatch.setenv(tasks.TASK_NAME_MAX_LENGTH_ENV, env_value)
-        monkeypatch.setenv(tasks.TASK_DESCRIPTION_MAX_LENGTH_ENV, env_value)
+@pytest.mark.parametrize("limit", [0, -1])
+def test_task_name_unbounded_when_limit_unset_or_zero(monkeypatch, limit):
+    monkeypatch.setattr(config, "task_name_max_length", limit)
+    monkeypatch.setattr(config, "task_description_max_length", limit)
 
     long_name = "x" * 10_000
     long_description = "y" * 10_000
@@ -377,7 +373,7 @@ def test_task_name_unbounded_when_env_unset_or_zero(monkeypatch, env_value):
 
 
 def test_task_name_too_long_raises(monkeypatch):
-    monkeypatch.setenv(tasks.TASK_NAME_MAX_LENGTH_ENV, "255")
+    monkeypatch.setattr(config, "task_name_max_length", 255)
     long_name = "x" * 256
     with pytest.raises(
         ValueError,
@@ -390,7 +386,7 @@ def test_task_name_too_long_raises(monkeypatch):
 
 
 def test_task_description_too_long_raises(monkeypatch):
-    monkeypatch.setenv(tasks.TASK_DESCRIPTION_MAX_LENGTH_ENV, "255")
+    monkeypatch.setattr(config, "task_description_max_length", 255)
     long_description = "y" * 256
     with pytest.raises(
         ValueError,
@@ -403,8 +399,8 @@ def test_task_description_too_long_raises(monkeypatch):
 
 
 def test_task_name_and_description_at_limit_accepted(monkeypatch):
-    monkeypatch.setenv(tasks.TASK_NAME_MAX_LENGTH_ENV, "255")
-    monkeypatch.setenv(tasks.TASK_DESCRIPTION_MAX_LENGTH_ENV, "255")
+    monkeypatch.setattr(config, "task_name_max_length", 255)
+    monkeypatch.setattr(config, "task_description_max_length", 255)
     name_at_limit = "n" * 255
     description_at_limit = "d" * 255
 
@@ -417,14 +413,14 @@ def test_task_name_and_description_at_limit_accepted(monkeypatch):
 
 
 def test_task_invalid_env_value_treated_as_no_limit(monkeypatch):
-    monkeypatch.setenv(tasks.TASK_NAME_MAX_LENGTH_ENV, "not-an-int")
-    monkeypatch.setenv(tasks.TASK_DESCRIPTION_MAX_LENGTH_ENV, "not-an-int")
+    from kaggle_benchmarks import _config
 
-    @tasks.task(name="n" * 1000, description="d" * 1000)
-    def malformed_env():
-        pass
+    monkeypatch.setenv("KAGGLE_BENCHMARK_MAX_NAME_LENGTH", "not-an-int")
+    monkeypatch.setenv("KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH", "not-an-int")
 
-    assert len(malformed_env.name) == 1000
+    fresh_config = _config.Config()
+    assert fresh_config.task_name_max_length == 0
+    assert fresh_config.task_description_max_length == 0
 
 
 def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
