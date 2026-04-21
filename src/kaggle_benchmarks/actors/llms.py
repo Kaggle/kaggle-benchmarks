@@ -89,7 +89,7 @@ import dataclasses
 import enum
 import json
 import typing
-from typing import TYPE_CHECKING, Any, Iterator, TypeVar
+from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeVar
 
 import openai
 from google import genai
@@ -118,6 +118,21 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
+def _validate_reasoning(reasoning: str | None) -> None:
+    """Raises if reasoning is not a valid level.
+
+    Note: GenAI validates these values automatically via ThinkingConfig,
+    but OpenAI does not, so we validate here for both backends.
+    """
+    # TODO: Add "disabled" once Model Proxy supports reasoning_effort="none".
+    valid = {"low", "medium", "high"}
+    if reasoning is not None and reasoning not in valid:
+        raise ValueError(
+            f"Invalid reasoning level: {reasoning!r}. "
+            f"Must be one of: {sorted(valid)}"
+        )
+
+
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str
@@ -143,7 +158,12 @@ class LLMChat(actors.Actor):
         self.stream_responses = config.interactive_mode
 
     def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
+        self,
+        messages: list[messages.Message],
+        system: str | None,
+        reasoning: Literal["low", "medium", "high"] | None = None,
+        include_thoughts: bool = False,
+        **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
         raise NotImplementedError
@@ -158,7 +178,10 @@ class LLMChat(actors.Actor):
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
+        reasoning: Literal["low", "medium", "high"] | None = None,
+        include_thoughts: bool = False,
     ) -> T:
+        _validate_reasoning(reasoning)
         if image is not None:
             match image:
                 case images.ImageURL():
@@ -186,6 +209,8 @@ class LLMChat(actors.Actor):
             seed=seed,
             temperature=temperature if self.support_temperature else None,
             tools=tools if tools is not None else [],
+            reasoning=reasoning,
+            include_thoughts=include_thoughts,
         ).content
 
     @chats.emits_message
@@ -305,7 +330,12 @@ class OpenAI(LLMChat):
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
 
     def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
+        self,
+        messages: list[messages.Message],
+        system: str | None,
+        reasoning: Literal["low", "medium", "high"] | None = None,
+        include_thoughts: bool = False,
+        **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
             from kaggle_benchmarks.messages import Message
@@ -318,6 +348,17 @@ class OpenAI(LLMChat):
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
             # Temporarily do not send "seed" parameter for models not supporting it in Model Proxy.
             kwargs.pop("seed", None)
+
+        if reasoning is not None:
+            kwargs["reasoning_effort"] = reasoning
+
+        if include_thoughts:
+            kwargs.setdefault("extra_body", {})
+            kwargs["extra_body"].setdefault("extra_body", {})
+            kwargs["extra_body"]["extra_body"].setdefault("google", {})
+            kwargs["extra_body"]["extra_body"]["google"].setdefault(
+                "thinking_config", {"include_thoughts": True}
+            )
 
         return self._call_api(raw_messages, **kwargs)
 
@@ -404,24 +445,64 @@ class GoogleGenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
+    _REASONING_LEVEL_MAP = {
+        "low": "LOW",
+        "medium": "MEDIUM",
+        "high": "HIGH",
+    }
+
+    @staticmethod
+    def _extract_text(response: types.GenerateContentResponse) -> str:
+        """Extracts text from a response, wrapping thought parts in <think> tags."""
+        if not response.candidates or not response.candidates[0].content:
+            return ""
+        parts = response.candidates[0].content.parts or []
+        segments = []
+        for part in parts:
+            if not part.text:
+                continue
+            if getattr(part, "thought", False):
+                segments.append(f"<think>\n{part.text}\n</think>")
+            else:
+                segments.append(part.text)
+        return "\n".join(segments) if segments else ""
+
     def _get_stream_response(
         self, response_stream: Iterator[types.GenerateContentResponse]
     ) -> Iterator[LLMResponse]:
         # We currently only support text outputs
         for chunk in response_stream:
             yield LLMResponse(
-                content=chunk.text or "",
+                content=self._extract_text(chunk) if chunk.candidates else (chunk.text or ""),
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
 
     def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
+        self,
+        messages: list[messages.Message],
+        system: str | None,
+        reasoning: Literal["low", "medium", "high"] | None = None,
+        include_thoughts: bool = False,
+        **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
 
         config_params = {}
         if system:
             config_params["system_instruction"] = system
+
+        if reasoning is not None:
+            # reasoning is already validated by _validate_reasoning in prompt().
+            level = self._REASONING_LEVEL_MAP[reasoning]
+            config_params["thinking_config"] = types.ThinkingConfig(
+                thinking_level=level,
+                include_thoughts=include_thoughts or None,
+            )
+        elif include_thoughts:
+            config_params["thinking_config"] = types.ThinkingConfig(
+                include_thoughts=True,
+            )
+
         if "response_format" in kwargs:
             schema = kwargs.pop("response_format")
             config_params["response_schema"] = schema
@@ -460,6 +541,6 @@ class GoogleGenAI(LLMChat):
                 )
 
             return LLMResponse(
-                content=response.text,
+                content=self._extract_text(response),
                 meta=self._get_usage_meta(response.usage_metadata),
             )

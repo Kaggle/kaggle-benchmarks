@@ -591,6 +591,66 @@ def test_audio_url(llm):
 
 
 # %%
+# --- Test Case: Reasoning parameter ---
+# The SDK maps the unified `reasoning` parameter to provider-specific params:
+# OpenAI → reasoning_effort, GenAI → thinking_config.
+
+
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
+        "deepseek-ai/deepseek-r1-0528",
+        "deepseek-ai/deepseek-v3.2",
+        "qwen/qwen3-235b-a22b-instruct-2507",
+        "qwen/qwen3-next-80b-a3b-instruct",
+        "zai/glm-5",
+        "google/gemini-3.1-flash-lite-preview",
+    },
+)
+@kbench.task()
+def test_reasoning_param(llm):
+    """Tests that the unified reasoning parameter works across providers."""
+    response = llm.prompt(
+        "What is 2 + 2? Reply with just the number.",
+        reasoning="low",
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"4",
+        response,
+        expectation="Model should answer 4.",
+    )
+
+
+# %%
+# --- Test Case: Include thoughts ---
+# Tests that thinking traces are returned when include_thoughts=True is passed.
+# Both backends wrap thoughts in <think> tags.
+
+@benchmark_test(
+    include={
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
+    },
+)
+@kbench.task()
+def test_include_thoughts(llm):
+    """Tests that include_thoughts returns thinking traces."""
+    response = llm.prompt(
+        "How many r's are in the word 'strawberry'? Think step by step.",
+        reasoning="high",
+        include_thoughts=True,
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)<think>",
+        response,
+        expectation="Response should contain thinking traces in <think> tags.",
+    )
+
+
+# %%
 # --- Test Case: Tool Use ---
 # This doesn't work with "genai" API for now
 # So test it with `-k "openai"` only.

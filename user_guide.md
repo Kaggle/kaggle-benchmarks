@@ -231,6 +231,32 @@ response = kbench.llm.prompt(
 > models support audio inputs. Models that don't support audio will
 > return an error.
 
+### Reasoning
+
+The `reasoning` parameter controls how much reasoning the model
+performs. The SDK maps this to the correct provider-specific parameter
+automatically (`reasoning_effort` for OpenAI, `thinking_config` for
+GenAI).
+
+```python
+response = llm.prompt("Solve this math problem.", reasoning="high")
+```
+
+Valid values: `"low"`, `"medium"`, `"high"`.
+
+### Thinking Traces
+
+Set `include_thoughts=True` to receive the model's internal reasoning
+traces in the response:
+
+```python
+response = llm.prompt(
+    "How many r's are in 'strawberry'?",
+    reasoning="high",
+    include_thoughts=True,
+)
+```
+
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them

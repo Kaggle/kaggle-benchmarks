@@ -197,6 +197,40 @@ def test_invoke():
     assert llm.kwargs.get("response_format") is None
 
 
+def test_prompt_reasoning_maps_to_reasoning_effort():
+    """Tests that reasoning='high' maps to reasoning_effort='high'."""
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Think hard", reasoning="high")
+
+    assert llm.kwargs["reasoning_effort"] == "high"
+
+
+def test_prompt_include_thoughts():
+    """Tests that include_thoughts constructs the correct extra_body."""
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Think hard", include_thoughts=True)
+
+    extra = llm.kwargs["extra_body"]["extra_body"]["google"]["thinking_config"]
+    assert extra["include_thoughts"] is True
+
+
+def test_prompt_include_thoughts_with_reasoning():
+    """Tests that include_thoughts and reasoning work together."""
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Think hard", reasoning="high", include_thoughts=True)
+
+    assert llm.kwargs["reasoning_effort"] == "high"
+    extra = llm.kwargs["extra_body"]["extra_body"]["google"]["thinking_config"]
+    assert extra["include_thoughts"] is True
+
+
+def test_prompt_rejects_invalid_reasoning():
+    """Tests that an invalid reasoning level raises ValueError."""
+    llm = MockedOpenAI(model="test-model")
+    with pytest.raises(ValueError, match="Invalid reasoning level"):
+        llm.prompt("Hi", reasoning="hgih")
+
+
 def test_invoke_prompt():
     llm = MockedOpenAI(model="test-model")
     llm.support_structured_outputs = False
