@@ -105,6 +105,7 @@ if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
 
 T = TypeVar("T")
+ReasoningLevel = Literal["low", "medium", "high"]
 
 
 # TODO: Figure out a more robust way to handle extra fields.
@@ -125,7 +126,7 @@ def _validate_reasoning(reasoning: str | None) -> None:
     but OpenAI does not, so we validate here for both backends.
     """
     # TODO: Add "disabled" once Model Proxy supports reasoning_effort="none".
-    valid = {"low", "medium", "high"}
+    valid = set(typing.get_args(ReasoningLevel))
     if reasoning is not None and reasoning not in valid:
         raise ValueError(
             f"Invalid reasoning level: {reasoning!r}. "
@@ -161,7 +162,7 @@ class LLMChat(actors.Actor):
         self,
         messages: list[messages.Message],
         system: str | None,
-        reasoning: Literal["low", "medium", "high"] | None = None,
+        reasoning: ReasoningLevel | None = None,
         include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
@@ -178,7 +179,7 @@ class LLMChat(actors.Actor):
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
-        reasoning: Literal["low", "medium", "high"] | None = None,
+        reasoning: ReasoningLevel | None = None,
         include_thoughts: bool = False,
     ) -> T:
         _validate_reasoning(reasoning)
@@ -333,7 +334,7 @@ class OpenAI(LLMChat):
         self,
         messages: list[messages.Message],
         system: str | None,
-        reasoning: Literal["low", "medium", "high"] | None = None,
+        reasoning: ReasoningLevel | None = None,
         include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
@@ -353,6 +354,10 @@ class OpenAI(LLMChat):
             kwargs["reasoning_effort"] = reasoning
 
         if include_thoughts:
+            # Model Proxy expects provider-specific params inside a nested
+            # extra_body: the outer extra_body is consumed by the OpenAI SDK,
+            # and the inner extra_body is forwarded to Model Proxy which reads
+            # the google.thinking_config field.
             kwargs.setdefault("extra_body", {})
             kwargs["extra_body"].setdefault("extra_body", {})
             kwargs["extra_body"]["extra_body"].setdefault("google", {})
@@ -465,7 +470,7 @@ class GoogleGenAI(LLMChat):
                 segments.append(f"<think>\n{part.text}\n</think>")
             else:
                 segments.append(part.text)
-        return "\n".join(segments) if segments else ""
+        return "".join(segments) if segments else ""
 
     def _get_stream_response(
         self, response_stream: Iterator[types.GenerateContentResponse]
@@ -481,7 +486,7 @@ class GoogleGenAI(LLMChat):
         self,
         messages: list[messages.Message],
         system: str | None,
-        reasoning: Literal["low", "medium", "high"] | None = None,
+        reasoning: ReasoningLevel | None = None,
         include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:

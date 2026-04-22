@@ -159,6 +159,50 @@ def test_extract_text_no_thought_parts():
     assert "<think>" not in text
 
 
+def test_extract_text_multi_part_matches_response_text():
+    """_extract_text should match response.text for non-thought multi-part responses."""
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[types.Part(text="Hello"), types.Part(text=" world")]
+                )
+            )
+        ]
+    )
+    assert GoogleGenAI._extract_text(response) == response.text
+
+
+def test_streaming_thought_output_matches_non_streaming():
+    """Streaming and non-streaming should produce the same text for identical content."""
+    parts = [
+        types.Part(text="step 1", thought=True),
+        types.Part(text="step 2", thought=True),
+        types.Part(text="Final answer"),
+    ]
+
+    # Non-streaming: all parts in one response
+    full_response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(content=types.Content(parts=parts))
+        ]
+    )
+    non_streaming_text = GoogleGenAI._extract_text(full_response)
+
+    # Streaming: one part per chunk
+    chunks = [
+        types.GenerateContentResponse(
+            candidates=[
+                types.Candidate(content=types.Content(parts=[p]))
+            ]
+        )
+        for p in parts
+    ]
+    streaming_text = "".join(GoogleGenAI._extract_text(c) for c in chunks)
+
+    assert streaming_text == non_streaming_text
+
+
 def test_prompt_rejects_invalid_reasoning():
     """Tests that an invalid reasoning level raises ValueError."""
     llm = MockedGoogleGenAI()
