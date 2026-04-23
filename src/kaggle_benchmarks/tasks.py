@@ -52,25 +52,20 @@ class Task(Generic[T]):
         from kaggle_benchmarks import client
         from kaggle_benchmarks._config import config
 
-        if (
-            config.task_name_max_length > 0
-            and len(self.name) > config.task_name_max_length
-        ):
+        name_limit = config.task_name_max_length
+        if name_limit and len(self.name) > name_limit:
             raise ValueError(
                 f"Task name is {len(self.name)} characters; the maximum "
-                f"allowed is {config.task_name_max_length}. Please shorten "
-                f"the 'name' argument to @kbench.task(...)."
+                f"allowed is {name_limit}. Please shorten the 'name' "
+                f"argument to @kbench.task(...)."
             )
 
-        if (
-            config.task_description_max_length > 0
-            and len(self.description) > config.task_description_max_length
-        ):
+        description_limit = config.task_description_max_length
+        if description_limit and len(self.description) > description_limit:
             raise ValueError(
                 f"Task description is {len(self.description)} characters; "
-                f"the maximum allowed is {config.task_description_max_length}. "
-                f"Please shorten the 'description' argument to "
-                f"@kbench.task(...)."
+                f"the maximum allowed is {description_limit}. Please shorten "
+                f"the 'description' argument to @kbench.task(...)."
             )
 
         client.register_task(self)

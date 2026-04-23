@@ -356,71 +356,30 @@ def test_partial():
     assert partial.run(x=1, y=2).result == 3
 
 
-@pytest.mark.parametrize("limit", [0, -1])
-def test_task_name_unbounded_when_limit_unset_or_zero(monkeypatch, limit):
-    monkeypatch.setattr(config, "task_name_max_length", limit)
-    monkeypatch.setattr(config, "task_description_max_length", limit)
+def test_task_length_limits_enforced(monkeypatch):
+    monkeypatch.setattr(config, "task_name_max_length", 5)
+    monkeypatch.setattr(config, "task_description_max_length", 5)
 
-    long_name = "x" * 10_000
-    long_description = "y" * 10_000
-
-    @tasks.task(name=long_name, description=long_description)
-    def long_values():
+    @tasks.task(name="ok", description="short")
+    def within_limit():
         pass
 
-    assert long_values.name == long_name
-    assert long_values.description == long_description
+    with pytest.raises(ValueError, match=r"Task name is 6 characters"):
+        tasks.task(name="x" * 6)(lambda: None)
+
+    with pytest.raises(ValueError, match=r"Task description is 6 characters"):
+        tasks.task(name="ok", description="y" * 6)(lambda: None)
 
 
-def test_task_name_too_long_raises(monkeypatch):
-    monkeypatch.setattr(config, "task_name_max_length", 255)
-    long_name = "x" * 256
-    with pytest.raises(
-        ValueError,
-        match=r"Task name is 256 characters; the maximum allowed is 255",
-    ):
+def test_task_length_limits_disabled_when_none(monkeypatch):
+    monkeypatch.setattr(config, "task_name_max_length", None)
+    monkeypatch.setattr(config, "task_description_max_length", None)
 
-        @tasks.task(name=long_name)
-        def too_long_name():
-            pass
-
-
-def test_task_description_too_long_raises(monkeypatch):
-    monkeypatch.setattr(config, "task_description_max_length", 255)
-    long_description = "y" * 256
-    with pytest.raises(
-        ValueError,
-        match=r"Task description is 256 characters; the maximum allowed is 255",
-    ):
-
-        @tasks.task(description=long_description)
-        def too_long_description():
-            pass
-
-
-def test_task_name_and_description_at_limit_accepted(monkeypatch):
-    monkeypatch.setattr(config, "task_name_max_length", 255)
-    monkeypatch.setattr(config, "task_description_max_length", 255)
-    name_at_limit = "n" * 255
-    description_at_limit = "d" * 255
-
-    @tasks.task(name=name_at_limit, description=description_at_limit)
-    def at_limit():
+    @tasks.task(name="x" * 1000, description="y" * 1000)
+    def unbounded():
         pass
 
-    assert at_limit.name == name_at_limit
-    assert at_limit.description == description_at_limit
-
-
-def test_task_invalid_env_value_treated_as_no_limit(monkeypatch):
-    from kaggle_benchmarks import _config
-
-    monkeypatch.setenv("KAGGLE_BENCHMARK_MAX_NAME_LENGTH", "not-an-int")
-    monkeypatch.setenv("KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH", "not-an-int")
-
-    fresh_config = _config.Config()
-    assert fresh_config.task_name_max_length == 0
-    assert fresh_config.task_description_max_length == 0
+    assert len(unbounded.name) == 1000
 
 
 def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):

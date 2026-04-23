@@ -17,7 +17,7 @@ import enum
 import logging
 import os
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, overload
 
 import dotenv
 import panel as pn
@@ -37,7 +37,11 @@ def string_to_bool(s: str) -> bool:
     return s.lower() in ("true", "1", "t", "y", "yes")
 
 
-def _parse_int_env(name: str, default: int = 0) -> int:
+@overload
+def _parse_int_env(name: str) -> int | None: ...
+@overload
+def _parse_int_env(name: str, default: int) -> int: ...
+def _parse_int_env(name: str, default: int | None = None) -> int | None:
     raw = os.environ.get(name)
     if not raw:
         return default
@@ -79,8 +83,8 @@ class Config:
     )
 
     cache_timeout_seconds: int = dataclasses.field(
-        default_factory=lambda: int(
-            os.environ.get("CACHE_TIMEOUT_SECONDS", str(7 * 24 * 60 * 60))
+        default_factory=lambda: _parse_int_env(
+            "CACHE_TIMEOUT_SECONDS", 7 * 24 * 60 * 60
         )
     )
 
@@ -112,11 +116,11 @@ class Config:
     # Maximum length the host platform allows for `@kbench.task(...)` `name`
     # and `description` arguments. The Kaggle notebook runtime sets these to
     # match its backend column widths so users get fast feedback before a
-    # wasted run; non-Kaggle users leave them unset (or `0`) for no limit.
-    task_name_max_length: int = dataclasses.field(
+    # wasted run; non-Kaggle users leave them unset (`None`) for no limit.
+    task_name_max_length: int | None = dataclasses.field(
         default_factory=lambda: _parse_int_env("KAGGLE_BENCHMARK_MAX_NAME_LENGTH")
     )
-    task_description_max_length: int = dataclasses.field(
+    task_description_max_length: int | None = dataclasses.field(
         default_factory=lambda: _parse_int_env(
             "KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH"
         )
