@@ -27,7 +27,7 @@ class LLMMessage(messages.Message[T]):
 
     content: T
     _status: utils.Status = utils.Status.RUNNING
-    reasoning: str | None = None
+    reasoning_traces: str | None = None
     tool_calls: (
         list[tool_utils.ToolInvocation | tool_utils.ToolInvocationResult] | None
     ) = None

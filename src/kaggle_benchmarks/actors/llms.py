@@ -120,7 +120,6 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
-
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str

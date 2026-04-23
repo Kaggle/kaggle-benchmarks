@@ -70,7 +70,7 @@ COMPLEX_USAGE = llm_messages.Usage(input_tokens=100, output_tokens=50)
             llm_messages.LLMMessage(
                 sender=LLM_ACTOR,
                 content="Thinking about something...",
-                thinking="hmmm...",
+                reasoning_traces="hmmm...",
             ),
             id="with_thinking",
         ),
@@ -104,7 +104,7 @@ COMPLEX_USAGE = llm_messages.Usage(input_tokens=100, output_tokens=50)
             llm_messages.LLMMessage(
                 sender=LLM_ACTOR,
                 content="Complex message",
-                thinking="Thinking hard...",
+                reasoning_traces="Thinking hard...",
                 usage=COMPLEX_USAGE,
                 tool_calls=[TOOL_INVOCATION],
                 chat=QUESTION_HISTORY,
