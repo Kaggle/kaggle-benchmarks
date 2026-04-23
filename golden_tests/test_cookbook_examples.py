@@ -628,6 +628,7 @@ def test_reasoning_param(llm):
 # Tests that thinking traces are automatically captured on the message
 # when reasoning is enabled, accessible via message.reasoning_traces.
 
+
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",

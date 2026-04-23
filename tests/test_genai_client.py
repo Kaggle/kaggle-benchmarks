@@ -133,9 +133,7 @@ def test_split_response_returns_none_thinking_without_thoughts():
     response = types.GenerateContentResponse(
         candidates=[
             types.Candidate(
-                content=types.Content(
-                    parts=[types.Part(text="Hello world")]
-                )
+                content=types.Content(parts=[types.Part(text="Hello world")])
             )
         ]
     )
@@ -170,18 +168,14 @@ def test_streaming_thought_output_matches_non_streaming():
 
     # Non-streaming: all parts in one response
     full_response = types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(content=types.Content(parts=parts))
-        ]
+        candidates=[types.Candidate(content=types.Content(parts=parts))]
     )
     non_streaming_text = llm._extract_text(full_response)
 
     # Streaming: one part per chunk
     chunks = [
         types.GenerateContentResponse(
-            candidates=[
-                types.Candidate(content=types.Content(parts=[p]))
-            ]
+            candidates=[types.Candidate(content=types.Content(parts=[p]))]
         )
         for p in parts
     ]

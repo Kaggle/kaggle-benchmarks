@@ -283,7 +283,9 @@ def test_last_reasoning_traces_accessor():
 
     with chats.new("Test last_reasoning_traces"):
         llm.prompt("What is the answer?")
-        assert chats.last_reasoning_traces() == "I need to think about this carefully..."
+        assert (
+            chats.last_reasoning_traces() == "I need to think about this carefully..."
+        )
 
 
 def test_last_reasoning_traces_returns_none_without_reasoning():

@@ -470,7 +470,9 @@ class GoogleGenAI(LLMChat):
         # We currently only support text outputs
         for chunk in response_stream:
             yield LLMResponse(
-                content=self._extract_text(chunk) if chunk.candidates else (chunk.text or ""),
+                content=self._extract_text(chunk)
+                if chunk.candidates
+                else (chunk.text or ""),
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
 
