@@ -43,7 +43,7 @@ def _parse_int_env(name: str) -> int | None: ...
 def _parse_int_env(name: str, default: int) -> int: ...
 def _parse_int_env(name: str, default: int | None = None) -> int | None:
     raw = os.environ.get(name)
-    if not raw:
+    if raw is None:
         return default
     try:
         return int(raw)
