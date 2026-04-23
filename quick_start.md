@@ -61,15 +61,9 @@ Here are some core concepts for using the library effectively:
   can optionally return a value. If no value is returned, the task is
   graded Pass/Fail based on its assertions. The first parameter must
   always be the LLM being tested; additional parameters are optional.
-  When running on Kaggle, the `name` and `description` arguments to
-  `@kbench.task(...)` must fit within the platform's storage limits;
-  the SDK reads those limits from the
-  `KAGGLE_BENCHMARK_MAX_NAME_LENGTH` and
-  `KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH` environment variables and
-  raises `ValueError` at decoration time if they are exceeded. If
-  `description` is omitted, the function's docstring is used and is
-  subject to the same limit. When the env vars are unset (or set to
-  `0`), no limit is enforced.
+  When running on Kaggle, `name` and `description` are subject to
+  platform length limits; the decorator raises `ValueError` immediately
+  if they are exceeded so you don't waste a run.
 - **`LLM`**: An object representing a large language model you can
   interact with. You can access available Kaggle models via
   `kbench.llms["vendor/model-name"]`.
