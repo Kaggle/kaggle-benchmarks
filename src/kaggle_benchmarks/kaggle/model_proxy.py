@@ -90,6 +90,10 @@ class ModelProxy:
         _validate_proxy_config(url=resolved_base_url, api_key=resolved_api_key)
         _validate_proxy_token_expiry(expiry_time=resolved_expiry_time)
 
+        # Normalize base URL: strip any existing /openapi or /genai suffix, then append the correct one.
+        if resolved_base_url.endswith(("/openapi", "/genai")):
+            resolved_base_url = re.sub(r"/(openapi|genai)$", "", resolved_base_url)
+
         llm_instance = None
         # Qwen and DeepSeek models support response_format, but the schema must be under 64 characters.
         kwargs.setdefault(
@@ -98,7 +102,7 @@ class ModelProxy:
         )
 
         if api == "genai":
-            resolved_base_url = re.sub(r"/openapi", "/genai", resolved_base_url)
+            resolved_base_url = resolved_base_url + "/genai"
             client = genai.Client(
                 api_key=resolved_api_key,
                 http_options=types.HttpOptions(
@@ -109,6 +113,7 @@ class ModelProxy:
             llm_instance = GoogleGenAI(client, model, **kwargs)
 
         elif api == "openai":
+            resolved_base_url = resolved_base_url + "/openapi"
             client = openai.OpenAI(
                 api_key=resolved_api_key,
                 base_url=resolved_base_url,
