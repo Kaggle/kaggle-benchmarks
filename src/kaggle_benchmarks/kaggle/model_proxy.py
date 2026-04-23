@@ -14,6 +14,9 @@
 
 import os
 import re
+import warnings
+from datetime import datetime, timezone
+from pathlib import Path
 
 import openai
 from google import genai
@@ -21,10 +24,53 @@ from google.genai import types
 
 from kaggle_benchmarks import utils
 from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
-from kaggle_benchmarks.auth import (
-    assert_kaggle_auth_exists,
-    assert_kaggle_auth_valid,
-)
+
+_BASE_DIR = Path(__file__).parent.parent.parent.parent
+_KAGGLE_INSTALL_COMMAND = "pip install kaggle"
+_KAGGLE_AUTH_COMMAND = f"cd {_BASE_DIR} && kaggle benchmarks auth"
+
+
+def _validate_proxy_config(
+    url: str | None = None,
+    api_key: str | None = None,
+) -> None:
+    """Raise if required auth env vars are missing."""
+    missing = []
+    if not url:
+        missing.append("MODEL_PROXY_URL")
+    if not api_key:
+        missing.append("MODEL_PROXY_API_KEY")
+    if not missing:
+        return
+
+    missing_list = "\n".join(f"  - {v}" for v in missing)
+    separator = "-" * len(_KAGGLE_AUTH_COMMAND)
+    raise ValueError(
+        f"\n\nMissing environment variables for Kaggle authentication:\n\n{missing_list}\n\n"
+        f"Authenticate by running:\n{separator}\n{_KAGGLE_INSTALL_COMMAND}\n{_KAGGLE_AUTH_COMMAND}\n{separator}\n"
+    )
+
+
+def _validate_proxy_token_expiry(
+    expiry_time: str | None = None,
+) -> None:
+    """Warn if the auth token has expired."""
+    # Kaggle notebook-based flows don't set MODEL_PROXY_EXPIRY_TIME, so skip the check.
+    if not expiry_time:
+        return
+
+    try:
+        expiry = datetime.fromisoformat(expiry_time)
+    except (ValueError, TypeError):
+        return
+
+    if expiry <= datetime.now(timezone.utc):
+        separator = "-" * len(_KAGGLE_AUTH_COMMAND)
+        warnings.warn(
+            "\n\nKaggle authentication has expired. Re-authenticate by running:\n"
+            f"{separator}\n{_KAGGLE_INSTALL_COMMAND}\n{_KAGGLE_AUTH_COMMAND}\n{separator}\n",
+            stacklevel=2,
+        )
 
 
 class ModelProxy:
@@ -41,12 +87,8 @@ class ModelProxy:
         resolved_base_url = base_url or os.getenv("MODEL_PROXY_URL")
         resolved_expiry_time = expiry_time or os.getenv("MODEL_PROXY_EXPIRY_TIME")
 
-        assert_kaggle_auth_exists(
-            url=resolved_base_url,
-            api_key=resolved_api_key,
-            raise_on_error=True,
-        )
-        assert_kaggle_auth_valid(expiry_time=resolved_expiry_time)
+        _validate_proxy_config(url=resolved_base_url, api_key=resolved_api_key)
+        _validate_proxy_token_expiry(expiry_time=resolved_expiry_time)
 
         llm_instance = None
         # Qwen and DeepSeek models support response_format, but the schema must be under 64 characters.
