@@ -105,6 +105,12 @@ def get_current_chat():
     return contexts.get_current().chat
 
 
+def last_reasoning_traces() -> str | None:
+    """Returns the reasoning traces from the last message in the current chat."""
+    messages = get_current_chat().messages
+    return messages[-1].reasoning_traces if messages else None
+
+
 def send(message: Message | Chat) -> Message | Chat:
     """A shortcut to send a message to the current chat."""
     return get_current_chat().append(message)

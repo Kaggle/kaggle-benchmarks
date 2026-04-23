@@ -244,17 +244,15 @@ response = llm.prompt("Solve this math problem.", reasoning="high")
 
 Valid values: `"low"`, `"medium"`, `"high"`.
 
-### Thinking Traces
+> **Note:** Not all models support reasoning. Models that don't support
+> it will return an error.
 
-Set `include_thoughts=True` to receive the model's internal reasoning
-traces in the response:
+Since `prompt()` returns a plain string, use `kbench.last_reasoning_traces()`
+to access the model's reasoning traces from the most recent response:
 
 ```python
-response = llm.prompt(
-    "How many r's are in 'strawberry'?",
-    reasoning="high",
-    include_thoughts=True,
-)
+response = llm.prompt("How many r's are in 'strawberry'?", reasoning="high")
+traces = kbench.last_reasoning_traces()  # model's internal reasoning
 ```
 
 ### `llm.prompt()` with Tool Calling

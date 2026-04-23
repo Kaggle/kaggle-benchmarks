@@ -53,8 +53,8 @@ class Message(Generic[T]):
         return str(self.content)
 
     @property
-    def thinking(self):
-        return self._meta.get("thinking")
+    def reasoning_traces(self):
+        return self._meta.get("reasoning_traces")
 
     @property
     def tool_calls(self):

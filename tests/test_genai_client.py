@@ -89,41 +89,27 @@ def test_invoke_with_config_params():
     assert llm.config.temperature == 0.9
 
 
-def test_prompt_reasoning_maps_to_thinking_config():
-    """Tests that reasoning='low' maps to thinking_level='LOW'."""
+@pytest.mark.parametrize(
+    "reasoning, expected_level",
+    [
+        ("low", "LOW"),
+        ("medium", "MEDIUM"),
+        ("high", "HIGH"),
+    ],
+)
+def test_prompt_thinking_config(reasoning, expected_level):
+    """Tests that reasoning maps to the correct ThinkingConfig with thoughts enabled."""
     llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", reasoning="low")
+    llm.prompt("Think hard", reasoning=reasoning)
 
-    assert llm.config.thinking_config.thinking_level == "LOW"
+    tc = llm.config.thinking_config
+    assert tc.thinking_level == expected_level
+    assert tc.include_thoughts is True
 
 
-def test_prompt_reasoning_high():
-    """Tests that reasoning='high' maps to thinking_level='HIGH'."""
+def test_split_response_separates_content_and_thinking():
+    """Tests that _split_response separates content from thought parts."""
     llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", reasoning="high")
-
-    assert llm.config.thinking_config.thinking_level == "HIGH"
-
-
-def test_prompt_include_thoughts():
-    """Tests that include_thoughts is passed into thinking_config."""
-    llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", include_thoughts=True)
-
-    assert llm.config.thinking_config.include_thoughts is True
-
-
-def test_prompt_reasoning_with_include_thoughts():
-    """Tests that reasoning and include_thoughts are merged into one thinking_config."""
-    llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", reasoning="high", include_thoughts=True)
-
-    assert llm.config.thinking_config.thinking_level == "HIGH"
-    assert llm.config.thinking_config.include_thoughts is True
-
-
-def test_extract_text_excludes_thought_parts():
-    """Tests that _extract_text excludes thought parts from content."""
     response = types.GenerateContentResponse(
         candidates=[
             types.Candidate(
@@ -136,32 +122,14 @@ def test_extract_text_excludes_thought_parts():
             )
         ]
     )
-    text = GoogleGenAI._extract_text(response)
-    assert text == "There are 3 r's."
-    assert "I need to count..." not in text
-    assert "<think>" not in text
-
-
-def test_extract_thinking_returns_thought_text():
-    """Tests that _extract_thinking extracts thought parts separately."""
-    response = types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(
-                    parts=[
-                        types.Part(text="I need to count...", thought=True),
-                        types.Part(text="There are 3 r's."),
-                    ]
-                )
-            )
-        ]
-    )
-    thinking = GoogleGenAI._extract_thinking(response)
+    content, thinking = llm._split_response(response)
+    assert content == "There are 3 r's."
     assert thinking == "I need to count..."
 
 
-def test_extract_thinking_returns_none_without_thoughts():
-    """Tests that _extract_thinking returns None when no thought parts exist."""
+def test_split_response_returns_none_thinking_without_thoughts():
+    """Tests that _split_response returns None thinking when no thought parts exist."""
+    llm = MockedGoogleGenAI()
     response = types.GenerateContentResponse(
         candidates=[
             types.Candidate(
@@ -171,45 +139,14 @@ def test_extract_thinking_returns_none_without_thoughts():
             )
         ]
     )
-    assert GoogleGenAI._extract_thinking(response) is None
-
-
-def test_extract_text_excludes_thoughts_from_structured_content():
-    """Thought parts should not corrupt structured output."""
-    response = types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(
-                    parts=[
-                        types.Part(text="Let me think...", thought=True),
-                        types.Part(text='{"answer": 42}'),
-                    ]
-                )
-            )
-        ]
-    )
-    text = GoogleGenAI._extract_text(response)
-    assert text == '{"answer": 42}'
-
-
-def test_extract_text_no_thought_parts():
-    """Tests that _extract_text returns plain text when no thought parts."""
-    response = types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(
-                    parts=[types.Part(text="Hello world")]
-                )
-            )
-        ]
-    )
-    text = GoogleGenAI._extract_text(response)
-    assert text == "Hello world"
-    assert "<think>" not in text
+    content, thinking = llm._split_response(response)
+    assert content == "Hello world"
+    assert thinking is None
 
 
 def test_extract_text_multi_part_matches_response_text():
     """_extract_text should match response.text for non-thought multi-part responses."""
+    llm = MockedGoogleGenAI()
     response = types.GenerateContentResponse(
         candidates=[
             types.Candidate(
@@ -219,11 +156,12 @@ def test_extract_text_multi_part_matches_response_text():
             )
         ]
     )
-    assert GoogleGenAI._extract_text(response) == response.text
+    assert llm._extract_text(response) == response.text
 
 
 def test_streaming_thought_output_matches_non_streaming():
-    """Streaming and non-streaming should produce the same text for identical content."""
+    """Streaming and non-streaming should produce the same content for identical input."""
+    llm = MockedGoogleGenAI()
     parts = [
         types.Part(text="step 1", thought=True),
         types.Part(text="step 2", thought=True),
@@ -236,7 +174,7 @@ def test_streaming_thought_output_matches_non_streaming():
             types.Candidate(content=types.Content(parts=parts))
         ]
     )
-    non_streaming_text = GoogleGenAI._extract_text(full_response)
+    non_streaming_text = llm._extract_text(full_response)
 
     # Streaming: one part per chunk
     chunks = [
@@ -247,16 +185,14 @@ def test_streaming_thought_output_matches_non_streaming():
         )
         for p in parts
     ]
-    streaming_text = "".join(GoogleGenAI._extract_text(c) for c in chunks)
+    streaming_text = "".join(llm._extract_text(c) for c in chunks)
 
     assert streaming_text == non_streaming_text
 
 
-def test_thinking_captured_in_response():
+def test_thinking_captured_in_response(mocker):
     """Tests that thought parts from GenAI response reach the message as thinking."""
-    from unittest.mock import MagicMock
-
-    mock_client = MagicMock()
+    mock_client = mocker.MagicMock()
     mock_response = types.GenerateContentResponse(
         candidates=[
             types.Candidate(
@@ -282,14 +218,8 @@ def test_thinking_captured_in_response():
 
     assert response == "There are 3 r's."
     last_message = t.messages[-1]
-    assert last_message.thinking == "Let me count the letters..."
+    assert last_message.reasoning_traces == "Let me count the letters..."
 
-
-def test_prompt_rejects_invalid_reasoning():
-    """Tests that an invalid reasoning level raises ValueError."""
-    llm = MockedGoogleGenAI()
-    with pytest.raises(ValueError, match="Invalid reasoning level"):
-        llm.prompt("Think hard", reasoning="hgih")
 
 
 @pytest.mark.parametrize("streaming", [True, False])

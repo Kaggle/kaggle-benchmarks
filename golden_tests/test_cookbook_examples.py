@@ -624,9 +624,9 @@ def test_reasoning_param(llm):
 
 
 # %%
-# --- Test Case: Include thoughts ---
-# Tests that thinking traces are returned when include_thoughts=True is passed.
-# Both backends wrap thoughts in <think> tags.
+# --- Test Case: Reasoning with thinking traces ---
+# Tests that thinking traces are automatically captured on the message
+# when reasoning is enabled, accessible via message.reasoning_traces.
 
 @benchmark_test(
     include={
@@ -635,18 +635,20 @@ def test_reasoning_param(llm):
     },
 )
 @kbench.task()
-def test_include_thoughts(llm):
-    """Tests that include_thoughts returns thinking traces."""
+def test_reasoning_captures_thinking(llm):
+    """Tests that reasoning captures thinking traces on the message."""
     response = llm.prompt(
         "How many r's are in the word 'strawberry'? Think step by step.",
         reasoning="high",
-        include_thoughts=True,
     )
 
-    kbench.assertions.assert_contains_regex(
-        r"(?i)<think>",
-        response,
-        expectation="Response should contain thinking traces in <think> tags.",
+    chat = kbench.chats.get_current_chat()
+    last_message = chat.messages[-1]
+    assert last_message.reasoning_traces is not None, (
+        "Reasoning traces should be accessible via message.reasoning_traces"
+    )
+    assert len(last_message.reasoning_traces) > 0, (
+        "Reasoning traces should not be empty"
     )
 
 

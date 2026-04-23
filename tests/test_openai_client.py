@@ -197,53 +197,34 @@ def test_invoke():
     assert llm.kwargs.get("response_format") is None
 
 
-def test_prompt_reasoning_maps_to_reasoning_effort():
-    """Tests that reasoning='high' maps to reasoning_effort='high'."""
+def test_prompt_reasoning_sets_effort_and_thoughts():
+    """Tests that reasoning='high' sets reasoning_effort and enables thinking."""
     llm = MockedOpenAI(model="test-model")
     llm.prompt("Think hard", reasoning="high")
 
     assert llm.kwargs["reasoning_effort"] == "high"
-
-
-def test_prompt_include_thoughts():
-    """Tests that include_thoughts constructs the correct extra_body."""
-    llm = MockedOpenAI(model="test-model")
-    llm.prompt("Think hard", include_thoughts=True)
-
     extra = llm.kwargs["extra_body"]["extra_body"]["google"]["thinking_config"]
     assert extra["include_thoughts"] is True
 
 
-def test_prompt_include_thoughts_with_reasoning():
-    """Tests that include_thoughts and reasoning work together."""
-    llm = MockedOpenAI(model="test-model")
-    llm.prompt("Think hard", reasoning="high", include_thoughts=True)
-
-    assert llm.kwargs["reasoning_effort"] == "high"
-    extra = llm.kwargs["extra_body"]["extra_body"]["google"]["thinking_config"]
-    assert extra["include_thoughts"] is True
-
-
-def test_reasoning_content_captured_in_response():
+def test_reasoning_content_captured_in_response(mocker):
     """Tests that reasoning_content from OpenAI response is not silently dropped."""
-    from unittest.mock import MagicMock
-
-    mock_client = MagicMock()
-    mock_message = MagicMock()
+    mock_client = mocker.MagicMock()
+    mock_message = mocker.MagicMock()
     mock_message.content = "There are 3 r's."
     mock_message.reasoning_content = (
         "Let me count: s-t-r-a-w-b-e-r-r-y. r appears at positions 3, 8, 9."
     )
     mock_message.tool_calls = None
 
-    mock_usage = MagicMock()
+    mock_usage = mocker.MagicMock()
     mock_usage.prompt_tokens = 10
     mock_usage.completion_tokens = 5
 
-    mock_choice = MagicMock()
+    mock_choice = mocker.MagicMock()
     mock_choice.message = mock_message
 
-    mock_response = MagicMock()
+    mock_response = mocker.MagicMock()
     mock_response.choices = [mock_choice]
     mock_response.usage = mock_usage
 
@@ -257,39 +238,62 @@ def test_reasoning_content_captured_in_response():
 
     assert response == "There are 3 r's."
     last_message = t.messages[-1]
-    assert last_message.thinking == (
+    assert last_message.reasoning_traces == (
         "Let me count: s-t-r-a-w-b-e-r-r-y. r appears at positions 3, 8, 9."
     )
 
 
-def test_thinking_plumbed_through_respond():
-    """Tests that LLMResponse.thinking is plumbed through respond() to the message."""
+def test_reasoning_plumbed_through_respond():
+    """Tests that LLMResponse.reasoning_traces is plumbed through respond() to the message."""
 
-    class MockedOpenAIWithThinking(OpenAI):
+    class MockedOpenAIWithReasoning(OpenAI):
         def __init__(self):
-            super().__init__(client=None, model="mock-thinking")
+            super().__init__(client=None, model="mock-reasoning")
 
         def _call_api(self, messages, **kwargs):
             return LLMResponse(
                 content="The answer is 42.",
-                thinking="I need to think about this carefully...",
+                reasoning_traces="I need to think about this carefully...",
             )
 
-    llm = MockedOpenAIWithThinking()
+    llm = MockedOpenAIWithReasoning()
 
-    with chats.new("Test thinking plumbing") as t:
+    with chats.new("Test reasoning plumbing") as t:
         response = llm.prompt("What is the answer?")
 
     assert response == "The answer is 42."
     last_message = t.messages[-1]
-    assert last_message.thinking == "I need to think about this carefully..."
+    assert last_message.reasoning_traces == "I need to think about this carefully..."
 
 
-def test_prompt_rejects_invalid_reasoning():
-    """Tests that an invalid reasoning level raises ValueError."""
+def test_last_reasoning_traces_accessor():
+    """Tests that kbench.last_reasoning_traces() returns reasoning from the last message."""
+
+    class MockedOpenAIWithReasoning(OpenAI):
+        def __init__(self):
+            super().__init__(client=None, model="mock-reasoning")
+
+        def _call_api(self, messages, **kwargs):
+            return LLMResponse(
+                content="The answer is 42.",
+                reasoning_traces="I need to think about this carefully...",
+            )
+
+    llm = MockedOpenAIWithReasoning()
+
+    with chats.new("Test last_reasoning_traces"):
+        llm.prompt("What is the answer?")
+        assert chats.last_reasoning_traces() == "I need to think about this carefully..."
+
+
+def test_last_reasoning_traces_returns_none_without_reasoning():
+    """Tests that kbench.last_reasoning_traces() returns None when no reasoning traces exist."""
     llm = MockedOpenAI(model="test-model")
-    with pytest.raises(ValueError, match="Invalid reasoning level"):
-        llm.prompt("Hi", reasoning="hgih")
+
+    with chats.new("Test no reasoning"):
+        llm.prompt("Hi")
+        assert chats.last_reasoning_traces() is None
+
 
 
 def test_invoke_prompt():
