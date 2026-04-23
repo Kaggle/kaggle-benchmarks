@@ -221,7 +221,6 @@ def test_thinking_captured_in_response(mocker):
     assert last_message.reasoning_traces == "Let me count the letters..."
 
 
-
 @pytest.mark.parametrize("streaming", [True, False])
 def test_streaming_and_non_streaming_responses(streaming):
     """Tests both streaming and non-streaming modes and checks metadata."""

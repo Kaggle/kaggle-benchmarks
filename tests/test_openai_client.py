@@ -295,7 +295,6 @@ def test_last_reasoning_traces_returns_none_without_reasoning():
         assert chats.last_reasoning_traces() is None
 
 
-
 def test_invoke_prompt():
     llm = MockedOpenAI(model="test-model")
     llm.support_structured_outputs = False
