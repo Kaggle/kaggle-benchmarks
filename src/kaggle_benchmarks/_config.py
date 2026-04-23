@@ -22,8 +22,16 @@ from typing import Any, Self
 import dotenv
 import panel as pn
 
+from kaggle_benchmarks.auth import (
+    assert_kaggle_auth_exists,
+    assert_kaggle_auth_valid,
+)
+
 base_dir = Path(__file__).parent.parent.parent
 dotenv.load_dotenv(override=True)
+
+assert_kaggle_auth_exists()
+assert_kaggle_auth_valid()
 
 
 def string_to_bool(s: str) -> bool:
