@@ -31,6 +31,8 @@ if _dotenv_path := dotenv.find_dotenv():
 else:
     _logger.info("No .env file found; skipping dotenv load")
 
+logger = logging.getLogger(__name__)
+
 
 def string_to_bool(s: str) -> bool:
     """Converts a string to a boolean, handling various truthy values."""
@@ -48,7 +50,7 @@ def _parse_int_env(name: str, default: int | None = None) -> int | None:
     try:
         return int(raw)
     except ValueError:
-        logging.getLogger(__name__).warning(
+        logger.warning(
             f"Ignoring non-integer value for {name}={raw!r}; using {default}."
         )
         return default
