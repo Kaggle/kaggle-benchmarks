@@ -538,7 +538,7 @@ Control how much reasoning the model performs:
 response = llm.prompt("Solve this math problem.", reasoning="high")
 ```
 
-Valid values: `"low"`, `"medium"`, `"high"`.
+Valid values: `"none"`, `"low"`, `"medium"`, `"high"`.
 
 > **Note:** Not all models support reasoning. Models that don't support
 > it will return an error.

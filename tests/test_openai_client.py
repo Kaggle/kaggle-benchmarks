@@ -208,10 +208,14 @@ def test_prompt_reasoning_sets_effort_and_thoughts():
 
 
 def test_reasoning_content_captured_in_response(mocker):
-    """Tests that reasoning_content from OpenAI response is not silently dropped."""
+    """Tests that reasoning_content is captured as reasoning_traces.
+
+    When reasoning_content is set, <think> tags in content should remain
+    untouched since reasoning_content takes priority.
+    """
     mock_client = mocker.MagicMock()
     mock_message = mocker.MagicMock()
-    mock_message.content = "There are 3 r's."
+    mock_message.content = "<think>\nstale\n</think>\n\nThere are 3 r's."
     mock_message.reasoning_content = (
         "Let me count: s-t-r-a-w-b-e-r-r-y. r appears at positions 3, 8, 9."
     )
@@ -236,7 +240,8 @@ def test_reasoning_content_captured_in_response(mocker):
     with chats.new("Test reasoning") as t:
         response = llm.prompt("How many r's in strawberry?")
 
-    assert response == "There are 3 r's."
+    # Content should preserve <think> tags since reasoning_content takes priority.
+    assert response == "<think>\nstale\n</think>\n\nThere are 3 r's."
     last_message = t.messages[-1]
     assert last_message.reasoning_traces == (
         "Let me count: s-t-r-a-w-b-e-r-r-y. r appears at positions 3, 8, 9."
@@ -295,6 +300,69 @@ def test_last_reasoning_traces_returns_none_without_reasoning():
     with chats.new("Test no reasoning"):
         llm.prompt("Hi")
         assert chats.last_reasoning_traces() is None
+
+
+def test_parse_think_tags_extracts_traces():
+    """Tests that <think> tags in content are parsed into reasoning_traces."""
+    content = "<think>\nLet me think step by step.\n</think>\n\nThe answer is 42."
+    remaining, thinking = OpenAI._parse_think_tags(content)
+    assert remaining == "The answer is 42."
+    assert thinking == "Let me think step by step."
+
+
+def test_parse_think_tags_returns_none_without_tags():
+    """Tests that content without <think> tags returns None for thinking."""
+    content = "The answer is 42."
+    remaining, thinking = OpenAI._parse_think_tags(content)
+    assert remaining == "The answer is 42."
+    assert thinking is None
+
+
+def test_parse_think_tags_extracts_multiple_blocks():
+    """Tests that multiple <think> blocks are all extracted and joined."""
+    content = (
+        "<think>\nFirst thought.\n</think>\n\n"
+        "Middle content.\n\n"
+        "<think>\nSecond thought.\n</think>\n\n"
+        "The answer is 42."
+    )
+    remaining, thinking = OpenAI._parse_think_tags(content)
+    assert remaining == "Middle content.\n\nThe answer is 42."
+    assert thinking == "First thought.\n\nSecond thought."
+
+
+def test_think_tags_captured_in_response(mocker):
+    """Tests that Model Proxy <think> tags are parsed into reasoning_traces."""
+    mock_client = mocker.MagicMock()
+    mock_message = mocker.MagicMock()
+    mock_message.content = (
+        "<think>\nCounting the letters...\n</think>\n\nThere are 3 r's."
+    )
+    mock_message.reasoning_content = None
+    mock_message.tool_calls = None
+
+    mock_usage = mocker.MagicMock()
+    mock_usage.prompt_tokens = 10
+    mock_usage.completion_tokens = 5
+
+    mock_choice = mocker.MagicMock()
+    mock_choice.message = mock_message
+
+    mock_response = mocker.MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.usage = mock_usage
+
+    mock_client.chat.completions.create.return_value = mock_response
+
+    llm = OpenAI(client=mock_client, model="google/gemini-2.5-flash")
+    llm.stream_responses = False
+
+    with chats.new("Test think tags") as t:
+        response = llm.prompt("How many r's in strawberry?", reasoning="high")
+
+    assert response == "There are 3 r's."
+    last_message = t.messages[-1]
+    assert last_message.reasoning_traces == "Counting the letters..."
 
 
 def test_invoke_prompt():

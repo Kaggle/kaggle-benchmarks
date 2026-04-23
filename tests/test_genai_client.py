@@ -185,7 +185,7 @@ def test_streaming_thought_output_matches_non_streaming():
 
 
 def test_thinking_captured_in_response(mocker):
-    """Tests that thought parts from GenAI response reach the message as thinking."""
+    """Tests that thought parts from GenAI response are captured as reasoning traces."""
     mock_client = mocker.MagicMock()
     mock_response = types.GenerateContentResponse(
         candidates=[

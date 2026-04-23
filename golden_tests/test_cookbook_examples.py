@@ -598,14 +598,8 @@ def test_audio_url(llm):
 
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
         "google/gemini-2.0-flash",
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
-        "google/gemini-3.1-flash-lite-preview",
+        "google/gemma-3-12b",
     },
 )
 @kbench.task()
@@ -624,8 +618,8 @@ def test_reasoning_param(llm):
 
 
 # %%
-# --- Test Case: Reasoning with thinking traces ---
-# Tests that thinking traces are automatically captured on the message
+# --- Test Case: Reasoning traces ---
+# Tests that reasoning traces are automatically captured on the message
 # when reasoning is enabled, accessible via message.reasoning_traces.
 
 
@@ -633,12 +627,13 @@ def test_reasoning_param(llm):
     include={
         "google/gemini-2.5-flash",
         "google/gemini-2.5-pro",
+        "anthropic/claude-sonnet-4-5@20250929",
     },
 )
 @kbench.task()
-def test_reasoning_captures_thinking(llm):
-    """Tests that reasoning captures thinking traces on the message."""
-    response = llm.prompt(
+def test_reasoning_captures_traces(llm):
+    """Tests that reasoning captures reasoning traces on the message."""
+    llm.prompt(
         "How many r's are in the word 'strawberry'? Think step by step.",
         reasoning="high",
     )

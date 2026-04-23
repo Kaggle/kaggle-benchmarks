@@ -88,6 +88,7 @@ print(outer_t)
 import dataclasses
 import enum
 import json
+import re
 import typing
 from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeVar
 
@@ -105,8 +106,7 @@ if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
 
 T = TypeVar("T")
-# TODO: Add "none" once Model Proxy supports reasoning_effort="none".
-ReasoningLevel = Literal["low", "medium", "high"]
+ReasoningLevel = Literal["none", "low", "medium", "high"]
 
 
 # TODO: Figure out a more robust way to handle extra fields.
@@ -149,7 +149,7 @@ class LLMChat(actors.Actor):
         self,
         messages: list[messages.Message],
         system: str | None,
-        reasoning: ReasoningLevel = None,
+        reasoning: ReasoningLevel | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
@@ -165,7 +165,7 @@ class LLMChat(actors.Actor):
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
-        reasoning: ReasoningLevel = None,
+        reasoning: ReasoningLevel | None = None,
     ) -> T:
         if image is not None:
             match image:
@@ -310,6 +310,22 @@ class OpenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
+    @staticmethod
+    def _parse_think_tags(content: str) -> tuple[str, str | None]:
+        """Extracts all <think>...</think> blocks from content.
+
+        Model Proxy wraps reasoning traces in <think> tags inside content
+        because the chat completions spec doesn't have a dedicated field
+        for reasoning traces.
+        """
+        pattern = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
+        segments = pattern.findall(content)
+        if not segments:
+            return content, None
+        remaining = pattern.sub("", content).strip()
+        thinking = "\n\n".join(s.strip() for s in segments if s.strip())
+        return remaining, thinking or None
+
     def _should_remove_seed(self) -> bool:
         unsupported_prefixes = ("google/", "openai/gpt-5.4-pro")
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
@@ -318,7 +334,7 @@ class OpenAI(LLMChat):
         self,
         messages: list[messages.Message],
         system: str | None,
-        reasoning: ReasoningLevel = None,
+        reasoning: ReasoningLevel | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
@@ -335,16 +351,18 @@ class OpenAI(LLMChat):
 
         if reasoning is not None:
             kwargs["reasoning_effort"] = reasoning
-            # Model Proxy expects provider-specific params inside a nested
-            # extra_body: the outer extra_body is consumed by the OpenAI SDK,
-            # and the inner extra_body is forwarded to Model Proxy which reads
-            # the google.thinking_config field.
-            kwargs.setdefault("extra_body", {})
-            kwargs["extra_body"].setdefault("extra_body", {})
-            kwargs["extra_body"]["extra_body"].setdefault("google", {})
-            kwargs["extra_body"]["extra_body"]["google"].setdefault(
-                "thinking_config", {"include_thoughts": True}
-            )
+            # The double-nested extra_body is intentional: the outer one is
+            # consumed by the OpenAI SDK (merged into the request body), the
+            # inner one arrives at Model Proxy as a top-level field where it
+            # reads google.thinking_config.  Without include_thoughts, the
+            # frontend drops thinking traces from the response.
+            if reasoning != "none":
+                kwargs.setdefault("extra_body", {})
+                kwargs["extra_body"].setdefault("extra_body", {})
+                kwargs["extra_body"]["extra_body"].setdefault("google", {})
+                kwargs["extra_body"]["extra_body"]["google"].setdefault(
+                    "thinking_config", {"include_thoughts": True}
+                )
 
         return self._call_api(raw_messages, **kwargs)
 
@@ -405,9 +423,17 @@ class OpenAI(LLMChat):
         else:
             message = response.choices[0].message
             tool_calls = message.tool_calls
+            content = message.content or ""
+            # The OpenAI chat completions spec doesn't support a dedicated
+            # reasoning_content field, so Model Proxy embeds thinking traces
+            # in content using <think> tags.  Only parse when reasoning was
+            # requested to avoid stripping literal <think> tags from content.
+            reasoning = getattr(message, "reasoning_content", None)
+            if reasoning is None and "reasoning_effort" in kwargs:
+                content, reasoning = self._parse_think_tags(content)
             return LLMResponse(
-                content=message.content or "",
-                reasoning_traces=getattr(message, "reasoning_content", None),
+                content=content,
+                reasoning_traces=reasoning,
                 tool_calls=[t.model_dump() for t in tool_calls] if tool_calls else None,
                 meta=self._get_usage_meta(response.usage),
             )
@@ -433,6 +459,7 @@ class GoogleGenAI(LLMChat):
         }
 
     _REASONING_LEVEL_MAP = {
+        "none": None,
         "low": "LOW",
         "medium": "MEDIUM",
         "high": "HIGH",
@@ -480,7 +507,7 @@ class GoogleGenAI(LLMChat):
         self,
         messages: list[messages.Message],
         system: str | None,
-        reasoning: ReasoningLevel = None,
+        reasoning: ReasoningLevel | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
@@ -491,10 +518,15 @@ class GoogleGenAI(LLMChat):
 
         if reasoning is not None:
             level = self._REASONING_LEVEL_MAP[reasoning]
-            config_params["thinking_config"] = types.ThinkingConfig(
-                thinking_level=level,
-                include_thoughts=True,
-            )
+            if level is None:
+                config_params["thinking_config"] = types.ThinkingConfig(
+                    thinking_budget=0,
+                )
+            else:
+                config_params["thinking_config"] = types.ThinkingConfig(
+                    thinking_level=level,
+                    include_thoughts=True,
+                )
 
         if "response_format" in kwargs:
             schema = kwargs.pop("response_format")
