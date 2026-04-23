@@ -252,6 +252,39 @@ def test_streaming_thought_output_matches_non_streaming():
     assert streaming_text == non_streaming_text
 
 
+def test_thinking_captured_in_response():
+    """Tests that thought parts from GenAI response reach the message as thinking."""
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[
+                        types.Part(text="Let me count the letters...", thought=True),
+                        types.Part(text="There are 3 r's."),
+                    ]
+                )
+            )
+        ],
+        usage_metadata=types.UsageMetadata(
+            prompt_token_count=10, response_token_count=5
+        ),
+    )
+    mock_client.models.generate_content.return_value = mock_response
+
+    llm = GoogleGenAI(client=mock_client, model="test-gemini")
+    llm.stream_responses = False
+
+    with chats.new("Test GenAI thinking") as t:
+        response = llm.prompt("How many r's in strawberry?")
+
+    assert response == "There are 3 r's."
+    last_message = t.messages[-1]
+    assert last_message.thinking == "Let me count the letters..."
+
+
 def test_prompt_rejects_invalid_reasoning():
     """Tests that an invalid reasoning level raises ValueError."""
     llm = MockedGoogleGenAI()
