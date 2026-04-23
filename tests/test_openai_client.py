@@ -224,6 +224,67 @@ def test_prompt_include_thoughts_with_reasoning():
     assert extra["include_thoughts"] is True
 
 
+def test_reasoning_content_captured_in_response():
+    """Tests that reasoning_content from OpenAI response is not silently dropped."""
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = "There are 3 r's."
+    mock_message.reasoning_content = (
+        "Let me count: s-t-r-a-w-b-e-r-r-y. r appears at positions 3, 8, 9."
+    )
+    mock_message.tool_calls = None
+
+    mock_usage = MagicMock()
+    mock_usage.prompt_tokens = 10
+    mock_usage.completion_tokens = 5
+
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.usage = mock_usage
+
+    mock_client.chat.completions.create.return_value = mock_response
+
+    llm = OpenAI(client=mock_client, model="test-model")
+    llm.stream_responses = False
+
+    with chats.new("Test reasoning") as t:
+        response = llm.prompt("How many r's in strawberry?")
+
+    assert response == "There are 3 r's."
+    last_message = t.messages[-1]
+    assert last_message.thinking == (
+        "Let me count: s-t-r-a-w-b-e-r-r-y. r appears at positions 3, 8, 9."
+    )
+
+
+def test_thinking_plumbed_through_respond():
+    """Tests that LLMResponse.thinking is plumbed through respond() to the message."""
+
+    class MockedOpenAIWithThinking(OpenAI):
+        def __init__(self):
+            super().__init__(client=None, model="mock-thinking")
+
+        def _call_api(self, messages, **kwargs):
+            return LLMResponse(
+                content="The answer is 42.",
+                thinking="I need to think about this carefully...",
+            )
+
+    llm = MockedOpenAIWithThinking()
+
+    with chats.new("Test thinking plumbing") as t:
+        response = llm.prompt("What is the answer?")
+
+    assert response == "The answer is 42."
+    last_message = t.messages[-1]
+    assert last_message.thinking == "I need to think about this carefully..."
+
+
 def test_prompt_rejects_invalid_reasoning():
     """Tests that an invalid reasoning level raises ValueError."""
     llm = MockedOpenAI(model="test-model")

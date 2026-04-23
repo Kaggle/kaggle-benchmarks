@@ -137,6 +137,7 @@ def _validate_reasoning(reasoning: str | None) -> None:
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str
+    thinking: str | None = None
     tool_calls: list[Any] | None = None
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
 
@@ -266,6 +267,7 @@ class LLMChat(actors.Actor):
             response.content = invoke_response.content or ""
             response._meta["tool_calls"] = invoke_response.tool_calls
             response._meta.update(invoke_response.meta)
+            response._meta["thinking"] = invoke_response.thinking
         elif isinstance(invoke_response, Iterator):
             response.stream(invoke_response)
         elif isinstance(invoke_response, llm_messages.LLMMessage):
@@ -426,6 +428,7 @@ class OpenAI(LLMChat):
             tool_calls = message.tool_calls
             return LLMResponse(
                 content=message.content or "",
+                thinking=getattr(message, "reasoning_content", None),
                 tool_calls=[t.model_dump() for t in tool_calls] if tool_calls else None,
                 meta=self._get_usage_meta(response.usage),
             )
@@ -458,7 +461,7 @@ class GoogleGenAI(LLMChat):
 
     @staticmethod
     def _extract_text(response: types.GenerateContentResponse) -> str:
-        """Extracts text from a response, wrapping thought parts in <think> tags."""
+        """Extracts non-thought text content from a response."""
         if not response.candidates or not response.candidates[0].content:
             return ""
         parts = response.candidates[0].content.parts or []
@@ -467,10 +470,23 @@ class GoogleGenAI(LLMChat):
             if not part.text:
                 continue
             if getattr(part, "thought", False):
-                segments.append(f"<think>\n{part.text}\n</think>")
-            else:
-                segments.append(part.text)
+                continue
+            segments.append(part.text)
         return "".join(segments) if segments else ""
+
+    @staticmethod
+    def _extract_thinking(response: types.GenerateContentResponse) -> str | None:
+        """Extracts thinking text from thought parts of a response."""
+        if not response.candidates or not response.candidates[0].content:
+            return None
+        parts = response.candidates[0].content.parts or []
+        segments = []
+        for part in parts:
+            if not part.text:
+                continue
+            if getattr(part, "thought", False):
+                segments.append(part.text)
+        return "".join(segments) if segments else None
 
     def _get_stream_response(
         self, response_stream: Iterator[types.GenerateContentResponse]
@@ -547,5 +563,6 @@ class GoogleGenAI(LLMChat):
 
             return LLMResponse(
                 content=self._extract_text(response),
+                thinking=self._extract_thinking(response),
                 meta=self._get_usage_meta(response.usage_metadata),
             )

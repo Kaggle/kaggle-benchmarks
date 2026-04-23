@@ -122,8 +122,8 @@ def test_prompt_reasoning_with_include_thoughts():
     assert llm.config.thinking_config.include_thoughts is True
 
 
-def test_extract_text_wraps_thought_parts():
-    """Tests that _extract_text wraps thought parts in <think> tags."""
+def test_extract_text_excludes_thought_parts():
+    """Tests that _extract_text excludes thought parts from content."""
     response = types.GenerateContentResponse(
         candidates=[
             types.Candidate(
@@ -137,10 +137,59 @@ def test_extract_text_wraps_thought_parts():
         ]
     )
     text = GoogleGenAI._extract_text(response)
-    assert "<think>" in text
-    assert "I need to count..." in text
-    assert "</think>" in text
-    assert "There are 3 r's." in text
+    assert text == "There are 3 r's."
+    assert "I need to count..." not in text
+    assert "<think>" not in text
+
+
+def test_extract_thinking_returns_thought_text():
+    """Tests that _extract_thinking extracts thought parts separately."""
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[
+                        types.Part(text="I need to count...", thought=True),
+                        types.Part(text="There are 3 r's."),
+                    ]
+                )
+            )
+        ]
+    )
+    thinking = GoogleGenAI._extract_thinking(response)
+    assert thinking == "I need to count..."
+
+
+def test_extract_thinking_returns_none_without_thoughts():
+    """Tests that _extract_thinking returns None when no thought parts exist."""
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[types.Part(text="Hello world")]
+                )
+            )
+        ]
+    )
+    assert GoogleGenAI._extract_thinking(response) is None
+
+
+def test_extract_text_excludes_thoughts_from_structured_content():
+    """Thought parts should not corrupt structured output."""
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[
+                        types.Part(text="Let me think...", thought=True),
+                        types.Part(text='{"answer": 42}'),
+                    ]
+                )
+            )
+        ]
+    )
+    text = GoogleGenAI._extract_text(response)
+    assert text == '{"answer": 42}'
 
 
 def test_extract_text_no_thought_parts():
