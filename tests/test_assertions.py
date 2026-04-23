@@ -157,6 +157,21 @@ def test_regex_assertions():
         },
     )
 
+    # Case 4: flags kwarg honored — IGNORECASE makes the match succeed,
+    # so the not_contains assertion should fail.
+    r_not_contains_flags = assertions.assert_not_contains_regex(
+        r"HELLO", "hello world", flags=re.IGNORECASE
+    )
+    assert_assertion_result_matches(
+        r_not_contains_flags,
+        expected_passed=False,
+        expected_expectation="Expected pattern 'HELLO' not found in 'hello world'",
+        expected_details_content={
+            "assertion_type": "assert_not_contains_regex",
+            "source_code": "r_not_contains_flags = assertions.assert_not_contains_regex(",
+        },
+    )
+
 
 @assertions.assertion_handler()
 def assert_duck_always_quacks(response, expectation) -> assertions.AssertionResult:

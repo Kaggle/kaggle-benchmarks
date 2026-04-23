@@ -356,6 +356,7 @@ def assert_contains_regex(
         pattern: The regex pattern to search for.
         text: The string to search within.
         expectation: An optional message summarizing the assertion.
+        flags: Optional regex flags to pass to `re.search`.
     """
     passed = re.search(pattern, text, flags=flags) is not None
 
