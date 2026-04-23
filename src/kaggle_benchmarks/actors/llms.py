@@ -105,7 +105,8 @@ if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
 
 T = TypeVar("T")
-ReasoningLevel = Literal["low", "medium", "high", None]
+# TODO: Add "none" once Model Proxy supports reasoning_effort="none".
+ReasoningLevel = Literal["low", "medium", "high"]
 
 
 # TODO: Figure out a more robust way to handle extra fields.
