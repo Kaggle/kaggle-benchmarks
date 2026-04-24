@@ -25,8 +25,7 @@ import panel as pn
 base_dir = Path(__file__).parent.parent.parent
 
 _logger = logging.getLogger(__name__)
-_dotenv_path = dotenv.find_dotenv(usecwd=True)
-if _dotenv_path:
+if _dotenv_path := dotenv.find_dotenv():
     _logger.info("Loading environment variables from %s", _dotenv_path)
     dotenv.load_dotenv(_dotenv_path, override=True)
 else:
