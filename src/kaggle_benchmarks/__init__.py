@@ -46,4 +46,4 @@ client: clients.Client = clients.resolve_client()
 config.apply()
 
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
