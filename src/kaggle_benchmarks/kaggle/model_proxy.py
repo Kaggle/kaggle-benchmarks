@@ -14,9 +14,6 @@
 
 import os
 import re
-import warnings
-from datetime import datetime, timezone
-from pathlib import Path
 
 import openai
 from google import genai
@@ -25,12 +22,11 @@ from google.genai import types
 from kaggle_benchmarks import utils
 from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
 
-_BASE_DIR = Path(__file__).parent.parent.parent.parent
 _KAGGLE_INSTALL_COMMAND = "pip install kaggle"
-_KAGGLE_AUTH_COMMAND = f"cd {_BASE_DIR} && kaggle benchmarks auth"
+_KAGGLE_AUTH_COMMAND = "kaggle benchmarks auth"
 
 
-def _validate_proxy_config(
+def _validate_kaggle_model_proxy_auth_config(
     url: str | None = None,
     api_key: str | None = None,
 ) -> None:
@@ -51,28 +47,6 @@ def _validate_proxy_config(
     )
 
 
-def _validate_proxy_token_expiry(
-    expiry_time: str | None = None,
-) -> None:
-    """Warn if the auth token has expired."""
-    # Kaggle notebook-based flows don't set MODEL_PROXY_EXPIRY_TIME, so skip the check.
-    if not expiry_time:
-        return
-
-    try:
-        expiry = datetime.fromisoformat(expiry_time)
-    except (ValueError, TypeError):
-        return
-
-    if expiry <= datetime.now(timezone.utc):
-        separator = "-" * len(_KAGGLE_AUTH_COMMAND)
-        warnings.warn(
-            "\n\nKaggle authentication has expired. Re-authenticate by running:\n"
-            f"{separator}\n{_KAGGLE_INSTALL_COMMAND}\n{_KAGGLE_AUTH_COMMAND}\n{separator}\n",
-            stacklevel=2,
-        )
-
-
 class ModelProxy:
     def __new__(
         cls,
@@ -80,17 +54,16 @@ class ModelProxy:
         api: str = "openai",
         api_key: str | None = None,
         base_url: str | None = None,
-        expiry_time: str | None = None,
         **kwargs,
     ) -> LLMChat:
         resolved_api_key = api_key or os.getenv("MODEL_PROXY_API_KEY")
         resolved_base_url = base_url or os.getenv("MODEL_PROXY_URL")
-        resolved_expiry_time = expiry_time or os.getenv("MODEL_PROXY_EXPIRY_TIME")
 
-        _validate_proxy_config(url=resolved_base_url, api_key=resolved_api_key)
-        _validate_proxy_token_expiry(expiry_time=resolved_expiry_time)
+        _validate_kaggle_model_proxy_auth_config(
+            url=resolved_base_url, api_key=resolved_api_key
+        )
 
-        # Normalize base URL: strip any existing /openapi or /genai suffix, then append the correct one.
+        # Normalize base URL
         if resolved_base_url.endswith(("/openapi", "/genai")):
             resolved_base_url = re.sub(r"/(openapi|genai)$", "", resolved_base_url)
 
