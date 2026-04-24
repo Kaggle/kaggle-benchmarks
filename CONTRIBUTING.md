@@ -31,3 +31,10 @@ All submissions, including submissions by project members, require review. We
 use GitHub pull requests for this purpose. Consult
 [GitHub Help](https://help.github.com/articles/about-pull-requests/) for more
 information on using pull requests.
+
+## Development resources
+
+For coding standards, architecture conventions, and testing workflows, see:
+
+- [**DEVELOPMENT.md**](DEVELOPMENT.md) — Architecture, coding conventions, testing, and a PR checklist for contributors.
+- [**REVIEWING.md**](REVIEWING.md) — What reviewers look for, how to give feedback, and when to block.
