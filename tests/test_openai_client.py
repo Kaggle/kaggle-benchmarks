@@ -197,9 +197,13 @@ def test_invoke():
     assert llm.kwargs.get("response_format") is None
 
 
-def test_prompt_reasoning_sets_effort_and_thoughts():
-    """Tests that reasoning='high' sets reasoning_effort and enables thinking."""
-    llm = MockedOpenAI(model="test-model")
+@pytest.mark.parametrize(
+    "model",
+    ["google/gemini-2.5-flash", "anthropic/claude-sonnet", "openai/gpt-5.4"],
+)
+def test_prompt_reasoning_sets_effort_and_thinking_config(model):
+    """Tests that reasoning sets reasoning_effort and include_thoughts for all models."""
+    llm = MockedOpenAI(model=model)
     llm.prompt("Think hard", reasoning="high")
 
     assert llm.kwargs["reasoning_effort"] == "high"
