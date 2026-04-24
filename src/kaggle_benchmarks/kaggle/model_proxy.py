@@ -19,8 +19,8 @@ import openai
 from google import genai
 from google.genai import types
 
-from kaggle_benchmarks import utils
-from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
+from kaggle_benchmarks import providers, utils
+from kaggle_benchmarks.actors import LLMChat
 
 
 def validate_model_proxy_config(
@@ -89,7 +89,11 @@ class ModelProxy:
                     base_url=resolved_base_url,
                 ),
             )
-            llm_instance = GoogleGenAI(client, model, **kwargs)
+            llm_instance = providers.genai.ModelProxyGenAI(
+                client,
+                model,
+                **kwargs,
+            )
 
         elif api == "openai":
             resolved_base_url = resolved_base_url + "/openapi"
@@ -101,11 +105,9 @@ class ModelProxy:
 
             # TODO (b/439876083): Disable temperature parameter till this is resolved.
             kwargs.setdefault("support_temperature", False)
-            llm_instance = OpenAI(client, model, **kwargs)
+            llm_instance = providers.openai.ModelProxyOpenAI(client, model, **kwargs)
 
         else:
             raise ValueError(f"Unsupported API: '{api}'. Must be 'openai' or 'genai'.")
 
-        if llm_instance:
-            llm_instance.stream_responses = False
         return llm_instance

@@ -14,97 +14,302 @@
 
 import json
 
+import pydantic
 import pytest
 
-from kaggle_benchmarks import actors, chats, contexts, prompting, utils
-from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks import actors, chats, prompting, usage, utils
+from kaggle_benchmarks import tools as tool_utils
 from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.llm_messages import LLMMessage
-from kaggle_benchmarks.prompting import handler
 from tests.mocks import MockedChat
 
 
-class Ferret(actors.LLMChat):
-    def __init__(self):
-        super().__init__(name="Ferret")
-        self.stream_responses = False
-
-    def invoke(self, messages, system=None, **kwargs):
-        if not self.stream_responses:
-            return LLMResponse(
-                content=json.dumps(
-                    dict(
-                        messages=[[m.sender.name.lower(), m.content] for m in messages],
-                        system=system,
-                    )
-                )
-            )
-
-        def stream_generator():
-            yield LLMResponse(content="stream", meta={"input_tokens": 10})
-            yield LLMResponse(
-                content="ing", meta={"input_tokens": 10, "output_tokens": 1}
-            )
-            yield LLMResponse(
-                content="...", meta={"input_tokens": 10, "output_tokens": 2}
-            )
-
-        return stream_generator()
-
-
 def test_prompt_without_context():
-    llm = Ferret()
+    llm = MockedChat.from_contents(["response content"])
+
     r = llm.prompt("A")
-    assert {"messages": [["user", "A"]], "system": None} == json.loads(r)
+    assert r == "response content"
+    assert len(llm.invocations) == 1
+    invoked_messages, kwargs = llm.invocations[0]
+    assert len(invoked_messages) == 1
+    assert invoked_messages[0].content == "A"
+    assert invoked_messages[0].sender is actors.user
+
+    assert kwargs["system"] is None
 
 
 def test_respond():
-    llm = Ferret()
+    llm = MockedChat.from_contents(["response content"])
 
-    with chats.new("Test") as t:
+    with chats.new() as t:
         actors.user.send("A")
         assert len(t.messages) == 1
 
         r = llm.respond()
         assert len(t.messages) == 2
-        assert {"messages": [["user", "A"]], "system": None} == json.loads(r.text)
+        assert r.content == "response content"
+        assert len(llm.invocations) == 1
+        invoked_messages, kwargs = llm.invocations[0]
+        assert len(invoked_messages) == 1
+        assert invoked_messages[0].content == "A"
+        assert invoked_messages[0].sender is actors.user
 
 
 def test_chat_context():
-    llm = Ferret()
-    llm.prompt("<should not be visible in the context>")
+    llm = MockedChat.from_contents(["response A", "response B"])
+    # This message should not be visible in the context of the next chat.
+    actors.user.send("<should not be visible in the context>")
 
     with chats.new(system_instructions="S") as t:
         assert t.status == utils.Status.RUNNING
 
+        assert len(t.messages) == 1
+        assert t.messages[0].content == "S"
+        assert t.messages[0].sender is actors.system
+
         r = llm.prompt("A")
-        assert {
-            "messages": [["system", "S"], ["user", "A"]],
-            "system": None,
-        } == json.loads(r)
+        assert r == "response A"
+
+        assert len(t.messages) == 3
+        assert t.messages[1].content == "A"
+        assert t.messages[1].sender is actors.user
+        assert t.messages[2].content == "response A"
+        assert t.messages[2].sender is llm
+
+        assert len(llm.invocations) == 1
+
+        invoked_messages, kwargs = llm.invocations[0]
+        assert len(invoked_messages) == 2
+        assert invoked_messages == t.messages[:2]
+        assert kwargs["system"] is None
+        assert kwargs["schema"] is str
 
         r = llm.prompt("B")
-        response = json.loads(r)
+        assert r == "response B"
+        assert len(t.messages) == 5
+        assert len(llm.invocations) == 2
 
-        assert response["system"] is None
-        assert 4 == len(response["messages"])
-        assert ["system", "S"] == response["messages"][0]
-        assert ["user", "A"] == response["messages"][1]
-        assert llm.name.lower() == response["messages"][2][0]
-        assert ["user", "B"] == response["messages"][3]
+        invoked_messages, kwargs = llm.invocations[1]
+        assert len(invoked_messages) == 4
+        assert invoked_messages == t.messages[:4]
+        assert kwargs["system"] is None
 
     assert t.status == utils.Status.SUCCESS
 
 
-def test_structured():
-    llm = Ferret()
+@pytest.mark.parametrize(
+    "support_structured_outputs",
+    [
+        pytest.param(True, id="with_schema_support"),
+        pytest.param(False, id="without_schema_support"),
+    ],
+)
+def test_structured_output(support_structured_outputs):
+    llm = MockedChat.from_contents(
+        ['{"field1": 1, "field2": "two"}'],
+        support_structured_outputs=support_structured_outputs,
+    )
+
+    class Response(pydantic.BaseModel):
+        field1: int
+        field2: str
+
+    with chats.new("test") as t:
+        response = llm.prompt("test", schema=Response)
+        assert response == Response(field1=1, field2="two")
+        assert len(t.messages) == 2
+
+        invoked_messages, kwargs = llm.invocations[0]
+        if support_structured_outputs:
+            assert len(invoked_messages) == 1
+            assert kwargs["schema"] is Response
+        else:
+            # extra message for schema instructions
+            assert len(invoked_messages) == 2
+            assert kwargs["schema"] is str
+
+
+def get_weather(location: str) -> str:
+    """Get current weather"""
+    if "london" in location.lower():
+        return "Rainy"
+    return "Sunny"
+
+
+class WeatherReport(pydantic.BaseModel):
+    text: str
+    temperature: int
+
+
+@pytest.mark.parametrize(
+    "support_tools",
+    [
+        pytest.param(True, id="with_tool_support"),
+        pytest.param(False, id="without_tool_support"),
+    ],
+)
+def test_tool_calling_with_structured_output(support_tools):
+    value = WeatherReport(text="Rainy", temperature=15)
+
+    if support_tools:
+        responses = [
+            LLMMessage(
+                sender=None,
+                content=None,
+                tool_calls=[
+                    tool_utils.ToolInvocation(
+                        name="get_weather", arguments={"location": "London"}
+                    )
+                ],
+            ),
+            LLMMessage(
+                sender=None,
+                content=value.model_dump_json(),
+            ),
+        ]
+    else:
+        responses = [
+            LLMMessage(
+                sender=None,
+                content=json.dumps(
+                    {
+                        "tools": [
+                            dict(name="get_weather", arguments={"location": "London"})
+                        ],
+                        "message": None,
+                    }
+                ),
+            ),
+            LLMMessage(
+                sender=None,
+                content=json.dumps(
+                    {
+                        "tools": None,
+                        "message": value.model_dump(),
+                    }
+                ),
+            ),
+        ]
+
+    llm = MockedChat(
+        responses=responses,
+        support_tool_calling=support_tools,
+        support_structured_outputs=True,
+    )
+
+    tools = [get_weather]
+
+    with chats.new() as t:
+        response = llm.prompt(
+            "What is the weather in London?", tools=tools, schema=WeatherReport
+        )
+        assert isinstance(response, WeatherReport)
+        assert response == value
+        assert len(t.messages) == 2
+
+        # one with tool invocation
+        # second one with result
+        assert len(llm.invocations) == 2
+        messages1, kwargs1 = llm.invocations[0]
+
+        if support_tools:
+            assert len(messages1) == 1
+            assert kwargs1["schema"] == WeatherReport
+            assert kwargs1["tools"] == tools
+
+        else:
+            # extra message to describe tools
+            assert len(messages1) == 2
+            assert issubclass(kwargs1["schema"], tool_utils.ModelResponse)
+
+            assert not kwargs1["tools"]
+
+        # assert len(messages1) == 1
+        assert messages1[0].content == "What is the weather in London?"
+        assert messages1[0].sender is actors.user
+        # assert kwargs1["schema"] == WeatherReport
+
+        messages2, kwargs2 = llm.invocations[1]
+        if support_tools:
+            assert len(messages2) == 3
+            assert kwargs2["tools"] == tools
+            assert kwargs2["schema"] == WeatherReport
+        else:
+            # extra message to describe tools
+            assert len(messages2) == 4
+            assert issubclass(kwargs2["schema"], tool_utils.ModelResponse)
+            assert not kwargs2["tools"]
+
+        assert messages2[0].sender is actors.user
+        assert messages2[1].sender is llm
+        assert isinstance(messages2[2].content, tool_utils.ToolInvocationResult)
+        assert messages2[2].content.output == "Rainy"
+
+
+def test_tool_calling_with_typed_output_no_tools():
+    responses = [
+        LLMMessage(
+            sender=None,
+            content=json.dumps(
+                {
+                    "tools": [
+                        dict(name="get_weather", arguments={"location": "London"})
+                    ],
+                    "message": None,
+                }
+            ),
+        ),
+        LLMMessage(
+            sender=None,
+            content=json.dumps(
+                {
+                    "tools": [],
+                    "message": "12",
+                }
+            ),
+        ),
+    ]
+
+    llm = MockedChat(
+        responses=responses,
+        support_tool_calling=False,
+        support_structured_outputs=True,
+    )
+
+    tools = [get_weather]
+
+    with chats.new():
+        response = llm.prompt("What is the weather in London?", tools=tools, schema=int)
+        assert isinstance(response, int)
+        assert response == 12
+        assert len(llm.invocations) == 2
+        # Check that the schema was wrapped for emulated tool calling
+        messages1, kwargs1 = llm.invocations[0]
+        # user message + instructions
+        assert len(messages1) == 2
+        assert issubclass(kwargs1["schema"], tool_utils.ModelResponse)
+        messages2, kwargs2 = llm.invocations[1]
+        # user message + first response + call result + instructions
+        assert len(messages2) == 4
+        assert issubclass(kwargs2["schema"], tool_utils.ModelResponse)
+
+
+def test_custom_types():
+    llm = MockedChat(
+        responses=[
+            LLMMessage(sender=None, content="any content"),
+            LLMMessage(sender=None, content="any content"),
+            LLMMessage(sender=None, content="any content"),
+        ],
+        support_structured_outputs=True,
+    )
 
     class F:
         pass
 
     value = F()
 
-    @handler(types=F)
+    @prompting.handler(types=F)
     def _(cls):
         yield ""
         return value
@@ -113,7 +318,7 @@ def test_structured():
     assert isinstance(response, F)
     assert value is response
 
-    @handler(types=F)
+    @prompting.handler(types=F)
     def _(cls):
         value = yield ""
         raise prompting.ResponseParsingError(
@@ -123,11 +328,16 @@ def test_structured():
     with chats.new() as t:
         with pytest.raises(prompting.ResponseParsingError):
             llm.prompt("test_value", schema=F)
-        assert "Bad response" in t.messages[-1].text
-        assert "test_value" in t.messages[-1].text
-        assert "F" in t.messages[-1].text
 
-    @handler(types=F)
+        assert len(t.messages) == 2
+        llm_message = t.messages[-1]
+        assert isinstance(llm_message, LLMMessage)
+        # the error goes to the subchat used for helper prompt
+        error_text = llm_message.chat.messages[-1].text
+        assert "Bad response" in error_text
+        assert "F" in error_text
+
+    @prompting.handler(types=F)
     def _(cls):
         yield ""
         yield "nonsense"
@@ -137,43 +347,22 @@ def test_structured():
         llm.prompt("Test", schema=F)
 
 
-def test_streaming_prompt():
-    llm = Ferret()
-    # Explicitly set stream mode.
-    llm.stream_responses = True
-
-    with chats.new("Test Streaming") as t:
-        response_content = llm.prompt("stream this")
-        assert response_content == "streaming..."
-
-        # The last message in the chat is the one from the LLM.
-        last_message = t.messages[-1]
-        assert last_message.content == "streaming..."
-        assert last_message.sender is llm
-        assert last_message._meta["input_tokens"] == 10
-        assert last_message._meta["output_tokens"] == 2
-
-
-def test_nested_chat_id():
-    llm = Ferret()
-    with chats.new("root") as root:
-        sub = chats.Chat(name="sub")
-        chats.get_current_chat().append(sub)
-        with contexts.enter(chat=sub):
-            llm.prompt("Hi")
-
-        sub.name += " - analysis"
-
-    assert root.history[0] is sub
-    assert sub.id.startswith("sub - analysis-")
-    assert len(sub.history) == 2
-
-
 def test_chat_usage_aggregation():
     """Test that chat usage properties aggregate token usage from all assistant messages."""
-    llm = Ferret()
-    llm.stream_responses = True
-
+    llm = MockedChat(
+        responses=[
+            LLMMessage(
+                sender=None,
+                content="first",
+                usage=usage.Usage(input_tokens=5, output_tokens=3),
+            ),
+            LLMMessage(
+                sender=None,
+                content="second",
+                usage=usage.Usage(input_tokens=15, output_tokens=1),
+            ),
+        ],
+    )
     with chats.new("Test Usage") as t:
         llm.prompt("first")
         llm.prompt("second")
@@ -263,4 +452,4 @@ def test_invoke_llmmessage():
     assert response.sender is mocked_chat
     assert len(mocked_chat.invocations) == 1
     assert mocked_chat.invocations[0][0] == messages
-    assert mocked_chat.invocations[0][1] == {"temperature": 0.5}
+    assert mocked_chat.invocations[0][1].get("temperature") == 0.5

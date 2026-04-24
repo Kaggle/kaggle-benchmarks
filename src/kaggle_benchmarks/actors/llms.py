@@ -11,95 +11,62 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Defines a chat agent that interacts with a Large Language Model (LLM).
 
-"""
-Defines a chat agent that interacts with a Large Language Model (LLM).
+The core class is `LLMChat`, which provides a unified interface for sending
+messages, handling structured outputs, managing tool calls, and processing
+multimodal inputs.
+
+The primary entry point for interaction is the `prompt` method, which handles the
+conversation loop, including:
+1.  Sending user input (text and optional images).
+2.  Invoking the LLM.
+3.  Executing requested tools and feeding results back to the LLM.
+4.  Parsing the final response into a requested schema (str, Pydantic model, etc.).
 
 Design Note:
-    LLMChat is stateless. No system instructions or temperature settings are
-    managed within the class itself. All state, including instructions and
-    chat history, is maintained within the `chats.Chat` object. This allows
-    for clean separation of concerns and enables nested threads to encapsulate
-    inner chat history, preventing it from being visible or sent to the LLM
-    in outer threads.
+    The `LLMChat` class is designed to be stateless. It does not hold any
+    conversation history or configuration like temperature settings internally.
+    Instead, all state, including system instructions and the sequence of
+    messages, is managed within the current `chats.Chat` context.
+
+    Methods like `prompt()` are stateful in their interaction with this context.
+    They append messages to the current chat history and trigger LLM responses,
+    effectively advancing the conversational state. This design allows for clean
+    separation of concerns and enables features like nested conversation threads.
 
 
-Example:
+Examples:
 
-class Goose(LLMChat):
-    def __init__(self, sound):
-        super().__init__(name="goose", avatar="🪿")
-        self.sound = sound
+    # 1. Basic Text Interaction
+    >>> llm.prompt("What is the capital of France?")
+    'Paris'
 
-    def invoke(self, messages, system: str = ""):
-        return LLMResponse(content=self.sound if not system else system)
+    # 2. Structured Output
+    >>> class Sentiment(pydantic.BaseModel):
+    ...     score: float
+    ...     label: str
+    >>> llm.prompt("I love this library!", schema=Sentiment, system="...")
+    Sentiment(score=0.9, label='positive')
 
-goose = Goose('honk')
+    # 3. Tool Calling
+    >>> def roll_dice(sides: int) -> int:
+    ...     return 4  # chosen by fair dice roll
+    >>> llm.prompt("Roll a dice", tools=[roll_dice])
+    'You rolled a 4.'
 
-
-print(goose.send("Hi"))
-# 🪿 [goose]: Hi
-
-
-with chats.new(system_instructions="quack") as t:
-    goose.send("Hi!")
-    goose.respond()
-    goose.send("What's up?")
-    goose.respond()
-
-print(t)
-# 🧵Chat:
-#   ⚙️ [System]: quack
-#   🪿 [goose]: Hi!
-#   🪿 [goose]: honk
-#   🪿 [goose]: What's up?
-#   🪿 [goose]: quack quack
-
-# system message is separately managed by chats module, so goose doesn't use system message of the Chat obj unless explicitly passed in to respond()
-
-with chats.new(name="Outer") as outer_t:
-    goose.send("Outer message 1")
-    goose.respond()
-    with chats.new(name="Inner", system_instructions="inner") as inner_t:
-        goose.send("Inner message 1")
-        goose.respond()
-        goose.send("Inner message 2")
-        goose.respond()
-    goose.send("Outer message 2")
-    goose.respond()
-
-
-# Inner messages are not part of the outer chat's history.
-print(outer_t)
-# 🧵Outer:
-#   🪿 [goose]: Outer message 1
-#   🪿 [goose]: honk
-#   🧵Inner:
-#     ⚙️ [System]: inner
-#     🪿 [goose]: Inner message 1
-#     🪿 [goose]: honk
-#     🪿 [goose]: Inner message 2
-#     🪿 [goose]: honk
-#   🪿 [goose]: Outer message 2
-#   🪿 [goose]: honk
+    # 4. Multimodal Input
+    >>> image = images.from_url("https://example.com/cat.jpg")
+    >>> llm.prompt("What animal is this?", image=image)
+    'It is a cat.'
 
 """
 
-import dataclasses
-import enum
-import json
-import typing
-from typing import TYPE_CHECKING, Any, Iterator, TypeVar
-
-import openai
-from google import genai
-from google.genai import types
+from typing import Any, TypeVar
 
 from kaggle_benchmarks import actors, chats, messages, prompting, utils
-from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
-from kaggle_benchmarks.serializers import genai as genai_serializer
-from kaggle_benchmarks.serializers import openai as openai_serializer
+from kaggle_benchmarks.llm_messages import LLMMessage, Usage
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -107,32 +74,27 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-# TODO: Figure out a more robust way to handle extra fields.
-def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
-    """Extracts cost metadata from a usage object augmented by Model Proxy."""
-    cost = getattr(usage, "cost", None) or {}
-    return {
-        "input_tokens_cost_nanodollars": cost.get("input_tokens_cost_nanodollars"),
-        "output_tokens_cost_nanodollars": cost.get("output_tokens_cost_nanodollars"),
-        "total_backend_latency_ms": getattr(usage, "total_backend_latency_ms", None),
-    }
+class APIError(Exception):
+    pass
 
 
-@dataclasses.dataclass(frozen=True)
-class LLMResponse:
-    content: str
-    tool_calls: list[Any] | None = None
-    meta: dict[str, Any] = dataclasses.field(default_factory=dict)
+class ToolInvocationLimitExhausted(Exception):
+    pass
 
 
 class LLMChat(actors.Actor):
-    """A chat agent that interacts with a Large Language Model (LLM)."""
+    """Base class for chat actors that interact with a Large Language Model API."""
+
+    roles_mapping = {}
 
     def __init__(
         self,
         *,
         support_structured_outputs: bool = False,
         support_temperature: bool = False,
+        support_tool_calling: bool = True,
+        support_vision: bool = True,
+        postprocessor=lambda x: x,
         **kwargs,
     ):
         kwargs.setdefault("role", "assistant")
@@ -140,118 +102,157 @@ class LLMChat(actors.Actor):
         super().__init__(**kwargs)
         self.support_structured_outputs = support_structured_outputs
         self.support_temperature = support_temperature
-        self.stream_responses = config.interactive_mode
-
-    def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
-    ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
-        """Invokes the LLM with the given messages and system instructions."""
-        raise NotImplementedError
+        self.support_tool_calling = support_tool_calling
+        self.support_vision = support_vision
+        self.postprocessor = postprocessor
 
     def prompt(
         self,
         message: str,
         schema: type[T] = str,
-        seed: int = 0,
-        temperature: float = 0,
+        seed: int | None = None,
+        temperature: float | None = 0,
         tools: list[Any] | None = None,
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
+        max_tool_calls: int = 5,
     ) -> T:
+        """Sends a user message to the LLM and returns the structured response.
+
+        This convenience method handles the entire conversation loop, including sending
+        the initial message, managing tool calls, and parsing the final response into
+        the desired schema.
+
+        Args:
+            message: The user's message.
+            schema: The expected Pydantic model or type of the response.
+            seed: A random seed for the LLM.
+            temperature: The sampling temperature for the LLM.
+            tools: A list of tools available to the LLM.
+            image: An optional image to include with the message.
+
+        Returns:
+            The processed and validated response from the LLM, matching the `schema`.
+        """
+        from kaggle_benchmarks import tools as tool_utils
+
         if image is not None:
-            match image:
-                case images.ImageURL():
-                    image_to_send = images.from_image_url(image)
-                case images.ImageBase64():
-                    image_to_send = image
-                case _:
-                    raise ValueError(f"Unsupported image type: {type(image)}")
+            if not isinstance(image, images.ImageContent):
+                raise TypeError(f"Unsupported image type: {type(image)}")
+            if not self.support_vision:
+                raise ValueError(f"Vision not supported by {self.name}")
+            image.caption = message
+            actors.user.send(image)
 
-            actors.user.send(image_to_send)
-
-        if video is not None:
+        elif video is not None:
             if not isinstance(video, videos.VideoContent):
                 raise ValueError(f"Unsupported video type: {video!r}")
             actors.user.send(video)
+            actors.user.send(message)
 
         if audio is not None:
             if not isinstance(audio, audios.AudioContent):
                 raise ValueError(f"Unsupported audio type: {audio!r}")
+            audio.caption = message
             actors.user.send(audio)
+        else:
+            actors.user.send(message)
 
-        actors.user.send(message)
-        return self.respond(
-            schema=schema,
-            seed=seed,
-            temperature=temperature if self.support_temperature else None,
-            tools=tools if tools is not None else [],
-        ).content
+        final_response = LLMMessage(
+            sender=self, content=None, usage=Usage(0, 0), tool_calls=[]
+        )
+
+        try:
+            # Fork the chat to isolate the tool-calling loop from the main
+            # conversation. This prevents format instructions and tool invocations
+            # from appearing in the primary chat history.
+            with chats.fork() as subchat:
+                final_response.chat = subchat
+
+                for _ in range(max_tool_calls):
+                    response = self.respond(
+                        schema=schema,
+                        seed=seed,
+                        temperature=temperature,
+                        tools=tools if tools is not None else [],
+                    )
+
+                    # final_response.tool_calls.extend(response.tool_calls or [])
+                    final_response.content = response.content
+                    final_response.usage += response.usage
+
+                    if tools and response.tool_calls:
+                        for call in response.tool_calls:
+                            result = tool_utils.invoke_tool(call, tools)
+                            final_response.tool_calls.append(result)
+                            actors.Tool(name=call.name).send(result)
+                    else:
+                        break
+                else:
+                    raise ToolInvocationLimitExhausted()
+        finally:
+            chats.send(final_response)
+
+        return final_response.content
 
     @chats.emits_message
     def respond(
         self,
+        *,
         system: str | None = None,
         schema: type[T] = str,
-        **kwargs,
-    ) -> messages.Message[T]:
-        from kaggle_benchmarks import contexts, llm_messages
+        temperature: float | None = 0,
+        seed: int | None = None,
+        tools: list[Any] | None = None,
+    ) -> LLMMessage[T]:
+        """Generates a response from the LLM, handling schema processing and tool calls."""
+        from kaggle_benchmarks import contexts
+
+        if tools and not self.support_tool_calling:
+            return self._simulate_tool_calling(
+                tools=tools,
+                schema=schema,
+                system=system,
+                temperature=temperature,
+                seed=seed,
+            )
 
         ctx = contexts.get_current()
         chat = ctx.chat
 
         h = prompting.process_schema(schema)
-
-        temp_messages = []
-
         schema_instructions = next(h)
-        match schema_instructions:
-            case [msg, schema]:
-                if self.support_structured_outputs:
-                    kwargs["response_format"] = schema
-                else:
-                    temp_messages.append(
-                        messages.Message(sender=actors.system, content=msg)
-                    )
-            case None:
-                pass
-            case _:
-                temp_messages.append(
-                    messages.Message(sender=actors.system, content=schema_instructions)
-                )
+        if isinstance(schema_instructions, tuple):
+            schema_instructions, schema = schema_instructions
 
-        response = messages.Message(
-            sender=self,
-            content="",
-            _status=utils.Status.RUNNING,
-        )
-
-        raw_messages = [
-            msg for msg in chat.messages if msg.is_visible_to_llm
-        ] + temp_messages
-
-        invoke_response = self.invoke(
-            raw_messages,
+        response = self.invoke(
+            messages=chat.messages,
+            schema_instructions=schema_instructions,
             system=system,
-            **kwargs,
+            schema=schema,
+            temperature=temperature,
+            seed=seed,
+            tools=tools,
         )
-        if isinstance(invoke_response, LLMResponse):
-            # A response can have either content, tool_calls, or both in some cases.
-            response.content = invoke_response.content or ""
-            response._meta["tool_calls"] = invoke_response.tool_calls
-            response._meta.update(invoke_response.meta)
-        elif isinstance(invoke_response, Iterator):
-            response.stream(invoke_response)
-        elif isinstance(invoke_response, llm_messages.LLMMessage):
-            response = invoke_response
-        else:
-            raise TypeError("Unknown response type from LLM.")
 
-        answer = response.content
-        response._meta.update(chat=chat, schema=schema, raw_content=answer, **kwargs)
+        response._meta.update(
+            chat=chat,
+            schema=schema,
+            raw_content=response.content,
+            temperature=temperature,
+            seed=seed,
+            tools=tools,
+        )
+
+        if not response.content:
+            # e.g., waiting for tool invocation or an error occurred.
+            return response
 
         try:
-            h.send(answer)  # must raise StopIteration by returning the parsed value
+            h.send(
+                response.content
+            )  # must raise StopIteration by returning the parsed value
             raise prompting.SchemaError(
                 f"Generator for {schema!r} yielded multiple values, expected only one."
             )
@@ -263,203 +264,106 @@ class LLMChat(actors.Actor):
                 )
             )
             response.status = utils.Status.FAILED
-            raise e
-
+            raise
         except StopIteration as e:
-            # StopIteration is expected as this is how you get returned value from a generator
+            # StopIteration is the expected signal for a successful parse.
             response.content = e.value
             response.status = utils.Status.SUCCESS
             chat.append(response)
 
-        return response
+        return response  # type: ignore
+
+    def invoke(
+        self,
+        messages: list[messages.Message],
+        *,
+        schema_instructions: str | None = None,
+        schema: type[T] = str,
+        system: str | None = None,
+        temperature: float | None = 0,
+        seed: int | None = None,
+        tools: list[Any] | None = None,
+    ) -> LLMMessage[str]:
+        """Invokes the LLM with a given context, handling structured output simulation."""
+        if schema is not str and not self.support_structured_outputs:
+            result = self._simulate_structured_response(
+                messages=messages,
+                system=system,
+                temperature=temperature,
+                seed=seed,
+                tools=tools,
+                schema_instructions=schema_instructions,
+            )
+        else:
+            result = self._invoke(
+                messages=messages,
+                system=system,
+                schema=schema,
+                temperature=temperature,
+                seed=seed,
+                tools=tools,
+            )
+        return self.postprocessor(result)
+
+    def _invoke(
+        self,
+        messages: list[messages.Message],
+        *,
+        schema: type[T | str] = str,
+        system: str | None = None,
+        temperature: float | None = 0,
+        seed: int | None = None,
+        tools: list[Any] | None = None,
+    ) -> LLMMessage[str]:
+        """Abstract method for native LLM invocation."""
+        raise NotImplementedError
 
     def __repr__(self):
         name = self.name
-        return f"{type(self).__name__}({name=})"
+        arguments = ", ".join(
+            f"{k}={v!r}" for k, v in self.__dict__.items() if k.startswith("support")
+        )
+        return f"{type(self).__name__}({name=}, {arguments})"
 
+    def _simulate_tool_calling(
+        self,
+        tools: list[Any],
+        schema: type[T],
+        system: str | None = None,
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> LLMMessage[T]:
+        """Simulates tool calling for models that do not support it natively."""
+        from kaggle_benchmarks.tools import simulate
 
-class OpenAI(LLMChat):
-    def __init__(self, client: openai.OpenAI, model: str, **kwargs):
-        kwargs.setdefault("name", model)
-        super().__init__(**kwargs)
-        self.model = model
-        self.client = client
-        self.serializer = openai_serializer.ModelProxyOpenAISerializer(
-            roles_mapping={"tool": "system"}
+        return simulate.simulate_respond_with_tools(
+            self,
+            tools=tools,
+            output_schema=schema,
+            system=system,
+            temperature=temperature,
+            seed=seed,
         )
 
-    def _get_usage_meta(
-        self, usage: openai.types.CompletionUsage | None
-    ) -> dict[str, Any]:
-        """Extracts token usage metadata from an OpenAI response object."""
-        if usage is None:
-            return {}
-        return {
-            "input_tokens": usage.prompt_tokens,
-            "output_tokens": usage.completion_tokens,
-            **_extract_extra_usage_metadata(usage),
-        }
+    def _simulate_structured_response(
+        self,
+        messages: list[messages.Message],
+        *,
+        system: str | None = None,
+        schema_instructions: str | None = None,
+        temperature: float | None = 0,
+        seed: int | None = None,
+        tools: list[Any] | None = None,
+    ) -> LLMMessage[str]:
+        """Simulates structured output generation for text-only models."""
+        if schema_instructions:
+            messages.append(actors.system.send(schema_instructions))
 
-    def _should_remove_seed(self) -> bool:
-        unsupported_prefixes = ("google/", "openai/gpt-5.4-pro")
-        return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
-
-    def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
-    ) -> LLMResponse | Iterator[LLMResponse]:
-        if system:
-            from kaggle_benchmarks.messages import Message
-
-            messages = [Message(sender=actors.system, content=system)] + messages
-
-        raw_messages = list(self.serializer.dump_messages(messages))
-
-        if self._should_remove_seed():
-            # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
-            # Temporarily do not send "seed" parameter for models not supporting it in Model Proxy.
-            kwargs.pop("seed", None)
-
-        return self._call_api(raw_messages, **kwargs)
-
-    def _get_stream_response(
-        self, response_stream: openai.Stream
-    ) -> Iterator[LLMResponse]:
-        """Yields LLMResponse objects from a streaming response."""
-        for chunk in response_stream:
-            if not chunk.choices:
-                continue
-
-            delta = chunk.choices[0].delta
-
-            # Guard against chunks where 'delta' is None
-            if not delta:
-                continue
-
-            yield LLMResponse(
-                content=delta.content or "",
-                tool_calls=delta.tool_calls,
-                meta=self._get_usage_meta(chunk.usage),
-            )
-
-    def _call_api(
-        self, messages: list[dict[str, str]], **kwargs
-    ) -> LLMResponse | Iterator[LLMResponse]:
-        if self.support_structured_outputs and "response_format" in kwargs:
-            # quickfix for nested models in ModelProxy API
-            if utils.has_nested_models(kwargs["response_format"]):
-                method = self.client.chat.completions.create
-                response_format = kwargs.pop("response_format")
-                json_schema = json.dumps(response_format.model_json_schema())
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "The output must be a valid JSON object that strictly adheres to the following JSON schema:\n"
-                            f"{json_schema}"
-                        ),
-                    }
-                )
-            else:
-                method = self.client.beta.chat.completions.parse
-        else:
-            if self.stream_responses:
-                kwargs["stream"] = True
-
-            method = self.client.chat.completions.create
-
-        response = method(
-            model=self.model,
+        return self.invoke(
             messages=messages,
-            **kwargs,
+            system=system,
+            schema=str,
+            temperature=temperature,
+            seed=seed,
+            tools=tools,
         )
-
-        if isinstance(response, openai.Stream):
-            return self._get_stream_response(response)
-        else:
-            message = response.choices[0].message
-            tool_calls = message.tool_calls
-            return LLMResponse(
-                content=message.content or "",
-                tool_calls=[t.model_dump() for t in tool_calls] if tool_calls else None,
-                meta=self._get_usage_meta(response.usage),
-            )
-
-
-class GoogleGenAI(LLMChat):
-    def __init__(self, client: genai.Client, model: str, **kwargs):
-        kwargs.setdefault("name", model)
-        super().__init__(**kwargs)
-        self.model = model
-        self.client = client
-        self.serializer = genai_serializer.GenAISerializer(
-            roles_mapping={"assistant": "model", "system": "user", "tool": "user"}
-        )
-
-    def _get_usage_meta(self, usage: types.UsageMetadata | None) -> dict[str, Any]:
-        if usage is None:
-            return {}
-        return {
-            "input_tokens": usage.prompt_token_count,
-            "output_tokens": usage.candidates_token_count,
-            **_extract_extra_usage_metadata(usage),
-        }
-
-    def _get_stream_response(
-        self, response_stream: Iterator[types.GenerateContentResponse]
-    ) -> Iterator[LLMResponse]:
-        # We currently only support text outputs
-        for chunk in response_stream:
-            yield LLMResponse(
-                content=chunk.text or "",
-                meta=self._get_usage_meta(chunk.usage_metadata),
-            )
-
-    def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
-    ) -> LLMResponse | Iterator[LLMResponse]:
-        raw_messages = list(self.serializer.dump_messages(messages))
-
-        config_params = {}
-        if system:
-            config_params["system_instruction"] = system
-        if "response_format" in kwargs:
-            schema = kwargs.pop("response_format")
-            config_params["response_schema"] = schema
-
-            # Determine the correct MIME type based on the schema's type
-            is_enum = isinstance(schema, type) and issubclass(schema, enum.Enum)
-            is_literal = typing.get_origin(schema) is typing.Literal
-
-            if is_enum or is_literal:
-                config_params["response_mime_type"] = "text/x.enum"
-            else:
-                # Assume any other schema (like a Pydantic model) is for JSON
-                config_params["response_mime_type"] = "application/json"
-
-        config = types.GenerateContentConfig(**kwargs, **config_params)
-
-        return self._call_api(contents=raw_messages, config=config)
-
-    def _call_api(
-        self, contents: list[types.Content], config: types.GenerateContentConfig
-    ) -> LLMResponse | Iterator[LLMResponse]:
-        if self.stream_responses:
-            response_stream = self.client.models.generate_content_stream(
-                model=self.model, contents=contents, config=config
-            )
-            return self._get_stream_response(response_stream)
-        else:
-            response = self.client.models.generate_content(
-                model=self.model, contents=contents, config=config
-            )
-            # Handle cases where the model refuses to respond
-            if not response.candidates:
-                return LLMResponse(
-                    content="",
-                    meta=self._get_usage_meta(response.usage_metadata),
-                )
-
-            return LLMResponse(
-                content=response.text,
-                meta=self._get_usage_meta(response.usage_metadata),
-            )

@@ -225,3 +225,19 @@ Here are the user inputs
 
     generated_code = model.prompt(prompt, **kwargs)
     return extract_code_block(generated_code, name="python", greedy=False)
+
+
+def extract_thinking_tag(response):
+    if "</think>" in response.content:
+        thinking, content = response.content.split("</think>", 1)
+        response.thinking = thinking[6:]
+        response.content = content
+    return response
+
+
+def extract_json_tag(response):
+    if "<json>" in response.content:
+        thinking, content = response.content.split("<json>", 1)
+        response.thinking = thinking
+        response.content = content.split("</json>")[0]
+    return response

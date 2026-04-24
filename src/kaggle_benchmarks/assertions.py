@@ -25,7 +25,7 @@ from typing import Any, Callable, Iterable, Type
 import panel as pn
 import pydantic
 
-from kaggle_benchmarks import chats
+from kaggle_benchmarks import chats, llm_messages, tools
 
 
 @dataclasses.dataclass
@@ -512,3 +512,31 @@ def assess_response_with_judge(
         assess_report = None
 
     return assess_report
+
+
+@assertion_handler()
+def assert_tool_was_invoked(
+    tool: str | Callable, expectation: str | None = None
+) -> AssertionResult:
+    if not isinstance(tool, str):
+        tool = tool.__name__
+    chat = chats.get_current_chat()
+    passed = False
+    for msg in chat.messages:
+        if (
+            isinstance(msg.content, tools.ToolInvocationResult)
+            and msg.content.name == tool
+        ):
+            passed = True
+            break
+
+        elif isinstance(msg, llm_messages.LLMMessage) and any(
+            t.name == tool for t in msg.tool_calls
+        ):
+            passed = True
+            break
+
+    return AssertionResult(
+        passed=passed,
+        expectation=expectation or "Expected to call `{tool}`",
+    )
