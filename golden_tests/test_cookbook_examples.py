@@ -647,6 +647,7 @@ def test_reasoning_captures_traces(llm):
         "Reasoning traces should not be empty"
     )
 
+
 # %%
 # --- Test Case: Tool Use ---
 # This doesn't work with "genai" API for now
