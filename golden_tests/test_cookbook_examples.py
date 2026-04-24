@@ -592,8 +592,10 @@ def test_audio_url(llm):
 
 # %%
 # --- Test Case: Reasoning parameter ---
-# The SDK maps the unified `reasoning` parameter to provider-specific params:
-# OpenAI → reasoning_effort, GenAI → thinking_config.
+# Sverifies that `reasoning=` doesn't error across providers.
+# Actual wiring (thinking_config, reasoning_effort) is covered by unit tests;
+# trace capture is verified in test_reasoning_captures_traces for models that
+# support it (not all models return traces).
 
 
 @benchmark_test(
