@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-import re
+import warnings
 
 import openai
 from google import genai
@@ -22,15 +22,13 @@ from google.genai import types
 from kaggle_benchmarks import utils
 from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
 
-_KAGGLE_INSTALL_COMMAND = "pip install kaggle"
-_KAGGLE_AUTH_COMMAND = "kaggle benchmarks auth"
 
-
-def _validate_kaggle_model_proxy_auth_config(
+def validate_model_proxy_config(
     url: str | None = None,
     api_key: str | None = None,
+    raise_on_error: bool = False,
 ) -> None:
-    """Raise if required auth env vars are missing."""
+    """Warn (or raise) if required auth env vars are missing."""
     missing = []
     if not url:
         missing.append("MODEL_PROXY_URL")
@@ -39,12 +37,18 @@ def _validate_kaggle_model_proxy_auth_config(
     if not missing:
         return
 
+    install_command = "pip install kaggle"
+    auth_command = "kaggle benchmarks auth"
     missing_list = "\n".join(f"  - {v}" for v in missing)
-    separator = "-" * len(_KAGGLE_AUTH_COMMAND)
-    raise ValueError(
+    separator = "-" * len(auth_command)
+    msg = (
         f"\n\nMissing environment variables for Kaggle authentication:\n\n{missing_list}\n\n"
-        f"Authenticate by running:\n{separator}\n{_KAGGLE_INSTALL_COMMAND}\n{_KAGGLE_AUTH_COMMAND}\n{separator}\n"
+        f"Authenticate by running:\n{separator}\n{install_command}\n{auth_command}\n{separator}\n"
     )
+
+    if raise_on_error:
+        raise ValueError(msg)
+    warnings.warn(msg, stacklevel=2)
 
 
 class ModelProxy:
@@ -59,13 +63,15 @@ class ModelProxy:
         resolved_api_key = api_key or os.getenv("MODEL_PROXY_API_KEY")
         resolved_base_url = base_url or os.getenv("MODEL_PROXY_URL")
 
-        _validate_kaggle_model_proxy_auth_config(
-            url=resolved_base_url, api_key=resolved_api_key
+        validate_model_proxy_config(
+            url=resolved_base_url, api_key=resolved_api_key, raise_on_error=True
         )
 
         # Normalize base URL
-        if resolved_base_url.endswith(("/openapi", "/genai")):
-            resolved_base_url = re.sub(r"/(openapi|genai)$", "", resolved_base_url)
+        for suffix in ("/openapi", "/genai"):
+            if resolved_base_url.endswith(suffix):
+                resolved_base_url = resolved_base_url[: -len(suffix)]
+                break
 
         llm_instance = None
         # Qwen and DeepSeek models support response_format, but the schema must be under 64 characters.
