@@ -23,7 +23,14 @@ import dotenv
 import panel as pn
 
 base_dir = Path(__file__).parent.parent.parent
-dotenv.load_dotenv(override=True)
+
+_logger = logging.getLogger(__name__)
+_dotenv_path = dotenv.find_dotenv(usecwd=True)
+if _dotenv_path:
+    _logger.info("Loading environment variables from %s", _dotenv_path)
+    dotenv.load_dotenv(_dotenv_path, override=True)
+else:
+    _logger.info("No .env file found; skipping dotenv load")
 
 
 def string_to_bool(s: str) -> bool:
