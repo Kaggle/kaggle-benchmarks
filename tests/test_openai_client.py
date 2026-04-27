@@ -398,12 +398,6 @@ def test_prompt_reasoning_none_sets_effort_without_thinking_config():
     assert "extra_body" not in llm.kwargs
 
 
-def test_prompt_rejects_invalid_reasoning():
-    llm = MockedOpenAI(model="test-model")
-    with pytest.raises(ValueError, match="Invalid reasoning level"):
-        llm.prompt("Hi", reasoning="hgih")
-
-
 def test_invoke_prompt():
     llm = MockedOpenAI(model="test-model")
     llm.support_structured_outputs = False

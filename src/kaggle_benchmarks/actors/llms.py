@@ -137,21 +137,6 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
-def _validate_reasoning(reasoning: str | None) -> None:
-    """Raises if reasoning is not a valid level.
-
-    Note: GenAI validates these values automatically via ThinkingConfig,
-    but OpenAI does not, so we validate here for both backends.
-    """
-
-    valid = {"none", "low", "medium", "high"}
-    if reasoning is not None and reasoning not in valid:
-        raise ValueError(
-            f"Invalid reasoning level: {reasoning!r}. "
-            f"Must be one of: {sorted(valid)}"
-        )
-
-
 _EXPLICIT_PARAMS = {
     "reasoning_effort": "reasoning",
     "thinking_config": "reasoning",
@@ -222,7 +207,6 @@ class LLMChat(actors.Actor):
         reasoning: ReasoningLevel | None = None,
         api_params: dict[str, Any] | None = None,
     ) -> T:
-        _validate_reasoning(reasoning)
         _validate_api_params(api_params)
 
         if image is not None:

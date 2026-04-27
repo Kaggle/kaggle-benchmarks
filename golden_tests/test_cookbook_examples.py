@@ -599,10 +599,11 @@ def test_audio_url(llm):
 # trace capture is verified in test_reasoning_captures_traces for models that
 # support it (not all models return traces).
 
+
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
         "google/gemini-2.0-flash",
+        "google/gemma-3-12b",
     },
 )
 @kbench.task()
