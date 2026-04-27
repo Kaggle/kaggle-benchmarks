@@ -28,8 +28,6 @@ _logger = logging.getLogger(__name__)
 if _dotenv_path := dotenv.find_dotenv():
     _logger.info("Loading environment variables from %s", _dotenv_path)
     dotenv.load_dotenv(_dotenv_path, override=True)
-else:
-    _logger.info("No .env file found; skipping dotenv load")
 
 
 def string_to_bool(s: str) -> bool:
