@@ -592,7 +592,7 @@ def test_audio_url(llm):
 
 # %%
 # --- Test Case: Reasoning parameter ---
-# Sverifies that `reasoning=` doesn't error across providers.
+# Verifies that `reasoning=` doesn't error across providers.
 # Actual wiring (thinking_config, reasoning_effort) is covered by unit tests;
 # trace capture is verified in test_reasoning_captures_traces for models that
 # support it (not all models return traces).

@@ -108,6 +108,23 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 ReasoningLevel = Literal["none", "low", "medium", "high"]
 
+_THINK_TAG_PATTERN = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
+
+
+def _parse_think_tags(content: str) -> tuple[str, str | None]:
+    """Extracts all <think>...</think> blocks from content.
+
+    Model Proxy wraps reasoning traces in <think> tags inside content
+    because the chat completions spec doesn't have a dedicated field
+    for reasoning traces.
+    """
+    segments = _THINK_TAG_PATTERN.findall(content)
+    if not segments:
+        return content, None
+    remaining = _THINK_TAG_PATTERN.sub("", content).strip()
+    thinking = "\n\n".join(s.strip() for s in segments if s.strip())
+    return remaining, thinking or None
+
 
 # TODO: Figure out a more robust way to handle extra fields.
 def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
@@ -310,22 +327,6 @@ class OpenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
-    @staticmethod
-    def _parse_think_tags(content: str) -> tuple[str, str | None]:
-        """Extracts all <think>...</think> blocks from content.
-
-        Model Proxy wraps reasoning traces in <think> tags inside content
-        because the chat completions spec doesn't have a dedicated field
-        for reasoning traces.
-        """
-        pattern = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
-        segments = pattern.findall(content)
-        if not segments:
-            return content, None
-        remaining = pattern.sub("", content).strip()
-        thinking = "\n\n".join(s.strip() for s in segments if s.strip())
-        return remaining, thinking or None
-
     def _should_remove_seed(self) -> bool:
         unsupported_prefixes = ("google/", "openai/gpt-5.4-pro")
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
@@ -370,6 +371,9 @@ class OpenAI(LLMChat):
         self, response_stream: openai.Stream
     ) -> Iterator[LLMResponse]:
         """Yields LLMResponse objects from a streaming response."""
+        # TODO: Streaming does not capture reasoning_traces. Think tags in
+        # streamed chunks are not parsed, so last_reasoning_traces() will
+        # return None when streaming is enabled.
         for chunk in response_stream:
             if not chunk.choices:
                 continue
@@ -429,8 +433,8 @@ class OpenAI(LLMChat):
             # in content using <think> tags.  Only parse when reasoning was
             # requested to avoid stripping literal <think> tags from content.
             reasoning = getattr(message, "reasoning_content", None)
-            if reasoning is None and "reasoning_effort" in kwargs:
-                content, reasoning = self._parse_think_tags(content)
+            if reasoning is None and kwargs.get("reasoning_effort") not in (None, "none"):
+                content, reasoning = _parse_think_tags(content)
             return LLMResponse(
                 content=content,
                 reasoning_traces=reasoning,
@@ -494,6 +498,9 @@ class GoogleGenAI(LLMChat):
     def _get_stream_response(
         self, response_stream: Iterator[types.GenerateContentResponse]
     ) -> Iterator[LLMResponse]:
+        # TODO: Streaming does not capture reasoning_traces. Thought parts
+        # are filtered out by _extract_text, so last_reasoning_traces() will
+        # return None when streaming is enabled.
         # We currently only support text outputs
         for chunk in response_stream:
             yield LLMResponse(

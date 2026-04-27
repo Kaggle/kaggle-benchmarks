@@ -54,6 +54,8 @@ class Message(Generic[T]):
 
     @property
     def reasoning_traces(self):
+        # TODO: Remove this _meta workaround once respond() creates LLMMessage
+        # instead of Message. LLMMessage.reasoning_traces will be the canonical field.
         return self._meta.get("reasoning_traces")
 
     @property

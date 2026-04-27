@@ -19,7 +19,7 @@ import pytest
 from pydantic import BaseModel
 
 from kaggle_benchmarks import actors, chats
-from kaggle_benchmarks.actors.llms import LLMResponse, OpenAI
+from kaggle_benchmarks.actors.llms import LLMResponse, OpenAI, _parse_think_tags
 from kaggle_benchmarks.prompting import handler
 
 
@@ -309,7 +309,7 @@ def test_last_reasoning_traces_returns_none_without_reasoning():
 def test_parse_think_tags_extracts_traces():
     """Tests that <think> tags in content are parsed into reasoning_traces."""
     content = "<think>\nLet me think step by step.\n</think>\n\nThe answer is 42."
-    remaining, thinking = OpenAI._parse_think_tags(content)
+    remaining, thinking = _parse_think_tags(content)
     assert remaining == "The answer is 42."
     assert thinking == "Let me think step by step."
 
@@ -317,7 +317,7 @@ def test_parse_think_tags_extracts_traces():
 def test_parse_think_tags_returns_none_without_tags():
     """Tests that content without <think> tags returns None for thinking."""
     content = "The answer is 42."
-    remaining, thinking = OpenAI._parse_think_tags(content)
+    remaining, thinking = _parse_think_tags(content)
     assert remaining == "The answer is 42."
     assert thinking is None
 
@@ -330,9 +330,17 @@ def test_parse_think_tags_extracts_multiple_blocks():
         "<think>\nSecond thought.\n</think>\n\n"
         "The answer is 42."
     )
-    remaining, thinking = OpenAI._parse_think_tags(content)
+    remaining, thinking = _parse_think_tags(content)
     assert remaining == "Middle content.\n\nThe answer is 42."
     assert thinking == "First thought.\n\nSecond thought."
+
+
+def test_parse_think_tags_empty_block():
+    """Tests that malformed empty <think></think> returns None for thinking."""
+    content = "<think></think>\n\nThe answer is 42."
+    remaining, thinking = _parse_think_tags(content)
+    assert remaining == "The answer is 42."
+    assert thinking is None
 
 
 def test_think_tags_captured_in_response(mocker):
