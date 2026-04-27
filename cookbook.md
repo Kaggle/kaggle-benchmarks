@@ -530,24 +530,6 @@ response = llm.prompt("Transcribe this audio.", audio=audio_content)
 
 ---
 
-### Recipe: Controlling Reasoning
-
-Control how much reasoning the model performs:
-
-```python
-response = llm.prompt("Solve this math problem.", reasoning="high")
-```
-
-Valid values: `"low"`, `"medium"`, `"high"`.
-
-Include the model's internal reasoning in the response:
-
-```python
-response = llm.prompt("How many r's in strawberry?", reasoning="high", include_thoughts=True)
-```
-
----
-
 ### Recipe: Passing Provider-Specific API Parameters
 
 For advanced use cases, `llm.prompt()` accepts an `api_params`

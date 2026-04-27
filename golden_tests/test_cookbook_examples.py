@@ -448,7 +448,7 @@ def test_image_base64(llm):
     # This is a 1x1 red pixel in PNG format
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
-    image = images.from_base64(red_dot_b64, format="png", api_params={"detail": "low"})
+    image = images.from_base64(red_dot_b64, format="png")
 
     response = llm.prompt("What color is this image?", image=image)
 
@@ -601,12 +601,6 @@ def test_audio_url(llm):
     exclude={
         "google/gemma-3-12b",
         "google/gemini-2.0-flash",
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
-        "google/gemini-3.1-flash-lite-preview",
     },
 )
 @kbench.task()
@@ -656,51 +650,52 @@ def test_reasoning_captures_traces(llm):
 
 
 # %%
-# --- Test Case: Include thoughts ---
-# Tests that thinking traces are returned when include_thoughts=True is passed.
-# Both backends wrap thoughts in <think> tags.
+# --- Test Case: Image with detail parameter (OpenAI only) ---
+# Tests that api_params={"detail": "low"} on images is forwarded via OpenAI.
 
-INCLUDE_THOUGHTS_LLM_NAMES = {
-    "google/gemini-2.5-flash",
-    "google/gemini-2.5-pro",
+IMAGE_DETAIL_LLM_NAMES = {
+    "google/gemini-3-flash-preview",
 }
 
 
 @kbench.task()
-def _include_thoughts_task(llm):
-    """Tests that include_thoughts returns thinking traces."""
-    response = llm.prompt(
-        "How many r's are in the word 'strawberry'? Think step by step.",
-        reasoning="high",
-        include_thoughts=True,
+def _image_detail_task(llm):
+    """Tests that detail api_param on images is forwarded via OpenAI."""
+    red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+    image = images.from_base64(
+        red_dot_b64,
+        format="png",
+        api_params={"detail": "low"},
     )
 
+    response = llm.prompt("What color is this image?", image=image)
+
     kbench.assertions.assert_contains_regex(
-        r"(?i)<think>",
+        r"(?i)red|pink|salmon|coral",
         response,
-        expectation="Response should contain thinking traces in <think> tags.",
+        expectation="LLM should identify the color red.",
     )
 
 
 @pytest.mark.parametrize(
-    "llm, api",
+    "llm",
     [
         pytest.param(
-            kbench.kaggle.load_model(key, api=api),
-            api,
-            id=f"{api}-{key}",
+            kbench.kaggle.load_model(key, api="openai"),
+            id=f"openai-{key}",
         )
-        for key in sorted(INCLUDE_THOUGHTS_LLM_NAMES)
-        for api in ["openai", "genai"]
+        for key in sorted(IMAGE_DETAIL_LLM_NAMES)
     ],
 )
-def test_include_thoughts(llm, api):
-    run = _include_thoughts_task.run(llm)
+def test_image_with_detail(llm):
+    run = _image_detail_task.run(llm)
     assert run.passed
 
 
 # %%
 # --- Test Case: Image with media_resolution parameter (GenAI only) ---
+# Tests that api_params={"media_resolution": ...} on images is forwarded via GenAI.
 
 MEDIA_RESOLUTION_LLM_NAMES = {
     "google/gemini-3-flash-preview",
@@ -709,7 +704,7 @@ MEDIA_RESOLUTION_LLM_NAMES = {
 
 @kbench.task()
 def _media_resolution_task(llm):
-    """Tests that media_resolution parameter on images is forwarded via GenAI."""
+    """Tests that media_resolution api_param on images is forwarded via GenAI."""
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
     image = images.from_base64(
@@ -728,17 +723,16 @@ def _media_resolution_task(llm):
 
 
 @pytest.mark.parametrize(
-    "llm, api",
+    "llm",
     [
         pytest.param(
             kbench.kaggle.load_model(key, api="genai"),
-            "genai",
             id=f"genai-{key}",
         )
         for key in sorted(MEDIA_RESOLUTION_LLM_NAMES)
     ],
 )
-def test_image_with_media_resolution(llm, api):
+def test_image_with_media_resolution(llm):
     run = _media_resolution_task.run(llm)
     assert run.passed
 

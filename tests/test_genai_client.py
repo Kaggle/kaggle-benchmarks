@@ -98,12 +98,13 @@ def test_invoke_with_config_params():
     ],
 )
 def test_prompt_thinking_config(reasoning, expected_level):
-    """Tests that reasoning maps to the correct ThinkingConfig."""
+    """Tests that reasoning maps to the correct ThinkingConfig with thoughts enabled."""
     llm = MockedGoogleGenAI()
     llm.prompt("Think hard", reasoning=reasoning)
 
     tc = llm.config.thinking_config
     assert tc.thinking_level == expected_level
+    assert tc.include_thoughts is True
 
 
 def test_prompt_forwards_api_params():
@@ -229,23 +230,6 @@ def test_prompt_reasoning_none():
     llm.prompt("Think hard", reasoning="none")
 
     assert llm.config.thinking_config.thinking_budget == 0
-
-
-def test_prompt_include_thoughts():
-    """Tests that include_thoughts is passed into thinking_config."""
-    llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", include_thoughts=True)
-
-    assert llm.config.thinking_config.include_thoughts is True
-
-
-def test_prompt_reasoning_with_include_thoughts():
-    """Tests that reasoning and include_thoughts are merged into one thinking_config."""
-    llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", reasoning="high", include_thoughts=True)
-
-    assert llm.config.thinking_config.thinking_level == "HIGH"
-    assert llm.config.thinking_config.include_thoughts is True
 
 
 def test_prompt_rejects_invalid_reasoning():

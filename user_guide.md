@@ -259,19 +259,6 @@ response = llm.prompt("How many r's are in 'strawberry'?", reasoning="high")
 traces = kbench.last_reasoning_traces()  # model's internal reasoning
 ```
 
-### Thinking Traces
-
-Set `include_thoughts=True` to receive the model's internal reasoning
-traces in the response (wrapped in `<think>` tags on the OpenAI backend):
-
-```python
-response = llm.prompt(
-    "How many r's are in 'strawberry'?",
-    reasoning="high",
-    include_thoughts=True,
-)
-```
-
 ### Provider-Specific API Parameters
 
 For advanced use cases, `llm.prompt()` accepts an `api_params`
@@ -290,7 +277,7 @@ response = llm.prompt("Generate something.", api_params={"max_tokens": 500})
 constructing content objects (images, videos, audio):
 
 ```python
-from kaggle_benchmarks.content_types import images, videos, audios
+from kaggle_benchmarks.content_types import images, videos
 
 # OpenAI: control image detail level
 image = images.from_url("https://example.com/photo.jpg", api_params={"detail": "low"})
@@ -316,6 +303,7 @@ response = llm.prompt("Summarize this video.", video=video)
 > parameter. Parameters not recognized by the provider will be dropped
 > (with a warning on GenAI) or may cause an error depending on the
 > backend.
+
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them

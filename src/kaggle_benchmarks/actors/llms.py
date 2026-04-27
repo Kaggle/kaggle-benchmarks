@@ -204,7 +204,6 @@ class LLMChat(actors.Actor):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
-        include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
@@ -221,7 +220,6 @@ class LLMChat(actors.Actor):
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
-        include_thoughts: bool = False,
         api_params: dict[str, Any] | None = None,
     ) -> T:
         _validate_reasoning(reasoning)
@@ -255,7 +253,6 @@ class LLMChat(actors.Actor):
             temperature=temperature if self.support_temperature else None,
             tools=tools if tools is not None else [],
             reasoning=reasoning,
-            include_thoughts=include_thoughts,
             **(api_params or {}),
         ).content
 
@@ -390,7 +387,6 @@ class OpenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
-        include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
@@ -419,14 +415,6 @@ class OpenAI(LLMChat):
                 kwargs["extra_body"]["extra_body"]["google"].setdefault(
                     "thinking_config", {"include_thoughts": True}
                 )
-
-        if include_thoughts:
-            kwargs.setdefault("extra_body", {})
-            kwargs["extra_body"].setdefault("extra_body", {})
-            kwargs["extra_body"]["extra_body"].setdefault("google", {})
-            kwargs["extra_body"]["extra_body"]["google"].setdefault(
-                "thinking_config", {"include_thoughts": True}
-            )
 
         return self._call_api(raw_messages, **kwargs)
 
@@ -581,7 +569,6 @@ class GoogleGenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
-        include_thoughts: bool = False,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
@@ -595,17 +582,12 @@ class GoogleGenAI(LLMChat):
             if level is None:
                 config_params["thinking_config"] = types.ThinkingConfig(
                     thinking_budget=0,
-                    include_thoughts=include_thoughts or None,
                 )
             else:
                 config_params["thinking_config"] = types.ThinkingConfig(
                     thinking_level=level,
-                    include_thoughts=include_thoughts or None,
+                    include_thoughts=True,
                 )
-        elif include_thoughts:
-            config_params["thinking_config"] = types.ThinkingConfig(
-                include_thoughts=True,
-            )
 
         if "response_format" in kwargs:
             schema = kwargs.pop("response_format")
