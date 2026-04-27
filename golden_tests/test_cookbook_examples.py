@@ -448,7 +448,9 @@ def test_image_base64(llm):
     # This is a 1x1 red pixel in PNG format
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
-    image = images.from_base64(red_dot_b64, format="png")
+    image = images.from_base64(
+        red_dot_b64, format="png", api_params={"detail": "low"}
+    )
 
     response = llm.prompt("What color is this image?", image=image)
 
@@ -679,16 +681,17 @@ def _image_detail_task(llm):
 
 
 @pytest.mark.parametrize(
-    "llm",
+    "llm, api",
     [
         pytest.param(
             kbench.kaggle.load_model(key, api="openai"),
+            "openai",
             id=f"openai-{key}",
         )
         for key in sorted(IMAGE_DETAIL_LLM_NAMES)
     ],
 )
-def test_image_with_detail(llm):
+def test_image_with_detail(llm, api):
     run = _image_detail_task.run(llm)
     assert run.passed
 
@@ -723,16 +726,17 @@ def _media_resolution_task(llm):
 
 
 @pytest.mark.parametrize(
-    "llm",
+    "llm, api",
     [
         pytest.param(
             kbench.kaggle.load_model(key, api="genai"),
+            "genai",
             id=f"genai-{key}",
         )
         for key in sorted(MEDIA_RESOLUTION_LLM_NAMES)
     ],
 )
-def test_image_with_media_resolution(llm):
+def test_image_with_media_resolution(llm, api):
     run = _media_resolution_task.run(llm)
     assert run.passed
 

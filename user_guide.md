@@ -1,5 +1,6 @@
 # Kaggle Benchmarks: A User Guide
 
+
 - [1. Writing a Task](#1-writing-a-task)
   - [The `@kbench.task` Decorator](#the-kbenchtask-decorator)
   - [Task Function Parameters](#task-function-parameters)
@@ -38,7 +39,7 @@ defines a problem for an LLM to solve.
 You can define a task by decorating a Python function with
 `@kbench.task`.
 
-```python
+``` python
 import kaggle_benchmarks as kbench
 
 @kbench.task(name="my_first_task")
@@ -57,7 +58,7 @@ A task function always accepts an `LLM` object as its first argument.
 This object is your interface to the model being evaluated. You can
 define additional parameters to make your task more flexible.
 
-```python
+``` python
 @kbench.task(name="simple_riddle")
 def solve_riddle(llm, riddle: str, answer: str):
     """Asks a riddle and checks for a keyword in the answer."""
@@ -70,7 +71,7 @@ def solve_riddle(llm, riddle: str, answer: str):
 When you execute the task using `.run()`, you pass in the values for
 these parameters:
 
-```python
+``` python
 solve_riddle.run(
     llm=kbench.llm,  # Use the default LLM
     riddle="What gets wetter as it dries?",
@@ -109,7 +110,7 @@ returned by your function will raise a warning like
 As an example, a task returning a boolean can be used to score
 performance across a dataset:
 
-```python
+``` python
 @kbench.task(name="evaluate_riddles")
 def solve_and_check_riddle(llm, riddle: str, answer_keyword: str) -> bool:
     """A task that returns True if the model gets the riddle right."""
@@ -121,7 +122,7 @@ def solve_and_check_riddle(llm, riddle: str, answer_keyword: str) -> bool:
 When this task is run on a dataset using `.evaluate()`, the boolean
 return values are collected, allowing for aggregate scoring.
 
-```python
+``` python
 import pandas as pd
 
 # Create a dataset of riddles
@@ -157,7 +158,7 @@ These interactions are tracked as a conversation within a `Chat` object.
 This is the most common method for interacting with a model. It sends a
 prompt and returns the model’s response as a string.
 
-```python
+``` python
 response = kbench.llm.prompt("What is the capital of France?")
 ```
 
@@ -165,7 +166,7 @@ You can also request a structured response by providing a `schema` (like
 a `dataclass` or `pydantic` model). The library will attempt to parse
 the model’s output into an instance of that schema.
 
-```python
+``` python
 from dataclasses import dataclass
 
 @dataclass
@@ -181,7 +182,7 @@ info = kbench.llm.prompt("What is the capital of France?", schema=CapitalInfo)
 You can include images in your prompt using the `image` parameter, such
 as
 
-```python
+``` python
 # Pass the image directly to the prompt
 response = kbench.llm.prompt(
     "What is the animal in the picture?",
@@ -192,7 +193,7 @@ response = kbench.llm.prompt(
 You can also include videos using the `video` parameter. Currently,
 only YouTube URLs are supported.
 
-```python
+``` python
 from kaggle_benchmarks.content_types import videos
 
 response = kbench.llm.prompt(
@@ -208,7 +209,7 @@ response = kbench.llm.prompt(
 You can also include audio using the `audio` parameter. Audio can be
 loaded from a file, a URL, or a base64-encoded string.
 
-```python
+``` python
 from kaggle_benchmarks.content_types import audios
 
 # From a local file
@@ -242,7 +243,6 @@ automatically (`reasoning_effort` for OpenAI, `thinking_config` for
 GenAI).
 
 ```python
-# Works across all providers — no need to worry about the backend
 response = llm.prompt("Solve this math problem.", reasoning="high")
 ```
 
@@ -259,51 +259,6 @@ response = llm.prompt("How many r's are in 'strawberry'?", reasoning="high")
 traces = kbench.last_reasoning_traces()  # model's internal reasoning
 ```
 
-### Provider-Specific API Parameters
-
-For advanced use cases, `llm.prompt()` accepts an `api_params`
-dictionary that is forwarded directly to the underlying API provider.
-
-```python
-# Pass provider-specific request parameters
-response = llm.prompt("Generate something.", api_params={"max_tokens": 500})
-```
-
-> **Note:** Parameters that have explicit SDK equivalents (e.g.,
-> `reasoning_effort`, `thinking_config`, `temperature`) are blocked
-> from `api_params`. Use the corresponding `prompt()` parameter instead.
-
-**Content-level parameters** are passed via `api_params` when
-constructing content objects (images, videos, audio):
-
-```python
-from kaggle_benchmarks.content_types import images, videos
-
-# OpenAI: control image detail level
-image = images.from_url("https://example.com/photo.jpg", api_params={"detail": "low"})
-response = llm.prompt("Describe this image.", image=image)
-
-# GenAI: control media resolution
-image = images.from_url(
-    "https://example.com/photo.jpg",
-    api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
-)
-response = llm.prompt("Describe this image.", image=image)
-
-# GenAI: control video metadata
-video = videos.from_url(
-    "https://youtube.com/watch?v=example",
-    api_params={"video_metadata": {"fps": 1.0, "start_offset": "0s", "end_offset": "10s"}},
-)
-response = llm.prompt("Summarize this video.", video=video)
-```
-
-> **Note:** Content-level parameters are provider-specific. For example,
-> `detail` is an OpenAI parameter and `media_resolution` is a GenAI
-> parameter. Parameters not recognized by the provider will be dropped
-> (with a warning on GenAI) or may cause an error depending on the
-> backend.
-
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them
@@ -312,7 +267,7 @@ in a list to the `tools` parameter.
 **Note: Automatic tool calling currently requires loading the model with
 `api="genai"`.**
 
-```python
+``` python
 import kaggle_benchmarks as kbench
 from kaggle_benchmarks.kaggle import models
 
@@ -342,7 +297,7 @@ For multi-turn conversations or multimodal input, you can use
 `kbench.user.send()` to add a user message to the chat history before
 prompting the LLM. This is how you can send images, for example.
 
-```python
+``` python
 image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Cute_dog.jpg/320px-Cute_dog.jpg"
 image = kbench.content_types.images.from_base64(kbench.content_types.images.image_url_to_base64(image_url))
 with kbench.chats.new("image_chat"):
@@ -384,7 +339,7 @@ a clean context, without the history of previous iterations.
 Consider this simple example where we want to ask an LLM about a list of
 items:
 
-```python
+``` python
 import kaggle_benchmarks as kbench
 
 @kbench.task()
@@ -420,7 +375,7 @@ the individual message level and aggregated across an entire chat.
 Each message has a `usage` property that returns a `Usage`
 object:
 
-```python
+``` python
 with kbench.chats.new("Conversation") as chat:
     response = llm.prompt("What is machine learning?")
 
@@ -438,7 +393,7 @@ with kbench.chats.new("Conversation") as chat:
 For convenience, the `Chat` object also provides a `usage` property that
 aggregates usage across all assistant messages in the conversation:
 
-```python
+``` python
 with kbench.chats.new("Conversation") as chat:
     llm.prompt("What is machine learning?")
     llm.prompt("Can you give me an example?")
@@ -497,7 +452,7 @@ some of the ones you’ll use most often:
 Here is a complete example showing a simple task that uses an assertion
 with a descriptive `expectation` message.
 
-```python
+``` python
 @kbench.task(name="capital_city_check")
 def check_capital(llm, country: str, capital: str):
     """Asks for the capital of a country and checks the answer."""
@@ -525,7 +480,7 @@ check_capital.run(
 When writing assertions, it is highly recommended to include the
 `expectation` parameter, as seen in the examples.
 
-```python
+``` python
 kbench.assertions.assert_equal(
     "610",
     code_output,
@@ -537,7 +492,7 @@ This parameter is a human-readable string that describes what the
 assertion is testing. **This text is what will be displayed on the
 benchmark leaderboard**. Providing a clear expectation makes your
 results much easier to interpret for yourself and others. It explains
-_why_ a task failed, not just _that_ it failed.
+*why* a task failed, not just *that* it failed.
 
 ### Custom Assertions
 
@@ -548,7 +503,7 @@ encapsulate custom validation logic.
 Here’s an example of a custom assertion that checks if a number is
 positive:
 
-```python
+``` python
 from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
 
 @assertion_handler()
@@ -589,7 +544,7 @@ benchmark.
 Here is an example of how to use it to evaluate an explanation of a
 technical concept:
 
-```python
+``` python
 import kaggle_benchmarks as kbench
 
 @kbench.task()
@@ -629,7 +584,7 @@ You can customize how the judge evaluates the response by providing a
 
 This is useful if you need the judge to return specific feedback.
 
-```python
+``` python
 import dataclasses
 from typing import Iterable, List
 import textwrap

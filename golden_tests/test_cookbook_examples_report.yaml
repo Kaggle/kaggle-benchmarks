@@ -53,6 +53,7 @@ genai://anthropic/claude-sonnet-4-5@20250929:
     test_image_local_file: passed
     test_image_url: passed
     test_multiple_tool_selection: failed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -64,12 +65,13 @@ genai://deepseek-ai/deepseek-r1-0528:
     test_complex_tool_return: failed
     test_dataset_eval: passed
     test_extract_bool: passed
-    test_extract_composite_pydantic: failed
+    test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -86,6 +88,7 @@ genai://deepseek-ai/deepseek-v3.2:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -129,8 +132,8 @@ genai://google/gemini-2.5-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_include_thoughts: passed
     test_multiple_tool_selection: passed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -154,8 +157,8 @@ genai://google/gemini-2.5-pro:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_include_thoughts: passed
     test_multiple_tool_selection: passed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -205,6 +208,7 @@ genai://google/gemini-3.1-flash-lite-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -234,6 +238,7 @@ genai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -250,6 +255,7 @@ genai://qwen/qwen3-next-80b-a3b-instruct:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -266,6 +272,7 @@ genai://zai/glm-5:
     test_extract_int: failed
     test_extract_pydantic: failed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -324,6 +331,7 @@ openai://anthropic/claude-sonnet-4-5@20250929:
     test_image_local_file: passed
     test_image_url: passed
     test_multiple_tool_selection: failed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -337,10 +345,11 @@ openai://deepseek-ai/deepseek-r1-0528:
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
-    test_extract_dict: failed
+    test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -357,6 +366,7 @@ openai://deepseek-ai/deepseek-v3.2:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -400,8 +410,8 @@ openai://google/gemini-2.5-flash:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_include_thoughts: passed
     test_multiple_tool_selection: failed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -425,8 +435,8 @@ openai://google/gemini-2.5-pro:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_include_thoughts: failed
     test_multiple_tool_selection: failed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -450,6 +460,7 @@ openai://google/gemini-3-flash-preview:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
+    test_image_with_detail: passed
     test_multiple_tool_selection: failed
     test_reasoning_param: passed
     test_simple_tool_use: failed
@@ -475,6 +486,7 @@ openai://google/gemini-3.1-flash-lite-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -504,6 +516,7 @@ openai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -520,6 +533,7 @@ openai://qwen/qwen3-next-80b-a3b-instruct:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
@@ -536,6 +550,7 @@ openai://zai/glm-5:
     test_extract_int: passed
     test_extract_pydantic: passed
     test_multiple_tool_selection: failed
+    test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
     test_tool_error_handling: failed
