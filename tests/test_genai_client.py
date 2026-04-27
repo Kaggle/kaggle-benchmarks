@@ -242,6 +242,18 @@ def test_prompt_rejects_thinking_config_in_api_params():
         )
 
 
+def test_prompt_rejects_schema_in_api_params():
+    llm = MockedGoogleGenAI()
+    with pytest.raises(ValueError, match="schema.*not allowed in api_params"):
+        llm.prompt("Hi", api_params={"schema": int})
+
+
+def test_prompt_rejects_system_in_api_params():
+    llm = MockedGoogleGenAI()
+    with pytest.raises(ValueError, match="system.*not allowed in api_params"):
+        llm.prompt("Hi", api_params={"system": "override"})
+
+
 @pytest.mark.parametrize("streaming", [True, False])
 def test_streaming_and_non_streaming_responses(streaming):
     """Tests both streaming and non-streaming modes and checks metadata."""

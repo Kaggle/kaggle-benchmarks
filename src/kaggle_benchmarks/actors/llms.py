@@ -144,6 +144,8 @@ _EXPLICIT_PARAMS = {
     "seed": "seed",
     "tools": "tools",
     "response_format": "schema",
+    "schema": "schema",
+    "system": "system",
 }
 
 

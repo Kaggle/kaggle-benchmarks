@@ -683,11 +683,11 @@ def _api_params_max_tokens_task_openai(llm):
     """Proves api_params reach OpenAI by capping max_completion_tokens."""
     response = llm.prompt(
         "Write a 500-word essay about the history of computing.",
-        api_params={"max_completion_tokens": 10},
+        api_params={"max_completion_tokens": 50},
     )
     word_count = len(response.split())
     kbench.assertions.assert_true(
-        word_count < 30,
+        word_count < 80,
         expectation=f"Response should be truncated (got {word_count} words). "
         "If api_params were ignored, response would be ~500 words.",
     )

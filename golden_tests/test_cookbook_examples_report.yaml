@@ -168,6 +168,7 @@ genai://google/gemini-3-flash-preview:
   config:
     structured_output: true
   tests:
+    test_api_params_max_tokens_genai: passed
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
@@ -446,6 +447,7 @@ openai://google/gemini-3-flash-preview:
   config:
     structured_output: true
   tests:
+    test_api_params_max_tokens_openai: passed
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed

@@ -389,6 +389,18 @@ def test_prompt_rejects_reasoning_effort_in_api_params():
         llm.prompt("Hi", api_params={"reasoning_effort": "high"})
 
 
+def test_prompt_rejects_schema_in_api_params():
+    llm = MockedOpenAI(model="test-model")
+    with pytest.raises(ValueError, match="schema.*not allowed in api_params"):
+        llm.prompt("Hi", api_params={"schema": int})
+
+
+def test_prompt_rejects_system_in_api_params():
+    llm = MockedOpenAI(model="test-model")
+    with pytest.raises(ValueError, match="system.*not allowed in api_params"):
+        llm.prompt("Hi", api_params={"system": "override"})
+
+
 def test_prompt_reasoning_none_sets_effort_without_thinking_config():
     """Tests that reasoning='none' sets reasoning_effort but skips thinking_config."""
     llm = MockedOpenAI(model="test-model")
