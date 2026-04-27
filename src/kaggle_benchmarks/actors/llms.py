@@ -87,7 +87,6 @@ print(outer_t)
 
 import dataclasses
 import enum
-import inspect
 import json
 import re
 import typing
@@ -145,8 +144,7 @@ def _validate_reasoning(reasoning: str | None) -> None:
     but OpenAI does not, so we validate here for both backends.
     """
 
-    # TODO: Add "disabled" once Model Proxy supports reasoning_effort="none".
-    valid = {"low", "medium", "high"}
+    valid = {"none", "low", "medium", "high"}
     if reasoning is not None and reasoning not in valid:
         raise ValueError(
             f"Invalid reasoning level: {reasoning!r}. "
@@ -154,15 +152,25 @@ def _validate_reasoning(reasoning: str | None) -> None:
         )
 
 
-def _validate_api_params(api_params: dict[str, Any] | None, prompt_params: set[str]) -> None:
+_EXPLICIT_PARAMS = {
+    "reasoning_effort": "reasoning",
+    "thinking_config": "reasoning",
+    "temperature": "temperature",
+    "seed": "seed",
+    "tools": "tools",
+    "response_format": "schema",
+}
+
+
+def _validate_api_params(api_params: dict[str, Any] | None) -> None:
     """Raises if api_params contains keys that have explicit SDK parameters."""
     if not api_params:
         return
-    for key in api_params:
-        if key in prompt_params:
+    for key, param_name in _EXPLICIT_PARAMS.items():
+        if key in api_params:
             raise ValueError(
                 f"{key!r} is not allowed in api_params. "
-                f"Use the {key!r} parameter on prompt() instead."
+                f"Use the {param_name!r} parameter on prompt() instead."
             )
 
 
@@ -217,7 +225,7 @@ class LLMChat(actors.Actor):
         api_params: dict[str, Any] | None = None,
     ) -> T:
         _validate_reasoning(reasoning)
-        _validate_api_params(api_params, _PROMPT_PARAMS)
+        _validate_api_params(api_params)
 
         if image is not None:
             match image:
@@ -349,13 +357,6 @@ class LLMChat(actors.Actor):
     def __repr__(self):
         name = self.name
         return f"{type(self).__name__}({name=})"
-
-
-# Auto-derived from prompt()'s signature. If someone adds a new param
-# to prompt(), it's automatically blocked from api_params.
-_PROMPT_PARAMS = set(inspect.signature(LLMChat.prompt).parameters.keys()) - {
-    "self", "message", "image", "video", "audio", "api_params",
-}
 
 
 class OpenAI(LLMChat):
@@ -588,8 +589,6 @@ class GoogleGenAI(LLMChat):
         config_params = {}
         if system:
             config_params["system_instruction"] = system
-
-        include_thoughts = kwargs.pop("include_thoughts", False)
 
         if reasoning is not None:
             level = self._REASONING_LEVEL_MAP[reasoning]

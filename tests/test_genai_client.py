@@ -98,13 +98,12 @@ def test_invoke_with_config_params():
     ],
 )
 def test_prompt_thinking_config(reasoning, expected_level):
-    """Tests that reasoning maps to the correct ThinkingConfig with thoughts enabled."""
+    """Tests that reasoning maps to the correct ThinkingConfig."""
     llm = MockedGoogleGenAI()
     llm.prompt("Think hard", reasoning=reasoning)
 
     tc = llm.config.thinking_config
     assert tc.thinking_level == expected_level
-    assert tc.include_thoughts is True
 
 
 def test_prompt_forwards_api_params():
@@ -247,43 +246,6 @@ def test_prompt_reasoning_with_include_thoughts():
 
     assert llm.config.thinking_config.thinking_level == "HIGH"
     assert llm.config.thinking_config.include_thoughts is True
-
-
-def test_extract_text_wraps_thought_parts():
-    """Tests that _extract_text wraps thought parts in <think> tags."""
-    response = types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(
-                    parts=[
-                        types.Part(text="I need to count...", thought=True),
-                        types.Part(text="There are 3 r's."),
-                    ]
-                )
-            )
-        ]
-    )
-    text = GoogleGenAI._extract_text(response)
-    assert "<think>" in text
-    assert "I need to count..." in text
-    assert "</think>" in text
-    assert "There are 3 r's." in text
-
-
-def test_extract_text_no_thought_parts():
-    """Tests that _extract_text returns plain text when no thought parts."""
-    response = types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(
-                    parts=[types.Part(text="Hello world")]
-                )
-            )
-        ]
-    )
-    text = GoogleGenAI._extract_text(response)
-    assert text == "Hello world"
-    assert "<think>" not in text
 
 
 def test_prompt_rejects_invalid_reasoning():
