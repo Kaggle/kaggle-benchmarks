@@ -530,6 +530,29 @@ response = llm.prompt("Transcribe this audio.", audio=audio_content)
 
 ------------------------------------------------------------------------
 
+### Recipe: Controlling Reasoning
+
+Control how much reasoning the model performs:
+
+```python
+response = llm.prompt("Solve this math problem.", reasoning="high")
+```
+
+Valid values: `"none"`, `"low"`, `"medium"`, `"high"`.
+
+> **Note:** Not all models support reasoning. Models that don't support
+> it will return an error.
+
+Since `prompt()` returns a plain string, use `kbench.last_reasoning_traces()`
+to access the model's reasoning traces from the most recent response:
+
+```python
+response = llm.prompt("How many r's in strawberry?", reasoning="high")
+traces = kbench.last_reasoning_traces()  # model's internal reasoning
+```
+
+---
+
 ## Advanced Patterns
 
 ### Recipe: Implementing an Interactive Game Loop

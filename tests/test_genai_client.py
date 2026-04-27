@@ -89,6 +89,132 @@ def test_invoke_with_config_params():
     assert llm.config.temperature == 0.9
 
 
+@pytest.mark.parametrize(
+    "reasoning, expected_level",
+    [
+        ("low", "LOW"),
+        ("medium", "MEDIUM"),
+        ("high", "HIGH"),
+    ],
+)
+def test_prompt_thinking_config(reasoning, expected_level):
+    """Tests that reasoning maps to the correct ThinkingConfig with thoughts enabled."""
+    llm = MockedGoogleGenAI()
+    llm.prompt("Think hard", reasoning=reasoning)
+
+    tc = llm.config.thinking_config
+    assert tc.thinking_level == expected_level
+    assert tc.include_thoughts is True
+
+
+def test_split_response_separates_content_and_thinking():
+    """Tests that _split_response separates content from thought parts."""
+    llm = MockedGoogleGenAI()
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[
+                        types.Part(text="I need to count...", thought=True),
+                        types.Part(text="There are 3 r's."),
+                    ]
+                )
+            )
+        ]
+    )
+    content, thinking = llm._split_response(response)
+    assert content == "There are 3 r's."
+    assert thinking == "I need to count..."
+
+
+def test_split_response_returns_none_thinking_without_thoughts():
+    """Tests that _split_response returns None thinking when no thought parts exist."""
+    llm = MockedGoogleGenAI()
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(parts=[types.Part(text="Hello world")])
+            )
+        ]
+    )
+    content, thinking = llm._split_response(response)
+    assert content == "Hello world"
+    assert thinking is None
+
+
+def test_extract_text_multi_part_matches_response_text():
+    """_extract_text should match response.text for non-thought multi-part responses."""
+    llm = MockedGoogleGenAI()
+    response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[types.Part(text="Hello"), types.Part(text=" world")]
+                )
+            )
+        ]
+    )
+    assert llm._extract_text(response) == response.text
+
+
+def test_streaming_thought_output_matches_non_streaming():
+    """Streaming and non-streaming should produce the same content for identical input."""
+    llm = MockedGoogleGenAI()
+    parts = [
+        types.Part(text="step 1", thought=True),
+        types.Part(text="step 2", thought=True),
+        types.Part(text="Final answer"),
+    ]
+
+    # Non-streaming: all parts in one response
+    full_response = types.GenerateContentResponse(
+        candidates=[types.Candidate(content=types.Content(parts=parts))]
+    )
+    non_streaming_text = llm._extract_text(full_response)
+
+    # Streaming: one part per chunk
+    chunks = [
+        types.GenerateContentResponse(
+            candidates=[types.Candidate(content=types.Content(parts=[p]))]
+        )
+        for p in parts
+    ]
+    streaming_text = "".join(llm._extract_text(c) for c in chunks)
+
+    assert streaming_text == non_streaming_text
+
+
+def test_thinking_captured_in_response(mocker):
+    """Tests that thought parts from GenAI response are captured as reasoning traces."""
+    mock_client = mocker.MagicMock()
+    mock_response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    parts=[
+                        types.Part(text="Let me count the letters...", thought=True),
+                        types.Part(text="There are 3 r's."),
+                    ]
+                )
+            )
+        ],
+        usage_metadata=types.UsageMetadata(
+            prompt_token_count=10, response_token_count=5
+        ),
+    )
+    mock_client.models.generate_content.return_value = mock_response
+
+    llm = GoogleGenAI(client=mock_client, model="test-gemini")
+    llm.stream_responses = False
+
+    with chats.new("Test GenAI thinking") as t:
+        response = llm.prompt("How many r's in strawberry?")
+
+    assert response == "There are 3 r's."
+    last_message = t.messages[-1]
+    assert last_message.reasoning_traces == "Let me count the letters..."
+
+
 @pytest.mark.parametrize("streaming", [True, False])
 def test_streaming_and_non_streaming_responses(streaming):
     """Tests both streaming and non-streaming modes and checks metadata."""

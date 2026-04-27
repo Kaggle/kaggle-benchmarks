@@ -88,8 +88,9 @@ print(outer_t)
 import dataclasses
 import enum
 import json
+import re
 import typing
-from typing import TYPE_CHECKING, Any, Iterator, TypeVar
+from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeVar
 
 import openai
 from google import genai
@@ -105,6 +106,24 @@ if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
 
 T = TypeVar("T")
+ReasoningLevel = Literal["none", "low", "medium", "high"]
+
+_THINK_TAG_PATTERN = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
+
+
+def _parse_think_tags(content: str) -> tuple[str, str | None]:
+    """Extracts all <think>...</think> blocks from content.
+
+    Model Proxy wraps reasoning traces in <think> tags inside content
+    because the chat completions spec doesn't have a dedicated field
+    for reasoning traces.
+    """
+    segments = _THINK_TAG_PATTERN.findall(content)
+    if not segments:
+        return content, None
+    remaining = _THINK_TAG_PATTERN.sub("", content).strip()
+    thinking = "\n\n".join(s.strip() for s in segments if s.strip())
+    return remaining, thinking or None
 
 
 # TODO: Figure out a more robust way to handle extra fields.
@@ -121,6 +140,7 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str
+    reasoning_traces: str | None = None
     tool_calls: list[Any] | None = None
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
 
@@ -143,7 +163,11 @@ class LLMChat(actors.Actor):
         self.stream_responses = config.interactive_mode
 
     def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
+        self,
+        messages: list[messages.Message],
+        system: str | None,
+        reasoning: ReasoningLevel | None = None,
+        **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
         raise NotImplementedError
@@ -158,6 +182,7 @@ class LLMChat(actors.Actor):
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
+        reasoning: ReasoningLevel | None = None,
     ) -> T:
         if image is not None:
             match image:
@@ -186,6 +211,7 @@ class LLMChat(actors.Actor):
             seed=seed,
             temperature=temperature if self.support_temperature else None,
             tools=tools if tools is not None else [],
+            reasoning=reasoning,
         ).content
 
     @chats.emits_message
@@ -240,6 +266,7 @@ class LLMChat(actors.Actor):
             response.content = invoke_response.content or ""
             response._meta["tool_calls"] = invoke_response.tool_calls
             response._meta.update(invoke_response.meta)
+            response._meta["reasoning_traces"] = invoke_response.reasoning_traces
         elif isinstance(invoke_response, Iterator):
             response.stream(invoke_response)
         elif isinstance(invoke_response, llm_messages.LLMMessage):
@@ -305,7 +332,11 @@ class OpenAI(LLMChat):
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
 
     def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
+        self,
+        messages: list[messages.Message],
+        system: str | None,
+        reasoning: ReasoningLevel | None = None,
+        **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
             from kaggle_benchmarks.messages import Message
@@ -319,12 +350,30 @@ class OpenAI(LLMChat):
             # Temporarily do not send "seed" parameter for models not supporting it in Model Proxy.
             kwargs.pop("seed", None)
 
+        if reasoning is not None:
+            kwargs["reasoning_effort"] = reasoning
+            # The double-nested extra_body is intentional: the outer one is
+            # consumed by the OpenAI SDK (merged into the request body), the
+            # inner one arrives at Model Proxy as a top-level field where it
+            # reads google.thinking_config.  Without include_thoughts, the
+            # frontend drops thinking traces from the response.
+            if reasoning != "none":
+                kwargs.setdefault("extra_body", {})
+                kwargs["extra_body"].setdefault("extra_body", {})
+                kwargs["extra_body"]["extra_body"].setdefault("google", {})
+                kwargs["extra_body"]["extra_body"]["google"].setdefault(
+                    "thinking_config", {"include_thoughts": True}
+                )
+
         return self._call_api(raw_messages, **kwargs)
 
     def _get_stream_response(
         self, response_stream: openai.Stream
     ) -> Iterator[LLMResponse]:
         """Yields LLMResponse objects from a streaming response."""
+        # TODO: Streaming does not capture reasoning_traces. Think tags in
+        # streamed chunks are not parsed, so last_reasoning_traces() will
+        # return None when streaming is enabled.
         for chunk in response_stream:
             if not chunk.choices:
                 continue
@@ -378,8 +427,17 @@ class OpenAI(LLMChat):
         else:
             message = response.choices[0].message
             tool_calls = message.tool_calls
+            content = message.content or ""
+            # The OpenAI chat completions spec doesn't support a dedicated
+            # reasoning_content field, so Model Proxy embeds thinking traces
+            # in content using <think> tags.  Only parse when reasoning was
+            # requested to avoid stripping literal <think> tags from content.
+            reasoning = getattr(message, "reasoning_content", None)
+            if reasoning is None and kwargs.get("reasoning_effort") not in (None, "none"):
+                content, reasoning = _parse_think_tags(content)
             return LLMResponse(
-                content=message.content or "",
+                content=content,
+                reasoning_traces=reasoning,
                 tool_calls=[t.model_dump() for t in tool_calls] if tool_calls else None,
                 meta=self._get_usage_meta(response.usage),
             )
@@ -404,24 +462,79 @@ class GoogleGenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
+    _REASONING_LEVEL_MAP = {
+        "none": None,
+        "low": "LOW",
+        "medium": "MEDIUM",
+        "high": "HIGH",
+    }
+
+    def _split_response(
+        self,
+        response: types.GenerateContentResponse,
+    ) -> tuple[str, str | None]:
+        """Splits a response into content text and thinking text."""
+        if not response.candidates or not response.candidates[0].content:
+            return "", None
+        parts = response.candidates[0].content.parts or []
+        content_segments = []
+        thinking_segments = []
+        for part in parts:
+            if not part.text:
+                continue
+            if getattr(part, "thought", False):
+                thinking_segments.append(part.text)
+            else:
+                content_segments.append(part.text)
+        content = "".join(content_segments) if content_segments else ""
+        thinking = "".join(thinking_segments) if thinking_segments else None
+        return content, thinking
+
+    def _extract_text(self, response: types.GenerateContentResponse) -> str:
+        """Extracts non-thought text content from a response."""
+        content, _ = self._split_response(response)
+        return content
+
     def _get_stream_response(
         self, response_stream: Iterator[types.GenerateContentResponse]
     ) -> Iterator[LLMResponse]:
+        # TODO: Streaming does not capture reasoning_traces. Thought parts
+        # are filtered out by _extract_text, so last_reasoning_traces() will
+        # return None when streaming is enabled.
         # We currently only support text outputs
         for chunk in response_stream:
             yield LLMResponse(
-                content=chunk.text or "",
+                content=self._extract_text(chunk)
+                if chunk.candidates
+                else (chunk.text or ""),
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
 
     def invoke(
-        self, messages: list[messages.Message], system: str | None, **kwargs
+        self,
+        messages: list[messages.Message],
+        system: str | None,
+        reasoning: ReasoningLevel | None = None,
+        **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
 
         config_params = {}
         if system:
             config_params["system_instruction"] = system
+
+        if reasoning is not None:
+            level = self._REASONING_LEVEL_MAP[reasoning]
+            if level is None:
+                config_params["thinking_config"] = types.ThinkingConfig(
+                    thinking_budget=0,
+                )
+            else:
+                config_params["thinking_config"] = types.ThinkingConfig(
+                    thinking_level=level,
+                    include_thoughts=True,
+                )
+
         if "response_format" in kwargs:
             schema = kwargs.pop("response_format")
             config_params["response_schema"] = schema
@@ -459,7 +572,9 @@ class GoogleGenAI(LLMChat):
                     meta=self._get_usage_meta(response.usage_metadata),
                 )
 
+            content, thinking = self._split_response(response)
             return LLMResponse(
-                content=response.text,
+                content=content,
+                reasoning_traces=thinking,
                 meta=self._get_usage_meta(response.usage_metadata),
             )

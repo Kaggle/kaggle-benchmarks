@@ -129,7 +129,7 @@ def render_llm_message(message, **kwargs) -> pn.chat.ChatMessage:
         footer_objects=[
             pn.Column(*(render_tool_call(call) for call in message.tool_calls or [])),
             render_usage(message.usage),
-            render_thinking(message.thinking or ""),
+            render_thinking(message.reasoning_traces or ""),
         ]
         + history,
         **kwargs,

@@ -591,6 +591,66 @@ def test_audio_url(llm):
 
 
 # %%
+# --- Test Case: Reasoning parameter ---
+# Verifies that `reasoning=` doesn't error across providers.
+# Actual wiring (thinking_config, reasoning_effort) is covered by unit tests;
+# trace capture is verified in test_reasoning_captures_traces for models that
+# support it (not all models return traces).
+
+
+@benchmark_test(
+    exclude={
+        "google/gemini-2.0-flash",
+        "google/gemma-3-12b",
+    },
+)
+@kbench.task()
+def test_reasoning_param(llm):
+    """Tests that the unified reasoning parameter works across providers."""
+    response = llm.prompt(
+        "What is 2 + 2? Reply with just the number.",
+        reasoning="low",
+    )
+
+    kbench.assertions.assert_contains_regex(
+        r"4",
+        response,
+        expectation="Model should answer 4.",
+    )
+
+
+# %%
+# --- Test Case: Reasoning traces ---
+# Tests that reasoning traces are automatically captured on the message
+# when reasoning is enabled, accessible via message.reasoning_traces.
+
+
+@benchmark_test(
+    include={
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
+        "anthropic/claude-sonnet-4-5@20250929",
+    },
+)
+@kbench.task()
+def test_reasoning_captures_traces(llm):
+    """Tests that reasoning captures reasoning traces on the message."""
+    llm.prompt(
+        "How many r's are in the word 'strawberry'? Think step by step.",
+        reasoning="high",
+    )
+
+    chat = kbench.chats.get_current_chat()
+    last_message = chat.messages[-1]
+    assert last_message.reasoning_traces is not None, (
+        "Reasoning traces should be accessible via message.reasoning_traces"
+    )
+    assert len(last_message.reasoning_traces) > 0, (
+        "Reasoning traces should not be empty"
+    )
+
+
+# %%
 # --- Test Case: Tool Use ---
 # This doesn't work with "genai" API for now
 # So test it with `-k "openai"` only.
