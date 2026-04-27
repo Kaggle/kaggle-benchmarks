@@ -380,8 +380,7 @@ def multi_qa_task(llm, df) -> tuple[float, float]:
     with kbench.client.enable_cache():
         runs = single_qa_task.evaluate(
             stop_condition=lambda runs: len(runs) == df.shape[0],
-            max_attempts=50,
-            retry_delay=15,
+            max_attempts=1,
             llm=[llm],
             evaluation_data=df,
             n_jobs=2,

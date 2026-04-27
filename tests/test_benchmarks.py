@@ -356,18 +356,25 @@ def test_partial():
     assert partial.run(x=1, y=2).result == 3
 
 
-def test_nested_task_evaluate_with_retries_fails(duck):
+def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
     @tasks.task()
     def single_task(llm, x):
         return llm.prompt(str(x))
 
     @tasks.task()
     def multi_task(llm, df):
-        single_task.evaluate(llm=[llm], evaluation_data=df, max_attempts=2)
+        return single_task.evaluate(
+            llm=[llm], evaluation_data=df, max_attempts=2
+        )
 
     df = pd.DataFrame({"x": [1, 2, 3]})
-    with pytest.raises(
-        tasks.NonRecoverableError,
-        match="`max_attempts` must be 1 for nested task evaluations.",
-    ):
-        multi_task.run(duck, df)
+    with caplog.at_level("WARNING", logger="kaggle_benchmarks.tasks"):
+        run = multi_task.run(duck, df)
+
+    assert any(
+        "`max_attempts` must be 1 for nested task evaluations" in record.message
+        for record in caplog.records
+    )
+    nested_runs = run.result
+    assert isinstance(nested_runs, runs.Runs)
+    assert len(nested_runs) == df.shape[0]
