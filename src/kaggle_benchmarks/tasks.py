@@ -174,6 +174,9 @@ class Task(Generic[T]):
                             condition is met.
             max_attempts: The maximum number of evaluation attempts.
                           Defaults to 1 (no retries).
+                          Note: Nested task evaluations always run with
+                          `max_attempts=1` regardless of the value passed;
+                          a warning is logged if a different value is provided.
             retry_delay: The delay in seconds between retry attempts.
             remove_run_files: Remove generated run files when done.
             **kwargs: Alternative way to specify the parameter grid.
@@ -187,9 +190,11 @@ class Task(Generic[T]):
 
         ctx = contexts.get_current()
         if ctx.parent and ctx.parent.run and max_attempts > 1:
-            raise NonRecoverableError(
-                "`max_attempts` must be 1 for nested task evaluations. Retries are not supported in this context."
+            logger.warning(
+                "`max_attempts` must be 1 for nested task evaluations; coercing from %d to 1.",
+                max_attempts,
             )
+            max_attempts = 1
 
         if grid is None:
             grid = kwargs
