@@ -248,6 +248,8 @@ uv run --group test pytest tests -v
 
 ## 5. Code Style & Tooling
 
+This project follows the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) as its baseline coding standard. The tooling below automates and enforces many of these conventions.
+
 ### Formatting and Linting
 
 The project uses **ruff** for both formatting and linting. Always run these before committing:
