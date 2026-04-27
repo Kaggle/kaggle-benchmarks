@@ -653,6 +653,79 @@ def test_reasoning_captures_traces(llm):
 
 
 # %%
+# --- Test Case: api_params forwarding ---
+# Proves that api_params are actually forwarded to the provider by capping
+# max output tokens to a small value. If api_params were silently dropped,
+# the response would be hundreds of tokens long instead of truncated.
+
+API_PARAMS_LLM_NAMES = {
+    "google/gemini-3-flash-preview",
+}
+
+
+@kbench.task()
+def _api_params_max_tokens_task_genai(llm):
+    """Proves api_params reach GenAI by capping max_output_tokens."""
+    response = llm.prompt(
+        "Write a 500-word essay about the history of computing.",
+        api_params={"max_output_tokens": 10},
+    )
+    word_count = len(response.split())
+    kbench.assertions.assert_true(
+        word_count < 30,
+        expectation=f"Response should be truncated (got {word_count} words). "
+        "If api_params were ignored, response would be ~500 words.",
+    )
+
+
+@kbench.task()
+def _api_params_max_tokens_task_openai(llm):
+    """Proves api_params reach OpenAI by capping max_completion_tokens."""
+    response = llm.prompt(
+        "Write a 500-word essay about the history of computing.",
+        api_params={"max_completion_tokens": 10},
+    )
+    word_count = len(response.split())
+    kbench.assertions.assert_true(
+        word_count < 30,
+        expectation=f"Response should be truncated (got {word_count} words). "
+        "If api_params were ignored, response would be ~500 words.",
+    )
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(
+            kbench.kaggle.load_model(key, api="genai"),
+            "genai",
+            id=f"genai-{key}",
+        )
+        for key in sorted(API_PARAMS_LLM_NAMES)
+    ],
+)
+def test_api_params_max_tokens_genai(llm, api):
+    run = _api_params_max_tokens_task_genai.run(llm)
+    assert run.passed
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(
+            kbench.kaggle.load_model(key, api="openai"),
+            "openai",
+            id=f"openai-{key}",
+        )
+        for key in sorted(API_PARAMS_LLM_NAMES)
+    ],
+)
+def test_api_params_max_tokens_openai(llm, api):
+    run = _api_params_max_tokens_task_openai.run(llm)
+    assert run.passed
+
+
+# %%
 # --- Test Case: Image with detail parameter (OpenAI only) ---
 # Tests that api_params={"detail": "low"} on images is forwarded via OpenAI.
 
