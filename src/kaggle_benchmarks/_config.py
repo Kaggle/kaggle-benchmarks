@@ -17,7 +17,7 @@ import enum
 import logging
 import os
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, overload
 
 import dotenv
 import panel as pn
@@ -29,10 +29,29 @@ if _dotenv_path := dotenv.find_dotenv():
     _logger.info("Loading environment variables from %s", _dotenv_path)
     dotenv.load_dotenv(_dotenv_path, override=True)
 
+logger = logging.getLogger(__name__)
+
 
 def string_to_bool(s: str) -> bool:
     """Converts a string to a boolean, handling various truthy values."""
     return s.lower() in ("true", "1", "t", "y", "yes")
+
+
+@overload
+def _parse_int_env(name: str) -> int | None: ...
+@overload
+def _parse_int_env(name: str, default: int) -> int: ...
+def _parse_int_env(name: str, default: int | None = None) -> int | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(
+            f"Ignoring non-integer value for {name}={raw!r}; using {default}."
+        )
+        return default
 
 
 class ExecutionMode(enum.Enum):
@@ -64,8 +83,8 @@ class Config:
     )
 
     cache_timeout_seconds: int = dataclasses.field(
-        default_factory=lambda: int(
-            os.environ.get("CACHE_TIMEOUT_SECONDS", str(7 * 24 * 60 * 60))
+        default_factory=lambda: _parse_int_env(
+            "CACHE_TIMEOUT_SECONDS", 7 * 24 * 60 * 60
         )
     )
 
@@ -92,6 +111,19 @@ class Config:
     )
     render_subruns: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("RENDER_SUBRUNS", "True"))
+    )
+
+    # Maximum length the host platform allows for `@kbench.task(...)` `name`
+    # and `description` arguments. The Kaggle notebook runtime sets these to
+    # match its backend column widths so users get fast feedback before a
+    # wasted run; non-Kaggle users leave them unset (`None`) for no limit.
+    task_name_max_length: int | None = dataclasses.field(
+        default_factory=lambda: _parse_int_env("KAGGLE_BENCHMARK_MAX_NAME_LENGTH")
+    )
+    task_description_max_length: int | None = dataclasses.field(
+        default_factory=lambda: _parse_int_env(
+            "KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH"
+        )
     )
 
     show_message_details: bool = False

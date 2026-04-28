@@ -48,6 +48,10 @@ def my_task(llm):
     pass
 ```
 
+When running on Kaggle, the `name` and `description` arguments are
+subject to platform length limits; the decorator raises `ValueError`
+immediately if they are exceeded so you don't waste a run.
+
 ### Task Function Parameters
 
 A task function always accepts an `LLM` object as its first argument.

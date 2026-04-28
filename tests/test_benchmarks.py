@@ -356,6 +356,32 @@ def test_partial():
     assert partial.run(x=1, y=2).result == 3
 
 
+def test_task_length_limits_enforced(monkeypatch):
+    monkeypatch.setattr(config, "task_name_max_length", 5)
+    monkeypatch.setattr(config, "task_description_max_length", 5)
+
+    @tasks.task(name="ok", description="short")
+    def within_limit():
+        pass
+
+    with pytest.raises(ValueError, match=r"Task name is 6 characters"):
+        tasks.task(name="x" * 6)(lambda: None)
+
+    with pytest.raises(ValueError, match=r"Task description is 6 characters"):
+        tasks.task(name="ok", description="y" * 6)(lambda: None)
+
+
+def test_task_length_limits_disabled_when_none(monkeypatch):
+    monkeypatch.setattr(config, "task_name_max_length", None)
+    monkeypatch.setattr(config, "task_description_max_length", None)
+
+    @tasks.task(name="x" * 1000, description="y" * 1000)
+    def unbounded():
+        pass
+
+    assert len(unbounded.name) == 1000
+
+
 def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
     @tasks.task()
     def single_task(llm, x):
