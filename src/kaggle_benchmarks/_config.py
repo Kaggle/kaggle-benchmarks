@@ -16,11 +16,11 @@ import dataclasses
 import enum
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Self, overload
 
 import dotenv
-import panel as pn
 
 base_dir = Path(__file__).parent.parent.parent
 
@@ -52,6 +52,27 @@ def _parse_int_env(name: str, default: int | None = None) -> int | None:
             f"Ignoring non-integer value for {name}={raw!r}; using {default}."
         )
         return default
+
+def _is_notebook_environment() -> bool:
+    """Detects if code is running inside a Jupyter notebook/lab kernel.
+
+    Avoids importing IPython if it isn't already loaded — a CLI process won't
+    have it in sys.modules, so we can short-circuit without triggering
+    IPython's (sometimes broken) import side effects.
+    """
+    if "IPython" not in sys.modules:
+        return False
+    try:
+        from IPython.core.getipython import get_ipython
+
+        ip = get_ipython()
+        if ip is None:
+            return False
+        # ZMQInteractiveShell = Jupyter notebook/lab kernel
+        # TerminalInteractiveShell = ipython CLI (not a notebook)
+        return type(ip).__name__ == "ZMQInteractiveShell"
+    except ImportError:
+        return False
 
 
 class ExecutionMode(enum.Enum):
@@ -128,17 +149,66 @@ class Config:
 
     show_message_details: bool = False
 
-    def apply(self) -> Self:
-        pn.config.theme = self.ui_theme  # type: ignore
+    console_mode: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(
+            os.environ.get("BENCHMARK_CONSOLE_UI", "False")
+        )
+    )
+    console_quiet: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(
+            os.environ.get("BENCHMARK_CONSOLE_QUIET", "False")
+        )
+    )
+    # None = auto-detect from TTY; True/False forces on/off
+    console_color: bool | None = dataclasses.field(
+        default_factory=lambda: (
+            string_to_bool(os.environ["BENCHMARK_CONSOLE_COLOR"])
+            if "BENCHMARK_CONSOLE_COLOR" in os.environ
+            else None
+        )
+    )
 
+    def apply(self) -> Self:
         if self.suppress_ui_warnings:
             logger = logging.getLogger("bokeh")
             logger.setLevel(logging.ERROR)
-        if self.interactive_mode:
-            from kaggle_benchmarks import events, ui
+
+        # Resolve which UI to use: explicit settings take priority,
+        # otherwise auto-detect based on environment.
+        use_panel = self.interactive_mode
+        use_console = self.console_mode
+
+        if not use_panel and not use_console and self.execution_mode != ExecutionMode.TESTING:
+            # Auto-detect: notebook -> PanelUI, otherwise -> ConsoleUI
+            if _is_notebook_environment():
+                use_panel = True
+            else:
+                use_console = True
+
+        if use_panel:
+            import panel as pn
+
+            pn.config.theme = self.ui_theme  # type: ignore
+            from kaggle_benchmarks import events
+            from kaggle_benchmarks.ui import (  # noqa: F401
+                ipython_magics,
+                panel,
+                setup_panel,
+            )
 
             if self.ui_handler is None:
-                self.ui_handler = ui.panel.PanelUI()
+                self.ui_handler = panel.PanelUI()
+                events.manager.bind(self.ui_handler)
+
+        elif use_console:
+            from kaggle_benchmarks import events
+            from kaggle_benchmarks.ui import console
+
+            if not isinstance(self.ui_handler, console.ConsoleUI):
+                self.ui_handler = console.ConsoleUI(
+                    quiet=self.console_quiet,
+                    color=self.console_color,
+                )
                 events.manager.bind(self.ui_handler)
 
         return self
@@ -160,6 +230,13 @@ class Config:
 
     def enable_interactive_mode(self):
         self.interactive_mode = True
+        self.apply()
+
+    def enable_console_mode(self, quiet: bool = False, color: bool | None = None):
+        self.console_mode = True
+        self.console_quiet = quiet
+        self.console_color = color
+        self.interactive_mode = False
         self.apply()
 
     def disable_tqdm(self):

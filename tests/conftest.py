@@ -23,6 +23,7 @@ def context(monkeypatch):
     with contexts.enter():
         config.execution_mode = ExecutionMode.TESTING
         config.interactive_mode = False
+        config.console_mode = False
         events.manager.listeners = []
         config.ui_handler = None
         config.apply()

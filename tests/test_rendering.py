@@ -16,7 +16,8 @@
 import panel as pn
 import pytest
 
-from kaggle_benchmarks import actors, chats, llm_messages, tools, ui
+from kaggle_benchmarks import actors, chats, llm_messages, tools
+from kaggle_benchmarks.ui import panel as ui_panel
 
 
 def test_render_thread():
@@ -29,7 +30,7 @@ def test_render_thread():
             chats.Message("Meow!", sender=cat),
         ]
     )
-    rendered = ui.panel.render_chat_to_html(chat)
+    rendered = ui_panel.render_chat_to_html(chat)
 
     assert "Chirp chirp" in rendered
     assert goose.name in rendered
@@ -114,5 +115,5 @@ COMPLEX_USAGE = llm_messages.Usage(input_tokens=100, output_tokens=50)
     ],
 )
 def test_render_llm_message_combinations(message):
-    rendered = ui.panel.render_llm_message(message)
+    rendered = ui_panel.render_llm_message(message)
     assert isinstance(rendered, pn.chat.ChatMessage)

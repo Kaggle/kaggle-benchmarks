@@ -67,7 +67,9 @@ def test_console_ui(capsys):
 
 
 def test_panel_ui():
-    handler = ui.panel.PanelUI()
+    from kaggle_benchmarks.ui import panel
+
+    handler = panel.PanelUI()
     events.manager.bind(handler)
     with chats.new("test") as chat:
         assert chat in handler

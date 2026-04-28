@@ -295,8 +295,8 @@ class LLMChat(actors.Actor):
         except StopIteration as e:
             # StopIteration is expected as this is how you get returned value from a generator
             response.content = e.value
-            response.status = utils.Status.SUCCESS
             chat.append(response)
+            response.status = utils.Status.SUCCESS
 
         return response
 
