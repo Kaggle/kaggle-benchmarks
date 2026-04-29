@@ -139,7 +139,7 @@ class ConsoleUI:
         result_width = 8  # "✅ PASS" / "❌ FAIL"
         effective_width = self.width - self._run_depth * self.tab_size
         expect_width = effective_width - line_width - result_width - 4  # 2x2 gaps
-        sep_line = "-" * effective_width
+        sep_line = self._colorize("-" * effective_width, c.DIM)
 
         lines = []
         lines.append("")
@@ -247,7 +247,7 @@ class ConsoleUI:
         if run.chat and run.chat.usage:
             usage_str = self._format_usage(run.chat.usage)
             if usage_str:
-                self._print(f"\nMETRICS:  {usage_str}")
+                self._print(f"\n{self._colorize('METRICS:', c.BOLD)}  {usage_str}")
 
         # Result or error
         if run.status == utils.Status.FAILED:
@@ -255,7 +255,7 @@ class ConsoleUI:
             self._print(self._colorize(f"ERROR:    {error_msg}", c.RED))
         else:
             result_str = run.format_result().strip()
-            self._print(f"RESULT:   {result_str}")
+            self._print(f"{self._colorize('RESULT:', c.BOLD)}   {result_str}")
 
         # Closing bar
         if self._run_depth == 0:
@@ -356,6 +356,7 @@ class ConsoleUI:
             print(chunk_text, end="", flush=True, file=self._output)
 
     def end_content(self, message):
+        c = self._c
         if self.quiet:
             self._quiet_end_content(message)
             return
@@ -370,4 +371,4 @@ class ConsoleUI:
             return
         usage_str = self._format_usage(usage)
         if usage_str:
-            self._print(f"\nMETRICS:  {usage_str}")
+            self._print(f"\n{self._colorize('METRICS:', c.BOLD)}  {usage_str}")
