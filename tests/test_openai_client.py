@@ -211,9 +211,9 @@ def test_prompt_reasoning_sets_effort_and_thinking_config(model):
     assert extra["include_thoughts"] is True
 
 
-def test_prompt_forwards_api_params():
+def test_prompt_forwards_overwrite_api_params():
     llm = MockedOpenAI(model="test-model")
-    llm.prompt("Hi", api_params={"max_tokens": 500})
+    llm.prompt("Hi", overwrite_api_params={"max_tokens": 500})
     assert llm.kwargs["max_tokens"] == 500
 
 
@@ -383,22 +383,20 @@ def test_think_tags_captured_in_response(mocker):
     assert last_message.reasoning_traces == "Counting the letters..."
 
 
-def test_prompt_rejects_reasoning_effort_in_api_params():
+def test_overwrite_api_params_overrides_reasoning():
+    """Tests that overwrite_api_params can override reasoning via reasoning_effort."""
     llm = MockedOpenAI(model="test-model")
-    with pytest.raises(ValueError, match="reasoning_effort.*not allowed in api_params"):
-        llm.prompt("Hi", api_params={"reasoning_effort": "high"})
+    llm.prompt("Hi", reasoning="low", overwrite_api_params={"reasoning_effort": "high"})
+
+    assert llm.kwargs["reasoning_effort"] == "high"
 
 
-def test_prompt_rejects_schema_in_api_params():
+def test_overwrite_api_params_overrides_seed():
+    """Tests that overwrite_api_params can override seed."""
     llm = MockedOpenAI(model="test-model")
-    with pytest.raises(ValueError, match="schema.*not allowed in api_params"):
-        llm.prompt("Hi", api_params={"schema": int})
+    llm.prompt("Hi", seed=42, overwrite_api_params={"seed": 99})
 
-
-def test_prompt_rejects_system_in_api_params():
-    llm = MockedOpenAI(model="test-model")
-    with pytest.raises(ValueError, match="system.*not allowed in api_params"):
-        llm.prompt("Hi", api_params={"system": "override"})
+    assert llm.kwargs["seed"] == 99
 
 
 def test_prompt_reasoning_none_sets_effort_without_thinking_config():

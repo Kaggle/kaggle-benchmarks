@@ -25,10 +25,10 @@ import numpy as np
 
 class ImageContent(abc.ABC):
     def __init__(
-        self, caption: str | None = None, api_params: dict[str, Any] | None = None
+        self, caption: str | None = None, overwrite_api_params: dict[str, Any] | None = None
     ):
         self.caption = caption
-        self.api_params = api_params or {}
+        self.overwrite_api_params = overwrite_api_params or {}
 
     @property
     @abc.abstractmethod
@@ -61,9 +61,9 @@ class ImageURL(ImageContent):
         self,
         url: str,
         caption: str | None = None,
-        api_params: dict[str, Any] | None = None,
+        overwrite_api_params: dict[str, Any] | None = None,
     ):
-        super().__init__(caption=caption, api_params=api_params)
+        super().__init__(caption=caption, overwrite_api_params=overwrite_api_params)
         self._url = url
 
     @property
@@ -98,9 +98,9 @@ class ImageBase64(ImageContent):
         b64_string: str,
         mime_type: str,
         caption: str | None = None,
-        api_params: dict[str, Any] | None = None,
+        overwrite_api_params: dict[str, Any] | None = None,
     ):
-        super().__init__(caption=caption, api_params=api_params)
+        super().__init__(caption=caption, overwrite_api_params=overwrite_api_params)
         self._b64_string = b64_string
         self._mime_type = mime_type
 
@@ -124,40 +124,40 @@ class ImageBase64(ImageContent):
         }
 
 
-def from_path(path: str, api_params: dict[str, Any] | None = None) -> ImageBase64:
+def from_path(path: str, overwrite_api_params: dict[str, Any] | None = None) -> ImageBase64:
     """Creates ImageContent from a local image file path."""
     with open(path, "rb") as image_file:
         return ImageBase64(
             base64.b64encode(image_file.read()).decode(),
             mimetypes.guess_type(path)[0],
-            api_params=api_params,
+            overwrite_api_params=overwrite_api_params,
         )
 
 
 def from_url(
-    url: str, caption: str | None = None, api_params: dict[str, Any] | None = None
+    url: str, caption: str | None = None, overwrite_api_params: dict[str, Any] | None = None
 ) -> ImageURL:
     """Creates ImageContent from an image URL."""
-    return ImageURL(url, caption=caption, api_params=api_params)
+    return ImageURL(url, caption=caption, overwrite_api_params=overwrite_api_params)
 
 
 def from_base64(
     base64: str | bytes,
     format: str = "jpeg",
     caption: str | None = None,
-    api_params: dict[str, Any] | None = None,
+    overwrite_api_params: dict[str, Any] | None = None,
 ) -> ImageBase64:
     """Creates ImageContent directly from a base64 string."""
     if isinstance(base64, bytes):
         base64 = base64.decode("utf-8")
 
     return ImageBase64(
-        base64, mime_type=f"image/{format}", caption=caption, api_params=api_params
+        base64, mime_type=f"image/{format}", caption=caption, overwrite_api_params=overwrite_api_params
     )
 
 
 def from_array(
-    array: np.ndarray, api_params: dict[str, Any] | None = None
+    array: np.ndarray, overwrite_api_params: dict[str, Any] | None = None
 ) -> ImageBase64:
     """Creates ImageContent from an image array."""
     from PIL import Image
@@ -168,7 +168,7 @@ def from_array(
     return ImageBase64(
         base64.b64encode(buff.getvalue()).decode(),
         mime_type="image/jpeg",
-        api_params=api_params,
+        overwrite_api_params=overwrite_api_params,
     )
 
 
@@ -178,7 +178,7 @@ def from_image_url(image_url: ImageURL) -> ImageBase64:
         image_url.b64_string,
         image_url.mime_type,
         caption=image_url.caption,
-        api_params=image_url.api_params,
+        overwrite_api_params=image_url.overwrite_api_params,
     )
 
 

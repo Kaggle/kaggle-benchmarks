@@ -137,30 +137,6 @@ def _extract_extra_usage_metadata(usage: Any) -> dict[str, Any]:
     }
 
 
-_EXPLICIT_PARAMS = {
-    "reasoning_effort": "reasoning",
-    "thinking_config": "reasoning",
-    "temperature": "temperature",
-    "seed": "seed",
-    "tools": "tools",
-    "response_format": "schema",
-    "schema": "schema",
-    "system": "system",
-}
-
-
-def _validate_api_params(api_params: dict[str, Any] | None) -> None:
-    """Raises if api_params contains keys that have explicit SDK parameters."""
-    if not api_params:
-        return
-    for key, param_name in _EXPLICIT_PARAMS.items():
-        if key in api_params:
-            raise ValueError(
-                f"{key!r} is not allowed in api_params. "
-                f"Use the {param_name!r} parameter on prompt() instead."
-            )
-
-
 @dataclasses.dataclass(frozen=True)
 class LLMResponse:
     content: str
@@ -207,10 +183,8 @@ class LLMChat(actors.Actor):
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
-        api_params: dict[str, Any] | None = None,
+        overwrite_api_params: dict[str, Any] | None = None,
     ) -> T:
-        _validate_api_params(api_params)
-
         if image is not None:
             match image:
                 case images.ImageURL():
@@ -233,14 +207,20 @@ class LLMChat(actors.Actor):
             actors.user.send(audio)
 
         actors.user.send(message)
-        return self.respond(
-            schema=schema,
-            seed=seed,
-            temperature=temperature if self.support_temperature else None,
-            tools=tools if tools is not None else [],
-            reasoning=reasoning,
-            **(api_params or {}),
-        ).content
+
+        # Build kwargs from explicit params, then let overwrite_api_params
+        # take precedence over any of them.
+        kwargs = {
+            "seed": seed,
+            "temperature": temperature if self.support_temperature else None,
+            "tools": tools if tools is not None else [],
+            "reasoning": reasoning,
+        }
+        overwrite = overwrite_api_params or {}
+        kwargs.update(overwrite)
+        effective_schema = kwargs.pop("schema", schema)
+
+        return self.respond(schema=effective_schema, **kwargs).content
 
     @chats.emits_message
     def respond(
@@ -388,13 +368,15 @@ class OpenAI(LLMChat):
             kwargs.pop("seed", None)
 
         if reasoning is not None:
-            kwargs["reasoning_effort"] = reasoning
+            # overwrite_api_params takes precedence if reasoning_effort was
+            # already set by the caller.
+            kwargs.setdefault("reasoning_effort", reasoning)
             # The double-nested extra_body is intentional: the outer one is
             # consumed by the OpenAI SDK (merged into the request body), the
             # inner one arrives at Model Proxy as a top-level field where it
             # reads google.thinking_config.  Without include_thoughts, the
             # frontend drops thinking traces from the response.
-            if reasoning != "none":
+            if kwargs["reasoning_effort"] != "none":
                 kwargs.setdefault("extra_body", {})
                 kwargs["extra_body"].setdefault("extra_body", {})
                 kwargs["extra_body"]["extra_body"].setdefault("google", {})
@@ -563,7 +545,8 @@ class GoogleGenAI(LLMChat):
         if system:
             config_params["system_instruction"] = system
 
-        if reasoning is not None:
+        if reasoning is not None and "thinking_config" not in kwargs:
+            # Only set thinking_config if not already overwritten by the caller.
             level = self._REASONING_LEVEL_MAP[reasoning]
             if level is None:
                 config_params["thinking_config"] = types.ThinkingConfig(

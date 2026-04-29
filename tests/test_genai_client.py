@@ -107,10 +107,10 @@ def test_prompt_thinking_config(reasoning, expected_level):
     assert tc.include_thoughts is True
 
 
-def test_prompt_forwards_api_params():
-    """Tests that api_params from prompt() reach the config."""
+def test_prompt_forwards_overwrite_api_params():
+    """Tests that overwrite_api_params from prompt() reach the config."""
     llm = MockedGoogleGenAI()
-    llm.prompt("Think hard", api_params={"top_p": 0.95, "max_output_tokens": 500})
+    llm.prompt("Think hard", overwrite_api_params={"top_p": 0.95, "max_output_tokens": 500})
 
     assert llm.config.top_p == 0.95
     assert llm.config.max_output_tokens == 500
@@ -232,26 +232,21 @@ def test_prompt_reasoning_none():
     assert llm.config.thinking_config.thinking_budget == 0
 
 
-def test_prompt_rejects_thinking_config_in_api_params():
-    """Tests that thinking_config in api_params raises an error."""
+def test_overwrite_api_params_overrides_temperature():
+    """Tests that overwrite_api_params takes precedence over explicit params."""
     llm = MockedGoogleGenAI()
-    with pytest.raises(ValueError, match="thinking_config.*not allowed in api_params"):
-        llm.prompt(
-            "Think hard",
-            api_params={"thinking_config": types.ThinkingConfig(thinking_level="LOW")},
-        )
+    llm.support_temperature = True
+    llm.prompt("Hi", temperature=0.5, overwrite_api_params={"temperature": 0.9})
+
+    assert llm.config.temperature == 0.9
 
 
-def test_prompt_rejects_schema_in_api_params():
+def test_overwrite_api_params_overrides_seed():
+    """Tests that overwrite_api_params can override seed."""
     llm = MockedGoogleGenAI()
-    with pytest.raises(ValueError, match="schema.*not allowed in api_params"):
-        llm.prompt("Hi", api_params={"schema": int})
+    llm.prompt("Hi", seed=42, overwrite_api_params={"seed": 99})
 
-
-def test_prompt_rejects_system_in_api_params():
-    llm = MockedGoogleGenAI()
-    with pytest.raises(ValueError, match="system.*not allowed in api_params"):
-        llm.prompt("Hi", api_params={"system": "override"})
+    assert llm.config.seed == 99
 
 
 @pytest.mark.parametrize("streaming", [True, False])

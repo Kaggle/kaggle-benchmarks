@@ -183,10 +183,10 @@ def test_dump_messages():
     assert list(serializer.dump_messages(msgs)) == expected_raw_messages
 
 
-def test_dump_image_message_with_api_params():
+def test_dump_image_message_with_overwrite_api_params():
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     image_content = ImageURL(
-        url="http://example.com/a.png", api_params={"detail": "low"}
+        url="http://example.com/a.png", overwrite_api_params={"detail": "low"}
     )
     message = messages.Message(content=image_content, sender=actors.user)
     raw_messages = list(serializer.dump_message(message))
@@ -286,10 +286,10 @@ def test_dump_audio_message_model_proxy():
     ]
 
 
-def test_dump_image_message_with_api_params_model_proxy():
+def test_dump_image_message_with_overwrite_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     image_content = ImageBase64(
-        b64_string="...", mime_type="image/png", api_params={"detail": "low"}
+        b64_string="...", mime_type="image/png", overwrite_api_params={"detail": "low"}
     )
     message = messages.Message(content=image_content, sender=actors.user)
     raw_messages = list(serializer.dump_message(message))
@@ -306,11 +306,11 @@ def test_dump_image_message_with_api_params_model_proxy():
     ]
 
 
-def test_dump_video_message_with_api_params_model_proxy():
+def test_dump_video_message_with_overwrite_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=videos.VideoURL(
-            url="https://youtube.com/watch?v=dummy", api_params={"max_frames": 10}
+            url="https://youtube.com/watch?v=dummy", overwrite_api_params={"max_frames": 10}
         ),
         sender=actors.user,
     )
@@ -331,11 +331,11 @@ def test_dump_video_message_with_api_params_model_proxy():
     ]
 
 
-def test_dump_audio_message_with_api_params_model_proxy():
+def test_dump_audio_message_with_overwrite_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=audios.AudioContent(
-            b64_string="abc123", mime_type="audio/wav", api_params={"language": "en"}
+            b64_string="abc123", mime_type="audio/wav", overwrite_api_params={"language": "en"}
         ),
         sender=actors.user,
     )

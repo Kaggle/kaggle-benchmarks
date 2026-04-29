@@ -25,12 +25,12 @@ class AudioContent:
         b64_string: str,
         mime_type: str,
         caption: str | None = None,
-        api_params: dict[str, Any] | None = None,
+        overwrite_api_params: dict[str, Any] | None = None,
     ):
         self._b64_string = b64_string
         self._mime_type = mime_type
         self.caption = caption
-        self.api_params = api_params or {}
+        self.overwrite_api_params = overwrite_api_params or {}
 
     @property
     def b64_string(self) -> str:
@@ -80,7 +80,7 @@ def from_url(
     url: str,
     caption: str | None = None,
     timeout: float = 30.0,
-    api_params: dict[str, Any] | None = None,
+    overwrite_api_params: dict[str, Any] | None = None,
 ) -> AudioContent:
     """Creates AudioContent from a URL by fetching and base64-encoding the audio."""
     try:
@@ -97,12 +97,12 @@ def from_url(
         base64.b64encode(response.content).decode(),
         mime_type,
         caption=caption,
-        api_params=api_params,
+        overwrite_api_params=overwrite_api_params,
     )
 
 
 def from_path(
-    path: str, caption: str | None = None, api_params: dict[str, Any] | None = None
+    path: str, caption: str | None = None, overwrite_api_params: dict[str, Any] | None = None
 ) -> AudioContent:
     """Creates AudioContent from a local audio file path."""
     with open(path, "rb") as audio_file:
@@ -110,7 +110,7 @@ def from_path(
             base64.b64encode(audio_file.read()).decode(),
             mimetypes.guess_type(path)[0] or "audio/*",
             caption=caption,
-            api_params=api_params,
+            overwrite_api_params=overwrite_api_params,
         )
 
 
@@ -118,7 +118,7 @@ def from_base64(
     b64_string: str | bytes,
     format: str = "mp3",
     caption: str | None = None,
-    api_params: dict[str, Any] | None = None,
+    overwrite_api_params: dict[str, Any] | None = None,
 ) -> AudioContent:
     """Creates AudioContent directly from a base64 string."""
     if isinstance(b64_string, bytes):
@@ -128,5 +128,5 @@ def from_base64(
     except ValueError as e:
         raise ValueError(f"Invalid base64 audio data: {e}") from e
     return AudioContent(
-        b64_string, mime_type=f"audio/{format}", caption=caption, api_params=api_params
+        b64_string, mime_type=f"audio/{format}", caption=caption, overwrite_api_params=overwrite_api_params
     )

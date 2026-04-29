@@ -119,14 +119,14 @@ def test_from_base64_invalid():
         audios.from_base64("!!!not-base64!!!")
 
 
-def test_api_params_stored():
-    a = audios.from_base64(B64_STRING, format="mp3", api_params={"some_param": "value"})
-    assert a.api_params == {"some_param": "value"}
+def test_overwrite_api_params_stored():
+    a = audios.from_base64(B64_STRING, format="mp3", overwrite_api_params={"some_param": "value"})
+    assert a.overwrite_api_params == {"some_param": "value"}
 
 
-def test_api_params_default_empty():
+def test_overwrite_api_params_default_empty():
     a = audios.from_base64(B64_STRING, format="mp3")
-    assert a.api_params == {}
+    assert a.overwrite_api_params == {}
 
 
 @pytest.mark.parametrize(
