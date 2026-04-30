@@ -100,9 +100,9 @@ class Message(Generic[T]):
         return self.text
 
     def __panel__(self):
-        from kaggle_benchmarks.ui import panel
+        from kaggle_benchmarks import ui
 
-        return panel.render_message(self)
+        return ui.panel.render_message(self)
 
     def _repr_mimebundle_(self, include=None, exclude=None):
         return self.__panel__()._repr_mimebundle_(include, exclude)

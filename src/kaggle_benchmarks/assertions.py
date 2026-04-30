@@ -22,6 +22,7 @@ import textwrap
 import uuid
 from typing import Any, Callable, Iterable, Type
 
+import panel as pn
 import pydantic
 
 from kaggle_benchmarks import chats
@@ -35,10 +36,8 @@ class AssertionResult:
     details: dict[str, Any] | None = None
     id: str = dataclasses.field(default_factory=lambda: uuid.uuid4().hex)
 
-    def __panel__(self):
+    def __panel__(self) -> pn.viewable.Viewable:
         """Custom Panel representation for an AssertionResult."""
-        import panel as pn
-
         status_icon = "✅" if self.passed else "❌"
         title_color = "green" if self.passed else "red"
 
