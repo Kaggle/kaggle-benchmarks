@@ -12,20 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 import panel as pn
 from panel import theme
 
-from kaggle_benchmarks._config import ExecutionMode, config
-
-
-def _is_vscode_kernel() -> bool:
-    """Detects if the kernel is hosted by the VSCode Jupyter extension.
-
-    VSCode injects these env vars into the kernel process; JupyterLab does not.
-    """
-    return "VSCODE_PID" in os.environ or "VSCODE_IPC_HOOK_CLI" in os.environ
+from kaggle_benchmarks._config import (
+    ExecutionMode,
+    HostEnvironment,
+    config,
+    detect_host_environment,
+)
 
 # css overrides to make the HoloViz output work with Kaggle theming.
 global_css = """
@@ -94,7 +89,7 @@ if (
     or config.execution_mode == ExecutionMode.DOC
 ):
     kwargs = {}
-elif _is_vscode_kernel():
+elif detect_host_environment() == HostEnvironment.VSCODE_NOTEBOOK:
     # The VSCode Jupyter renderer doesn't register the @bokeh/jupyter_bokeh
     # widget JS, so the BokehModel ipywidget that comms="vscode"/"ipywidgets"
     # produce can't be rendered. Force comms="default" to bypass ipywidget

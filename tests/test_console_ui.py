@@ -16,8 +16,41 @@ import io
 
 import pytest
 
-from kaggle_benchmarks import assertions, chats, config, events, system, tasks, ui, user
+from kaggle_benchmarks import (
+    actors,
+    assertions,
+    chats,
+    config,
+    events,
+    system,
+    tasks,
+    ui,
+    user,
+)
+from kaggle_benchmarks.actors import llms
 from tests.mocks import MockedChat
+
+
+class _StreamingLLM(actors.LLMChat):
+    """LLM whose invoke() returns an Iterator (exercises the streaming path)."""
+
+    def __init__(self, chunks, name="Stream", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self._chunks = list(chunks)
+
+    def invoke(self, messages, **kwargs):
+        return iter(self._chunks)
+
+
+class _NonStreamingLLM(actors.LLMChat):
+    """LLM whose invoke() returns an LLMResponse (non-streaming path)."""
+
+    def __init__(self, content, name="NonStream", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self._content = content
+
+    def invoke(self, messages, **kwargs):
+        return llms.LLMResponse(content=self._content)
 
 
 @pytest.fixture
@@ -257,3 +290,221 @@ class TestNestedRuns:
         assert "Outer Task" in captured
         assert "Inner Task" in captured
         assert "SUBTASK" in captured
+
+
+class TestLLMResponseRendering:
+    """Verify the rendering ordering for each LLMChat.respond() invoke branch.
+
+    These exercise the actual code paths in actors/llms.py — MockedChat only
+    hits the LLMMessage branch, so we need fakes for LLMResponse and Iterator.
+    """
+
+    def test_non_streaming_quiet_preserves_newline(self):
+        """LLMResponse path in quiet mode must terminate each message with \\n.
+
+        Regression: an earlier version swapped chat.append/status order so
+        new_message fired with status=RUNNING, causing _quiet_new_message to
+        omit the trailing newline and glue messages together.
+        """
+        handler, output = _make_handler(quiet=True)
+        llm = _NonStreamingLLM(content="alpha")
+        with chats.new("test"):
+            llm.prompt("first")
+            llm.prompt("second")
+        captured = _get_output(output)
+        # Each message must end with a newline; lines must not be glued.
+        assert "alpha\n" in captured
+        assert "alpha  " not in captured  # not followed by next message inline
+
+    def test_streaming_header_before_chunks_in_rich_mode(self):
+        """Streaming path must dispatch new_message BEFORE chunks stream in,
+        so the rich UI's [RESPONSE: name] header appears above the tokens."""
+        handler, output = _make_handler()
+
+        @tasks.task(name="StreamTask", store_task=False, store_run=False)
+        def stream_task(llm):
+            llm.prompt("go")
+
+        stream_task.run(_StreamingLLM(chunks=["hel", "lo ", "world"]))
+        captured = _get_output(output)
+        header_idx = captured.find("[RESPONSE: Stream]")
+        body_idx = captured.find("hello world")
+        assert header_idx != -1, captured
+        assert body_idx != -1, captured
+        assert header_idx < body_idx, (
+            f"[RESPONSE] header at {header_idx} must precede streamed body "
+            f"at {body_idx}:\n{captured}"
+        )
+
+    def test_streaming_no_duplicate_body(self):
+        """Streamed text should appear exactly once, not also re-printed by
+        a later new_message dispatch."""
+        handler, output = _make_handler()
+
+        @tasks.task(name="StreamDup", store_task=False, store_run=False)
+        def stream_task(llm):
+            llm.prompt("go")
+
+        stream_task.run(_StreamingLLM(chunks=["uniq", "ue!"]))
+        captured = _get_output(output)
+        assert captured.count("unique!") == 1, captured
+
+    def test_non_streaming_rich_renders_response(self):
+        """LLMResponse path inside @task should print header + body once."""
+        handler, output = _make_handler()
+
+        @tasks.task(name="NonStreamTask", store_task=False, store_run=False)
+        def t(llm):
+            llm.prompt("go")
+
+        t.run(_NonStreamingLLM(content="answer-text"))
+        captured = _get_output(output)
+        assert "[RESPONSE: NonStream]" in captured
+        assert captured.count("answer-text") == 1, captured
+
+    def test_invisible_to_llm_messages_still_render(self):
+        """Messages with is_visible_to_llm=False (e.g. tool debug output)
+        should still appear in the console — that flag controls inclusion
+        in the LLM context window, not user-facing visibility."""
+        from kaggle_benchmarks import actors, messages
+
+        handler, output = _make_handler(quiet=False)
+
+        @tasks.task(name="ToolTask", store_task=False, store_run=False)
+        def tool_task():
+            tool_actor = actors.Actor(name="Docker", role="tool")
+            chats.get_current_chat().append(
+                messages.Message(
+                    sender=tool_actor,
+                    content="container exited with code 0",
+                    is_visible_to_llm=False,
+                )
+            )
+
+        tool_task.run()
+        captured = _get_output(output)
+        assert "[TOOL: Docker]" in captured, captured
+        assert "container exited with code 0" in captured, captured
+
+    def test_streaming_does_not_double_print(self):
+        """If a message is streamed and *then* appended (the inverse of the
+        canonical order), new_message should still print the role header but
+        skip the body since chunks already rendered it."""
+        from kaggle_benchmarks import actors, messages, utils
+
+        handler, output = _make_handler(quiet=False)
+
+        @tasks.task(name="Stream Test", store_task=False, store_run=False)
+        def stream_task():
+            msg = messages.Message(
+                sender=actors.system, content="", _status=utils.Status.RUNNING
+            )
+            msg.stream(iter(["hello", " world"]))
+            chats.get_current_chat().append(msg)
+
+        stream_task.run()
+        captured = _get_output(output)
+        assert captured.count("hello world") == 1, captured
+        # Header should still appear so the [SYSTEM] label is visible.
+        assert "[SYSTEM]" in captured
+
+    def test_streaming_with_usage_prints_metrics_once(self):
+        """For assistant-role streaming responses with usage, METRICS must
+        be printed exactly once (by end_run from chat.usage), not also by
+        end_content per-message."""
+        from dataclasses import dataclass, field
+
+        from kaggle_benchmarks import actors, messages, utils
+
+        @dataclass
+        class Chunk:
+            content: str
+            meta: dict = field(default_factory=dict)
+
+        handler, output = _make_handler()
+
+        @tasks.task(name="Metrics Task", store_task=False, store_run=False)
+        def metrics_task():
+            llm_actor = actors.Actor(name="TestLLM", role="assistant")
+            msg = messages.Message(
+                sender=llm_actor, content="", _status=utils.Status.RUNNING
+            )
+            chunks = [
+                Chunk("hello"),
+                Chunk(" world", meta={"input_tokens": 10, "output_tokens": 5}),
+            ]
+            chats.get_current_chat().append(msg)
+            msg.stream(chunks)
+            msg.status = utils.Status.SUCCESS
+
+        metrics_task.run()
+        captured = _get_output(output)
+        assert captured.count("METRICS:") == 1, captured
+
+    def test_assertion_table_narrow_terminal(self):
+        """expect_width must stay positive even when terminal is very narrow
+        and run depth is deep, otherwise textwrap.wrap raises ValueError."""
+        output = io.StringIO()
+        handler = ui.console.ConsoleUI(
+            quiet=False, color=False, output=output, width=30, min_width=30
+        )
+        handler._run_depth = 8  # raw expect_width would be -4 without the floor
+        results = [
+            assertions.AssertionResult(passed=True, expectation="Some expectation")
+        ]
+        table = handler._format_assertion_table(results)
+        assert isinstance(table, str)
+        assert "Some expectation" in table or "Some" in table
+
+    def test_switching_ui_unbinds_old_handler(self, cfg):
+        """Switching UI mode must unbind the previous handler so events
+        aren't dispatched to both."""
+        cfg.enable_interactive_mode()  # binds PanelUI
+        old_handler = cfg.ui_handler
+        from kaggle_benchmarks.ui import panel as panel_ui
+
+        assert isinstance(old_handler, panel_ui.PanelUI)
+        assert old_handler in events.manager.listeners
+
+        cfg.enable_console_mode()  # should unbind PanelUI, bind ConsoleUI
+        assert old_handler not in events.manager.listeners
+        assert isinstance(cfg.ui_handler, ui.console.ConsoleUI)
+        assert cfg.ui_handler in events.manager.listeners
+
+        # And the reverse: console -> panel must also unbind.
+        console_handler = cfg.ui_handler
+        cfg.enable_interactive_mode()
+        assert console_handler not in events.manager.listeners
+        assert isinstance(cfg.ui_handler, panel_ui.PanelUI)
+
+    def test_llm_message_branch_dispatches_new_message_once(self):
+        """LLMMessage returned from invoke() should produce exactly one
+        new_message event for the response (the chat.append in respond()).
+
+        Guards against future regressions if invoke() starts using
+        LLMMessage.from_chunks (which dispatches new_message itself) — that
+        would need chat.history.append, not chat.append, to avoid a duplicate.
+        """
+        events_seen = []
+
+        class Spy:
+            def new_message(self, chat, message):
+                events_seen.append(message)
+
+        events.manager.listeners = []
+        config.ui_handler = None
+        events.manager.bind(Spy())
+
+        llm = MockedChat.from_contents(["only-once"])
+        with chats.new("t"):
+            user.send("hi")
+            llm.respond()
+
+        # Filter to just message events (not chat-open events).
+        msgs = [m for m in events_seen if not isinstance(m, chats.Chat)]
+        # Expect exactly two: the user prompt, and the LLM response.
+        # If respond() dispatches twice for the LLMMessage branch this jumps to 3.
+        assert len(msgs) == 2, (
+            f"Expected 2 message events, got {len(msgs)}: {[m.content for m in msgs]}"
+        )
+        assert msgs[-1].content == "only-once"
