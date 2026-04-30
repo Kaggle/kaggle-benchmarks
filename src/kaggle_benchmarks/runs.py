@@ -155,9 +155,9 @@ class Run(Generic[T]):
         return self.task.result_type.format(self)
 
     def __panel__(self):
-        from kaggle_benchmarks.ui import panel
+        from kaggle_benchmarks import ui
 
-        return panel.render_run(self)
+        return ui.panel.render_run(self)
 
     def _repr_mimebundle_(self, include=None, exclude=None):
         return self.__panel__()._repr_mimebundle_(include, exclude)
@@ -193,7 +193,7 @@ class Runs(Generic[T], abc.MutableSequence):
         ).set_index("run_id")
 
     def group_by(self, by="llm"):
-        from kaggle_benchmarks.ui import panel
+        from kaggle_benchmarks import ui
 
         runs = []
         for run in self.runs:
@@ -208,21 +208,21 @@ class Runs(Generic[T], abc.MutableSequence):
             key = f"{run.task.name}\n{params}"
             groups.setdefault(key, {})[str(run.params[by])] = run
 
-        return panel.render_groups(groups=groups)
+        return ui.panel.render_groups(groups=groups)
 
     def pivot(self, by: str = "llm", mode: Literal["tabs", "columns"] = "columns"):
-        from kaggle_benchmarks.ui import panel
+        from kaggle_benchmarks import ui
 
         groups: dict[Any, dict[str, Run]] = {}
         for run in self.runs:
             groups.setdefault(run.params[by], {})[run.param_id] = run
 
-        return panel.render_pivot(groups, mode=mode)
+        return ui.panel.render_pivot(groups, mode=mode)
 
     def __panel__(self):
-        from kaggle_benchmarks.ui import panel
+        from kaggle_benchmarks import ui
 
-        return panel.render_runs(self)
+        return ui.panel.render_runs(self)
 
     def _repr_mimebundle_(self, include=None, exclude=None):
         return self.__panel__()._repr_mimebundle_(include, exclude)

@@ -16,6 +16,7 @@ import base64
 import mimetypes
 
 import httpx
+import panel as pn
 
 
 class AudioContent:
@@ -58,10 +59,8 @@ class AudioContent:
             html += f"\n\n{self.caption}"
         return html
 
-    def __panel__(self):
+    def __panel__(self) -> pn.viewable.Viewable:
         """Renders the audio using a Panel HTML pane."""
-        import panel as pn
-
         html = f'<audio controls src="{self.url}"></audio>'
         if self.caption:
             html += f"<p>{self.caption}</p>"

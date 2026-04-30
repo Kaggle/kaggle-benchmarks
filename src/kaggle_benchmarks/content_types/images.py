@@ -20,6 +20,7 @@ import mimetypes
 
 import httpx
 import numpy as np
+import panel as pn
 
 
 class ImageContent(abc.ABC):
@@ -61,10 +62,8 @@ class ImageURL(ImageContent):
     def url(self) -> str:
         return self._url
 
-    def __panel__(self):
+    def __panel__(self) -> pn.viewable.Viewable:
         """Renders the image using a Panel Image pane."""
-        import panel as pn
-
         return pn.pane.image.Image(self.url)
 
     @property
