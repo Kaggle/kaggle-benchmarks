@@ -171,8 +171,9 @@ genai://google/gemini-3-flash-preview:
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
-    test_complex_tool_return: passed
+    test_complex_tool_return: failed
     test_dataset_eval: passed
+    test_extra_api_params_max_tokens_genai: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -183,8 +184,7 @@ genai://google/gemini-3-flash-preview:
     test_image_local_file: passed
     test_image_url: passed
     test_image_with_media_resolution: passed
-    test_multiple_tool_selection: passed
-    test_extra_api_params_max_tokens_genai: passed
+    test_multiple_tool_selection: failed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -452,6 +452,7 @@ openai://google/gemini-3-flash-preview:
     test_audio_url: passed
     test_complex_tool_return: failed
     test_dataset_eval: passed
+    test_extra_api_params_max_tokens_openai: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -463,7 +464,6 @@ openai://google/gemini-3-flash-preview:
     test_image_url: passed
     test_image_with_detail: passed
     test_multiple_tool_selection: failed
-    test_extra_api_params_max_tokens_openai: failed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
