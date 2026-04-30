@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
 import shutil
 import sys
 import textwrap
@@ -50,7 +52,6 @@ def _supports_color(stream) -> bool:
     Disables color when NO_COLOR is set (https://no-color.org), forces it on
     when FORCE_COLOR is set, otherwise enables only for TTYs.
     """
-    import os
     if os.environ.get("NO_COLOR"):
         return False
     if os.environ.get("FORCE_COLOR"):
@@ -79,6 +80,11 @@ class ConsoleUI:
         self._c = _Colors() if self.color else _NoColors()
         self._in_run = False
         self._run_depth = 0
+        # Tracks message ids whose body was already rendered via new_chunk
+        # events; new_message skips the eager body print for these so the
+        # text isn't duplicated. Stores id(message) to avoid pinning Message
+        # objects in memory.
+        self._streamed_messages: set[int] = set()
 
     @property
     def width(self) -> int:
@@ -139,6 +145,9 @@ class ConsoleUI:
         result_width = 8  # "✅ PASS" / "❌ FAIL"
         effective_width = self.width - self._run_depth * self.tab_size
         expect_width = effective_width - line_width - result_width - 4  # 2x2 gaps
+        # Floor at 10 so textwrap.wrap doesn't blow up (raises ValueError on
+        # width<=0) when the terminal is narrow or run depth is deep.
+        expect_width = max(expect_width, 10)
         sep_line = self._colorize("-" * effective_width, c.DIM)
 
         lines = []
@@ -197,6 +206,9 @@ class ConsoleUI:
 
     def _quiet_new_message(self, chat, message):
         if isinstance(message, chats.Chat):
+            return
+        # If this message was streamed, chunks already rendered the body.
+        if id(message) in self._streamed_messages:
             return
         print(
             message.__str__(indent=" " * (self.depth * self.tab_size)),
@@ -290,7 +302,6 @@ class ConsoleUI:
         if isinstance(content, str):
             text = content
         elif hasattr(content, "model_dump"):
-            import json
             text = json.dumps(content.model_dump(), default=str)
         else:
             text = str(content)
@@ -316,38 +327,45 @@ class ConsoleUI:
             self._quiet_new_message(chat, message)
             return
 
-        # Skip assertion result messages -- they're shown in the assertion table
+        # Skip assertion result messages -- they're shown in the assertion
+        # table. Everything else falls through to the role-based rendering
+        # below; in particular, messages with is_visible_to_llm=False (e.g.
+        # tool/debug output) are still useful to surface in the console.
         if isinstance(message.content, assertions.AssertionResult):
-            return
-        # Skip messages not visible to LLM (internal framework messages)
-        if not message.is_visible_to_llm:
             return
 
         c = self._c
         role = message.sender.role
         name = message.sender.name
         text = self._format_content(message.content)
+        # Print body unless chunks already streamed it. Header still prints
+        # so the [ROLE] label appears above the streamed tokens regardless
+        # of whether append happened before or after stream().
+        print_body = bool(text) and id(message) not in self._streamed_messages
 
         if role == "user":
             self._print(self._colorize("\n[PROMPT]", c.CYAN))
-            self._print(text)
+            if print_body:
+                self._print(text)
         elif role == "assistant":
             self._print(self._colorize(f"\n[RESPONSE: {name}]", c.CYAN))
-            # Print eagerly if content is already populated (non-streaming path);
-            # otherwise let new_chunk handlers stream it in.
-            if text:
+            if print_body:
                 self._print(text)
         elif role == "system":
             self._print(self._colorize("\n[SYSTEM]", c.DIM))
-            self._print(text)
+            if print_body:
+                self._print(text)
         elif role == "tool":
             self._print(self._colorize(f"\n[TOOL: {name}]", c.DIM))
-            self._print(text)
+            if print_body:
+                self._print(text)
         else:
             self._print(f"\n[{name}]")
-            self._print(text)
+            if print_body:
+                self._print(text)
 
     def new_chunk(self, message, chunk):
+        self._streamed_messages.add(id(message))
         if self.quiet:
             self._quiet_new_chunk(message, chunk)
             return
@@ -356,19 +374,11 @@ class ConsoleUI:
             print(chunk_text, end="", flush=True, file=self._output)
 
     def end_content(self, message):
-        c = self._c
         if self.quiet:
             self._quiet_end_content(message)
             return
         with self._lock:
             print(file=self._output)
-
-        # Print metrics if available
-        if not self._in_run:
-            return
-        usage = message.usage
-        if usage is None:
-            return
-        usage_str = self._format_usage(usage)
-        if usage_str:
-            self._print(f"\n{self._colorize('METRICS:', c.BOLD)}  {usage_str}")
+        # Per-message metrics intentionally omitted: end_run prints the
+        # aggregate METRICS line from chat.usage. Printing here would
+        # double up for assistant-role messages.
