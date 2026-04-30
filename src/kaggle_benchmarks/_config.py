@@ -29,8 +29,6 @@ if _dotenv_path := dotenv.find_dotenv():
     _logger.info("Loading environment variables from %s", _dotenv_path)
     dotenv.load_dotenv(_dotenv_path, override=True)
 
-logger = logging.getLogger(__name__)
-
 
 def string_to_bool(s: str) -> bool:
     """Converts a string to a boolean, handling various truthy values."""
@@ -48,7 +46,7 @@ def _parse_int_env(name: str, default: int | None = None) -> int | None:
     try:
         return int(raw)
     except ValueError:
-        logger.warning(
+        _logger.warning(
             f"Ignoring non-integer value for {name}={raw!r}; using {default}."
         )
         return default

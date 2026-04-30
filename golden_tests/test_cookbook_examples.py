@@ -449,7 +449,7 @@ def test_image_base64(llm):
     red_dot_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
     image = images.from_base64(
-        red_dot_b64, format="png", overwrite_api_params={"detail": "low"}
+        red_dot_b64, format="png", extra_api_params={"detail": "low"}
     )
 
     response = llm.prompt("What color is this image?", image=image)
@@ -653,9 +653,9 @@ def test_reasoning_captures_traces(llm):
 
 
 # %%
-# --- Test Case: overwrite_api_params forwarding ---
-# Proves that overwrite_api_params are actually forwarded to the provider by capping
-# max output tokens to a small value. If overwrite_api_params were silently dropped,
+# --- Test Case: extra_api_params forwarding ---
+# Proves that extra_api_params are actually forwarded to the provider by capping
+# max output tokens to a small value. If extra_api_params were silently dropped,
 # the response would be hundreds of tokens long instead of truncated.
 
 API_PARAMS_LLM_NAMES = {
@@ -664,32 +664,32 @@ API_PARAMS_LLM_NAMES = {
 
 
 @kbench.task()
-def _overwrite_api_params_max_tokens_task_genai(llm):
-    """Proves overwrite_api_params reach GenAI by capping max_output_tokens."""
+def _extra_api_params_max_tokens_task_genai(llm):
+    """Proves extra_api_params reach GenAI by capping max_output_tokens."""
     response = llm.prompt(
         "Write a 500-word essay about the history of computing.",
-        overwrite_api_params={"max_output_tokens": 10},
+        extra_api_params={"max_output_tokens": 10},
     )
     word_count = len(response.split())
     kbench.assertions.assert_true(
         word_count < 30,
         expectation=f"Response should be truncated (got {word_count} words). "
-        "If overwrite_api_params were ignored, response would be ~500 words.",
+        "If extra_api_params were ignored, response would be ~500 words.",
     )
 
 
 @kbench.task()
-def _overwrite_api_params_max_tokens_task_openai(llm):
-    """Proves overwrite_api_params reach OpenAI by capping max_completion_tokens."""
+def _extra_api_params_max_tokens_task_openai(llm):
+    """Proves extra_api_params reach OpenAI by capping max_completion_tokens."""
     response = llm.prompt(
         "Write a 500-word essay about the history of computing.",
-        overwrite_api_params={"max_completion_tokens": 50},
+        extra_api_params={"max_completion_tokens": 50},
     )
     word_count = len(response.split())
     kbench.assertions.assert_true(
         word_count < 80,
         expectation=f"Response should be truncated (got {word_count} words). "
-        "If overwrite_api_params were ignored, response would be ~500 words.",
+        "If extra_api_params were ignored, response would be ~500 words.",
     )
 
 
@@ -704,8 +704,8 @@ def _overwrite_api_params_max_tokens_task_openai(llm):
         for key in sorted(API_PARAMS_LLM_NAMES)
     ],
 )
-def test_overwrite_api_params_max_tokens_genai(llm, api):
-    run = _overwrite_api_params_max_tokens_task_genai.run(llm)
+def test_extra_api_params_max_tokens_genai(llm, api):
+    run = _extra_api_params_max_tokens_task_genai.run(llm)
     assert run.passed
 
 
@@ -720,14 +720,14 @@ def test_overwrite_api_params_max_tokens_genai(llm, api):
         for key in sorted(API_PARAMS_LLM_NAMES)
     ],
 )
-def test_overwrite_api_params_max_tokens_openai(llm, api):
-    run = _overwrite_api_params_max_tokens_task_openai.run(llm)
+def test_extra_api_params_max_tokens_openai(llm, api):
+    run = _extra_api_params_max_tokens_task_openai.run(llm)
     assert run.passed
 
 
 # %%
 # --- Test Case: Image with detail parameter (OpenAI only) ---
-# Tests that overwrite_api_params={"detail": "low"} on images is forwarded via OpenAI.
+# Tests that extra_api_params={"detail": "low"} on images is forwarded via OpenAI.
 
 IMAGE_DETAIL_LLM_NAMES = {
     "google/gemini-3-flash-preview",
@@ -742,7 +742,7 @@ def _image_detail_task(llm):
     image = images.from_base64(
         red_dot_b64,
         format="png",
-        overwrite_api_params={"detail": "low"},
+        extra_api_params={"detail": "low"},
     )
 
     response = llm.prompt("What color is this image?", image=image)
@@ -772,7 +772,7 @@ def test_image_with_detail(llm, api):
 
 # %%
 # --- Test Case: Image with media_resolution parameter (GenAI only) ---
-# Tests that overwrite_api_params={"media_resolution": ...} on images is forwarded via GenAI.
+# Tests that extra_api_params={"media_resolution": ...} on images is forwarded via GenAI.
 
 MEDIA_RESOLUTION_LLM_NAMES = {
     "google/gemini-3-flash-preview",
@@ -787,7 +787,7 @@ def _media_resolution_task(llm):
     image = images.from_base64(
         red_dot_b64,
         format="png",
-        overwrite_api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
+        extra_api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
     )
 
     response = llm.prompt("What color is this image?", image=image)
