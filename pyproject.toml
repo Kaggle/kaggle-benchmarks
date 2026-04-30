@@ -76,7 +76,7 @@ kaggle = [
   "jedi",
   "notebook>=6.5.4",
   "nbconvert>=6.5.1",
-  "traitlets==5.9.0",
+  "traitlets>=5.10",
   "jupyter-bokeh>=4.0.5",
 ]
 docs = [
@@ -109,7 +109,8 @@ dev = [
 # To upgrade packages: bump this date to ~2 days before today, then run `uv lock --upgrade`.
 # This is a fixed date (not a rolling window) and must be bumped periodically.
 # See: https://docs.astral.sh/uv/reference/settings/#exclude-newer
-exclude-newer = "2026-03-24T00:00:00Z"
+# Disabling for now as Corp Airlock doesn't like it
+# exclude-newer = "2026-03-24T00:00:00Z"
 
 [tool.mypy]
 warn_unused_configs = true
