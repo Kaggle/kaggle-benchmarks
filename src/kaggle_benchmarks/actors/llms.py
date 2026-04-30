@@ -87,6 +87,7 @@ print(outer_t)
 
 import dataclasses
 import enum
+import inspect
 import json
 import re
 import typing
@@ -183,8 +184,16 @@ class LLMChat(actors.Actor):
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
-        overwrite_api_params: dict[str, Any] | None = None,
+        extra_api_params: dict[str, Any] | None = None,
     ) -> T:
+        """Sends a message to the LLM and returns the parsed response.
+
+        Args:
+            extra_api_params: Additional provider-specific API parameters
+                (e.g. top_p, max_tokens, max_output_tokens). Cannot include
+                parameters already on prompt() or respond() signatures
+                (seed, temperature, schema, system, etc.).
+        """
         if image is not None:
             match image:
                 case images.ImageURL():
@@ -208,19 +217,26 @@ class LLMChat(actors.Actor):
 
         actors.user.send(message)
 
-        # Build kwargs from explicit params, then let overwrite_api_params
-        # take precedence over any of them.
+        extra = extra_api_params or {}
+        _reserved = (
+            set(inspect.signature(type(self).prompt).parameters)
+            | set(inspect.signature(type(self).respond).parameters)
+        ) - {"self", "message", "extra_api_params", "kwargs"}
+        conflicts = set(extra) & _reserved
+        if conflicts:
+            raise ValueError(
+                f"{conflicts} cannot be set via extra_api_params. "
+                f"Use the corresponding prompt() parameter instead."
+            )
+
         kwargs = {
             "seed": seed,
             "temperature": temperature if self.support_temperature else None,
             "tools": tools if tools is not None else [],
             "reasoning": reasoning,
         }
-        overwrite = overwrite_api_params or {}
-        kwargs.update(overwrite)
-        effective_schema = kwargs.pop("schema", schema)
 
-        return self.respond(schema=effective_schema, **kwargs).content
+        return self.respond(schema=schema, **kwargs, **extra).content
 
     @chats.emits_message
     def respond(
@@ -368,7 +384,7 @@ class OpenAI(LLMChat):
             kwargs.pop("seed", None)
 
         if reasoning is not None:
-            # overwrite_api_params takes precedence if reasoning_effort was
+            # extra_api_params takes precedence if reasoning_effort was
             # already set by the caller.
             kwargs.setdefault("reasoning_effort", reasoning)
             # The double-nested extra_body is intentional: the outer one is

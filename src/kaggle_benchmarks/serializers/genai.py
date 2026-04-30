@@ -27,16 +27,16 @@ from kaggle_benchmarks.serializers.base import BaseSerializer
 _PART_FIELDS = set(types.Part.model_fields.keys())
 
 
-def _filter_part_params(overwrite_api_params: dict[str, Any]) -> dict[str, Any]:
-    """Filters overwrite_api_params to only valid Part fields, warning on unsupported ones."""
-    unsupported = set(overwrite_api_params) - _PART_FIELDS
+def _filter_part_params(extra_api_params: dict[str, Any]) -> dict[str, Any]:
+    """Filters extra_api_params to only valid Part fields, warning on unsupported ones."""
+    unsupported = set(extra_api_params) - _PART_FIELDS
     if unsupported:
         warnings.warn(
-            f"Ignoring unsupported overwrite_api_params for GenAI Part: {unsupported}. "
+            f"Ignoring unsupported extra_api_params for GenAI Part: {unsupported}. "
             f"Supported fields: {_PART_FIELDS}",
             stacklevel=2,
         )
-    return {k: v for k, v in overwrite_api_params.items() if k in _PART_FIELDS}
+    return {k: v for k, v in extra_api_params.items() if k in _PART_FIELDS}
 
 
 class GenAISerializer(BaseSerializer):
@@ -81,7 +81,7 @@ class GenAISerializer(BaseSerializer):
                         data=image.b64_string,
                         mime_type=image.mime_type,
                     ),
-                    **_filter_part_params(image.overwrite_api_params),
+                    **_filter_part_params(image.extra_api_params),
                 )
             ],
         )
@@ -96,7 +96,7 @@ class GenAISerializer(BaseSerializer):
                     file_data=types.FileData(
                         file_uri=video.url, mime_type=video.mime_type
                     ),
-                    **_filter_part_params(video.overwrite_api_params),
+                    **_filter_part_params(video.extra_api_params),
                 )
             ],
         )
@@ -113,7 +113,7 @@ class GenAISerializer(BaseSerializer):
                     data=base64.b64decode(audio_content.b64_string),
                     mime_type=audio_content.mime_type,
                 ),
-                **_filter_part_params(audio_content.overwrite_api_params),
+                **_filter_part_params(audio_content.extra_api_params),
             )
         )
         yield types.Content(

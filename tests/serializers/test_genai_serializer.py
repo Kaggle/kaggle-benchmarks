@@ -222,12 +222,12 @@ def test_dump_message(message, expected_raw_messages):
     assert actual == expected
 
 
-def test_dump_image_message_with_overwrite_api_params():
+def test_dump_image_message_with_extra_api_params():
     serializer = genai_serializer.GenAISerializer()
     image_content = ImageBase64(
         b64_string=B64_STRING,
         mime_type="image/png",
-        overwrite_api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
+        extra_api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
     )
     message = messages.Message(content=image_content, sender=actors.user)
     actual = [c.model_dump() for c in serializer.dump_message(message)]
@@ -245,11 +245,11 @@ def test_dump_image_message_with_overwrite_api_params():
     assert actual == expected
 
 
-def test_dump_video_message_with_overwrite_api_params():
+def test_dump_video_message_with_extra_api_params():
     serializer = genai_serializer.GenAISerializer()
     video_content = videos.VideoURL(
         url="https://youtube.com/watch?v=dummy",
-        overwrite_api_params={
+        extra_api_params={
             "video_metadata": {"fps": 1.0, "start_offset": "0s", "end_offset": "10s"}
         },
     )
@@ -276,12 +276,12 @@ def test_dump_video_message_with_overwrite_api_params():
     assert actual == expected
 
 
-def test_dump_audio_message_with_overwrite_api_params():
+def test_dump_audio_message_with_extra_api_params():
     serializer = genai_serializer.GenAISerializer()
     audio_content = audios.AudioContent(
         b64_string="dGVzdA==",
         mime_type="audio/wav",
-        overwrite_api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
+        extra_api_params={"media_resolution": {"level": "MEDIA_RESOLUTION_LOW"}},
     )
     message = messages.Message(content=audio_content, sender=actors.user)
     actual = [c.model_dump() for c in serializer.dump_message(message)]
@@ -299,16 +299,16 @@ def test_dump_audio_message_with_overwrite_api_params():
     assert actual == expected
 
 
-def test_dump_image_filters_unsupported_overwrite_api_params():
+def test_dump_image_filters_unsupported_extra_api_params():
     """Verifies that provider-specific params like 'detail' are dropped with a warning."""
     serializer = genai_serializer.GenAISerializer()
     image_content = ImageBase64(
         b64_string=B64_STRING,
         mime_type="image/png",
-        overwrite_api_params={"detail": "low"},
+        extra_api_params={"detail": "low"},
     )
     message = messages.Message(content=image_content, sender=actors.user)
-    with pytest.warns(UserWarning, match="Ignoring unsupported overwrite_api_params"):
+    with pytest.warns(UserWarning, match="Ignoring unsupported extra_api_params"):
         actual = [c.model_dump() for c in serializer.dump_message(message)]
     expected = [
         types.Content(

@@ -14,11 +14,24 @@
 
 import json
 import logging
+import warnings
 
 from kaggle_benchmarks import llm_messages, messages
 from kaggle_benchmarks import tools as tool_utils
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer, UnsupportedMessageFormat
+
+
+def _merge_with_warning(base: dict, extra_api_params: dict, content_type: str) -> dict:
+    """Merges extra_api_params into base dict, warning on overlapping keys."""
+    overlap = set(extra_api_params) & set(base)
+    if overlap:
+        warnings.warn(
+            f"extra_api_params {overlap} will overwrite core {content_type} fields. "
+            f"This may produce unexpected results.",
+            stacklevel=3,
+        )
+    return {**base, **extra_api_params}
 
 
 class OpenAICompletionSerializer(BaseSerializer):
@@ -28,12 +41,12 @@ class OpenAICompletionSerializer(BaseSerializer):
         """Serializes an image content object into the API's image_url format."""
         image = message.content
         caption = [{"type": "text", "text": image.caption}] if image.caption else []
+        image_url = _merge_with_warning(
+            {"url": image.url}, image.extra_api_params, "image_url"
+        )
         yield {
             "role": self.get_role(message.sender),
-            "content": caption
-            + [
-                {"type": "image_url", "image_url": {"url": image.url, **image.overwrite_api_params}},
-            ],
+            "content": caption + [{"type": "image_url", "image_url": image_url}],
         }
 
     def dump_llm_message(self, message: llm_messages.LLMMessage):
@@ -74,19 +87,14 @@ class OpenAICompletionSerializer(BaseSerializer):
             if audio_content.caption
             else []
         )
+        input_audio = _merge_with_warning(
+            {"data": audio_content.b64_string, "format": fmt},
+            audio_content.extra_api_params,
+            "input_audio",
+        )
         yield {
             "role": self.get_role(message.sender),
-            "content": caption
-            + [
-                {
-                    "type": "input_audio",
-                    "input_audio": {
-                        "data": audio_content.b64_string,
-                        "format": fmt,
-                        **audio_content.overwrite_api_params,
-                    },
-                },
-            ],
+            "content": caption + [{"type": "input_audio", "input_audio": input_audio}],
         }
 
     def _dump_invocation(
@@ -117,28 +125,25 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
         """Serializes images natively as base64-encoded data URLs compatible with Model Proxy."""
         image = message.content
         caption = [{"type": "text", "text": image.caption}] if image.caption else []
+        image_url = _merge_with_warning(
+            {"url": f"data:{image.mime_type};base64,{image.b64_string}"},
+            image.extra_api_params,
+            "image_url",
+        )
         yield {
             "role": self.get_role(message.sender),
-            "content": caption
-            + [
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{image.mime_type};base64,{image.b64_string}",
-                        **image.overwrite_api_params,
-                    },
-                },
-            ],
+            "content": caption + [{"type": "image_url", "image_url": image_url}],
         }
 
     def dump_video(self, message: messages.Message[videos.VideoContent]):
         """Serializes videos leveraging the bespoke `video_url` supported by Model Proxy."""
         video = message.content
+        image_url = _merge_with_warning(
+            {"url": video.url}, video.extra_api_params, "image_url"
+        )
         yield {
             "role": self.get_role(message.sender),
-            "content": [
-                {"type": "image_url", "image_url": {"url": video.url, **video.overwrite_api_params}},
-            ],
+            "content": [{"type": "image_url", "image_url": image_url}],
         }
 
     def _dump_message(self, message: messages.Message):

@@ -168,7 +168,6 @@ genai://google/gemini-3-flash-preview:
   config:
     structured_output: true
   tests:
-    test_api_params_max_tokens_genai: passed
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
@@ -185,6 +184,7 @@ genai://google/gemini-3-flash-preview:
     test_image_url: passed
     test_image_with_media_resolution: passed
     test_multiple_tool_selection: passed
+    test_overwrite_api_params_max_tokens_genai: passed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed
@@ -447,7 +447,6 @@ openai://google/gemini-3-flash-preview:
   config:
     structured_output: true
   tests:
-    test_api_params_max_tokens_openai: passed
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
@@ -464,6 +463,7 @@ openai://google/gemini-3-flash-preview:
     test_image_url: passed
     test_image_with_detail: passed
     test_multiple_tool_selection: failed
+    test_overwrite_api_params_max_tokens_openai: failed
     test_reasoning_param: passed
     test_simple_tool_use: failed
     test_stateful_tool_double_execution: failed

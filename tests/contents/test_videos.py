@@ -45,13 +45,13 @@ def test_video_url_get_payload():
     assert payload == [{"type": "image_url", "image_url": {"url": url}}]
 
 
-def test_overwrite_api_params_stored():
+def test_extra_api_params_stored():
     url = "https://www.youtube.com/watch?v=abc123"
-    video = videos.from_url(url, overwrite_api_params={"video_metadata": {"fps": 1.0}})
-    assert video.overwrite_api_params == {"video_metadata": {"fps": 1.0}}
+    video = videos.from_url(url, extra_api_params={"video_metadata": {"fps": 1.0}})
+    assert video.extra_api_params == {"video_metadata": {"fps": 1.0}}
 
 
-def test_overwrite_api_params_default_empty():
+def test_extra_api_params_default_empty():
     url = "https://www.youtube.com/watch?v=abc123"
     video = videos.from_url(url)
-    assert video.overwrite_api_params == {}
+    assert video.extra_api_params == {}
