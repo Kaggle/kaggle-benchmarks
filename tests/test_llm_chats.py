@@ -267,19 +267,33 @@ def test_invoke_llmmessage():
 
 
 def test_panel_ui_tolerates_message_update_before_new_message():
-    """Regression test for the Kaggle Editor KeyError: in the non-streaming
-    LLMResponse path, status is set to SUCCESS (dispatching message_update)
-    before chat.append (dispatching new_message). PanelUI.message_update
-    must therefore tolerate messages it hasn't registered yet — when
-    new_message fires later, the pane is built from the already-finalized
-    message content."""
+    """PanelUI.message_update must not crash on messages it hasn't
+    registered via new_message yet.
+
+    We call message_update directly rather than going through
+    llm.prompt() because contexts.enter() swallows exceptions when
+    there is no parent run, which would mask the KeyError."""
+    from kaggle_benchmarks.messages import Message
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    msg = Message(content="test", sender=actors.user, _status=utils.Status.RUNNING)
+
+    # Must not raise KeyError for messages not yet seen via new_message.
+    handler.message_update(msg, utils.Status.SUCCESS)
+
+
+def test_panel_ui_streaming_with_bound_handler():
+    """The streaming path must append the message (registering it in
+    PanelUI.shadows via new_message) before calling response.stream()
+    (which dispatches new_chunk). This test locks in that ordering."""
     from kaggle_benchmarks.ui import panel as panel_ui
 
     handler = panel_ui.PanelUI()
     events.manager.bind(handler)
     try:
         llm = Ferret()
-        assert not llm.stream_responses
+        llm.stream_responses = True
         with chats.new("test"):
             llm.prompt("hello")
     finally:
