@@ -307,3 +307,87 @@ def test_panel_ui_streaming_with_bound_handler():
             llm.prompt("hello")
     finally:
         events.manager.unbind(handler)
+
+
+def test_panel_ui_new_chunk_tolerates_unregistered_message():
+    """PanelUI.new_chunk must not crash on unregistered messages.
+
+    Under n_jobs > 1, depth corruption in new_chat can cause a chat
+    to skip registration, leaving downstream message lookups unresolved."""
+    from kaggle_benchmarks.messages import Message
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    msg = Message(content="test", sender=actors.user)
+    handler.new_chunk(msg, "chunk")
+
+
+def test_panel_ui_end_content_tolerates_unregistered_message():
+    """PanelUI.end_content must not crash on unregistered messages."""
+    from kaggle_benchmarks.messages import Message
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    msg = Message(content="test", sender=actors.user)
+    handler.end_content(msg)
+
+
+def test_panel_ui_end_run_tolerates_unregistered_run():
+    """PanelUI.end_run must not crash on unregistered runs."""
+    from kaggle_benchmarks import results, runs, tasks
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    dummy_task = tasks.Task(
+        func=lambda: None, name="dummy", store_task=False, store_run=False
+    )
+    run = runs.Run(task=dummy_task, result=results.PENDING)
+    handler.end_run(run)
+
+
+def test_panel_ui_new_tool_call_tolerates_unregistered_message():
+    """PanelUI.new_tool_call must not crash on unregistered messages."""
+    from kaggle_benchmarks.messages import Message
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    msg = Message(content="test", sender=actors.user)
+    handler.new_tool_call(msg, {"name": "tool", "args": {}})
+
+
+def test_panel_ui_concurrent_prompts():
+    """PanelUI must not crash when multiple threads dispatch events
+    concurrently, as happens with evaluate(n_jobs > 1)."""
+    import concurrent.futures
+
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+
+    # Stub new_chunk to avoid Panel's .stream() rejecting LLMResponse.
+    def safe_new_chunk(message, chunk):
+        if message in handler:
+            pass  # ordering check only
+
+    handler.new_chunk = safe_new_chunk
+
+    events.manager.bind(handler)
+    errors = []
+
+    def run_prompt(i):
+        try:
+            with contexts.enter():
+                llm = Ferret()
+                with chats.new(f"thread-{i}"):
+                    llm.prompt(f"hello from thread {i}")
+        except Exception as e:
+            errors.append(e)
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(run_prompt, i) for i in range(8)]
+            concurrent.futures.wait(futures)
+    finally:
+        events.manager.unbind(handler)
+
+    assert not errors, f"Concurrent prompts raised: {errors}"
