@@ -283,6 +283,93 @@ def test_panel_ui_tolerates_message_update_before_new_message():
     handler.message_update(msg, utils.Status.SUCCESS)
 
 
+def test_panel_ui_tolerates_unregistered_keys():
+    """Companion to test_panel_ui_tolerates_message_update_before_new_message
+    for the other handlers. Under n_jobs > 1, joblib's threading backend
+    dispatches lifecycle events from worker threads through the global
+    events.manager, and PanelUI.new_chat can hit its `elif parent is None`
+    branch and skip registering the chat — leaving downstream handlers to
+    fire on keys they never saw. Each must tolerate that."""
+    from unittest.mock import Mock
+
+    from kaggle_benchmarks.messages import Message
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    msg = Message(content="x", sender=actors.user, _status=utils.Status.RUNNING)
+    run = Mock()
+
+    handler.new_chunk(msg, "chunk")
+    handler.end_content(msg)
+    handler.new_tool_call(msg, Mock())
+
+    starting_depth = handler.depth
+    handler.end_run(run)
+    assert handler.depth == starting_depth - 1, (
+        "end_run must still decrement depth even when run is unregistered, "
+        "to stay balanced with new_run."
+    )
+
+
+def test_panel_ui_new_run_tolerates_unregistered_parent():
+    """Deterministic stand-in for the n_jobs > 1 race: when self.depth
+    is concurrently inflated by another thread, new_run takes the
+    else-branch and looks up self[run.parent] — which may not be
+    registered. Must not KeyError."""
+    from kaggle_benchmarks import results, runs, tasks
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+
+    # Simulate depth corruption from concurrent threads: set depth >= 1
+    # so new_run takes the parent-lookup branch instead of add_card.
+    # run.parent is unregistered, so this must not KeyError.
+    handler.depth = 2
+    dummy_task = tasks.Task(
+        func=lambda: None, name="dummy-new-run", store_task=False, store_run=False
+    )
+    unregistered_parent_run = runs.Run(task=dummy_task, result=results.PENDING)
+    handler.new_run(unregistered_parent_run)
+
+
+def test_panel_ui_concurrent_prompts():
+    """PanelUI must not crash when multiple threads dispatch events
+    concurrently, as happens with evaluate(n_jobs > 1)."""
+    import concurrent.futures
+
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+
+    # Stub new_chunk to avoid Panel's .stream() rejecting LLMResponse.
+    def safe_new_chunk(message, chunk):
+        if message in handler:
+            pass
+
+    handler.new_chunk = safe_new_chunk
+
+    events.manager.bind(handler)
+    errors = []
+
+    def run_prompt(i):
+        try:
+            with contexts.enter():
+                llm = Ferret()
+                with chats.new(f"thread-{i}"):
+                    llm.prompt(f"hello from thread {i}")
+        except Exception as e:
+            errors.append(e)
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(run_prompt, i) for i in range(8)]
+            concurrent.futures.wait(futures)
+    finally:
+        events.manager.unbind(handler)
+
+    assert not errors, f"Concurrent prompts raised: {errors}"
+
+
 def test_panel_ui_streaming_with_bound_handler():
     """The streaming path must append the message (registering it in
     PanelUI.shadows via new_message) before calling response.stream()

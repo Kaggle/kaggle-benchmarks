@@ -389,10 +389,13 @@ class PanelUI:
         elif context.run:
             # add to already existing card
             self[chat] = pane = render_chat(chat, with_header=False)
-            self[context.run].append(pane)
+            if context.run in self:
+                self[context.run].append(pane)
 
         else:
-            raise RuntimeError("Unhandled scenario")
+            # Reachable under threading races (e.g. n_jobs > 1) when
+            # self.depth is concurrently inflated by another thread.
+            return
 
     def end_chat(self, chat: chats.Chat):
         self.depth -= 1
@@ -437,11 +440,13 @@ class PanelUI:
             self[chat].collapsed = status != utils.Status.RUNNING
 
     def new_chunk(self, message, chunk):
-        self[message].stream(chunk)
+        if message in self:
+            self[message].stream(chunk)
 
     def end_content(self, message):
         # doesn't work as expected
-        self[message].show_activity_dot = False
+        if message in self:
+            self[message].show_activity_dot = False
 
     def new_run(self, run: runs.Run):
         self.depth += 1
@@ -454,12 +459,13 @@ class PanelUI:
 
         if self.depth == 1:
             self.add_card(card)
-        else:
+        elif run.parent in self:
             self[run.parent].append(card)
 
     def end_run(self, run: runs.Run):
-        self[run].append(render_result(run))
-        self[run].collapsed = True
+        if run in self:
+            self[run].append(render_result(run))
+            self[run].collapsed = True
         self.depth -= 1
 
     def new_task(self, task: tasks.Task):
@@ -490,5 +496,5 @@ class PanelUI:
             self._feed[-1].collapsed = True
 
     def new_tool_call(self, message, call):
-        if self[message].footer_objects:
+        if message in self and self[message].footer_objects:
             self[message].footer_objects[0].append(render_tool_call(call))
