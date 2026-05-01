@@ -84,6 +84,6 @@ class LLMMessage(messages.Message[T]):
         return obj
 
     def __panel__(self):
-        from kaggle_benchmarks import ui
+        from kaggle_benchmarks.ui import panel
 
-        return ui.panel.render_llm_message(self)
+        return panel.render_llm_message(self)

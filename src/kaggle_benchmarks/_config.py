@@ -16,11 +16,11 @@ import dataclasses
 import enum
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Self, overload
 
 import dotenv
-import panel as pn
 
 base_dir = Path(__file__).parent.parent.parent
 
@@ -52,6 +52,43 @@ def _parse_int_env(name: str, default: int | None = None) -> int | None:
             f"Ignoring non-integer value for {name}={raw!r}; using {default}."
         )
         return default
+
+
+class HostEnvironment(enum.Enum):
+    """Where the SDK is running. Used to pick the right UI + bokeh comms."""
+
+    TERMINAL = "terminal"  # CLI / script / IPython terminal
+    JUPYTER = "jupyter"  # JupyterLab / classic notebook kernel
+    VSCODE_NOTEBOOK = "vscode_notebook"  # Jupyter kernel hosted by VSCode
+
+
+def detect_host_environment() -> HostEnvironment:
+    """Detects the host environment (terminal, Jupyter kernel, or VSCode kernel).
+
+    Avoids importing IPython if it isn't already loaded — a CLI process won't
+    have it in sys.modules, so we can short-circuit without triggering
+    IPython's (sometimes broken) import side effects.
+
+    VSCode injects VSCODE_PID / VSCODE_IPC_HOOK_CLI into kernel processes;
+    JupyterLab does not.
+    """
+    if "IPython" not in sys.modules:
+        return HostEnvironment.TERMINAL
+    try:
+        from IPython.core.getipython import get_ipython
+
+        ip = get_ipython()
+    except ImportError:
+        return HostEnvironment.TERMINAL
+    if ip is None:
+        return HostEnvironment.TERMINAL
+    # ZMQInteractiveShell = Jupyter notebook/lab kernel
+    # TerminalInteractiveShell = ipython CLI (not a notebook)
+    if type(ip).__name__ != "ZMQInteractiveShell":
+        return HostEnvironment.TERMINAL
+    if "VSCODE_PID" in os.environ or "VSCODE_IPC_HOOK_CLI" in os.environ:
+        return HostEnvironment.VSCODE_NOTEBOOK
+    return HostEnvironment.JUPYTER
 
 
 class ExecutionMode(enum.Enum):
@@ -128,17 +165,74 @@ class Config:
 
     show_message_details: bool = False
 
-    def apply(self) -> Self:
-        pn.config.theme = self.ui_theme  # type: ignore
+    console_mode: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(
+            os.environ.get("BENCHMARK_CONSOLE_UI", "False")
+        )
+    )
+    console_quiet: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(
+            os.environ.get("BENCHMARK_CONSOLE_QUIET", "False")
+        )
+    )
+    # None = auto-detect from TTY; True/False forces on/off
+    console_color: bool | None = dataclasses.field(
+        default_factory=lambda: (
+            string_to_bool(os.environ["BENCHMARK_CONSOLE_COLOR"])
+            if "BENCHMARK_CONSOLE_COLOR" in os.environ
+            else None
+        )
+    )
 
+    def apply(self) -> Self:
         if self.suppress_ui_warnings:
             logger = logging.getLogger("bokeh")
             logger.setLevel(logging.ERROR)
-        if self.interactive_mode:
-            from kaggle_benchmarks import events, ui
 
-            if self.ui_handler is None:
-                self.ui_handler = ui.panel.PanelUI()
+        # Resolve which UI to use: explicit settings take priority,
+        # otherwise auto-detect based on environment.
+        use_panel = self.interactive_mode
+        use_console = self.console_mode
+
+        if (
+            not use_panel
+            and not use_console
+            and self.execution_mode != ExecutionMode.TESTING
+        ):
+            # Auto-detect: any notebook kernel -> PanelUI, otherwise -> ConsoleUI
+            if detect_host_environment() == HostEnvironment.TERMINAL:
+                use_console = True
+            else:
+                use_panel = True
+
+        if use_panel:
+            import panel as pn
+
+            pn.config.theme = self.ui_theme  # type: ignore
+            from kaggle_benchmarks import events
+            from kaggle_benchmarks.ui import (  # noqa: F401
+                ipython_magics,
+                panel,
+                setup_panel,
+            )
+
+            if not isinstance(self.ui_handler, panel.PanelUI):
+                if self.ui_handler is not None:
+                    events.manager.unbind(self.ui_handler)
+                self.ui_handler = panel.PanelUI()
+                events.manager.bind(self.ui_handler)
+
+        elif use_console:
+            from kaggle_benchmarks import events
+            from kaggle_benchmarks.ui import console
+
+            if not isinstance(self.ui_handler, console.ConsoleUI):
+                if self.ui_handler is not None:
+                    events.manager.unbind(self.ui_handler)
+                self.ui_handler = console.ConsoleUI(
+                    quiet=self.console_quiet,
+                    color=self.console_color,
+                )
                 events.manager.bind(self.ui_handler)
 
         return self
@@ -160,6 +254,17 @@ class Config:
 
     def enable_interactive_mode(self):
         self.interactive_mode = True
+        self.apply()
+
+    def enable_console_mode(self, quiet: bool = False, color: bool | None = None):
+        self.console_mode = True
+        self.console_quiet = quiet
+        self.console_color = color
+        self.interactive_mode = False
+        self.apply()
+
+    def disable_console_mode(self):
+        self.console_mode = False
         self.apply()
 
     def disable_tqdm(self):

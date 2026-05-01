@@ -267,10 +267,18 @@ class LLMChat(actors.Actor):
             response._meta["tool_calls"] = invoke_response.tool_calls
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
+            response.status = utils.Status.SUCCESS
+            chat.append(response)
         elif isinstance(invoke_response, Iterator):
+            # Append before streaming so UIs see new_message (with empty
+            # content + RUNNING status) before chunks arrive — lets them
+            # render the message header before tokens stream in.
+            chat.append(response)
             response.stream(invoke_response)
+            response.status = utils.Status.SUCCESS
         elif isinstance(invoke_response, llm_messages.LLMMessage):
             response = invoke_response
+            chat.append(response)
         else:
             raise TypeError("Unknown response type from LLM.")
 
@@ -293,10 +301,11 @@ class LLMChat(actors.Actor):
             raise e
 
         except StopIteration as e:
-            # StopIteration is expected as this is how you get returned value from a generator
+            # StopIteration is expected as this is how you get returned value
+            # from a generator. The message has already been appended and its
+            # status set above; here we just refine .content to the parsed
+            # schema value (may differ from the raw text the UI rendered).
             response.content = e.value
-            response.status = utils.Status.SUCCESS
-            chat.append(response)
 
         return response
 
@@ -433,7 +442,10 @@ class OpenAI(LLMChat):
             # in content using <think> tags.  Only parse when reasoning was
             # requested to avoid stripping literal <think> tags from content.
             reasoning = getattr(message, "reasoning_content", None)
-            if reasoning is None and kwargs.get("reasoning_effort") not in (None, "none"):
+            if reasoning is None and kwargs.get("reasoning_effort") not in (
+                None,
+                "none",
+            ):
                 content, reasoning = _parse_think_tags(content)
             return LLMResponse(
                 content=content,

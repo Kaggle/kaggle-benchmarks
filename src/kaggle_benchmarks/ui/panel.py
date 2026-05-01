@@ -427,7 +427,7 @@ class PanelUI:
             self.add_card(pn.Card(pane, title=f"✉️: {message.sender.name}"))
 
     def message_update(self, message: messages.Message, status: utils.Status):
-        if status == utils.Status.SUCCESS:
+        if status == utils.Status.SUCCESS and message in self:
             self[message].object = render_message_content(message.content)
             self[message].show_activity_dot = False
 

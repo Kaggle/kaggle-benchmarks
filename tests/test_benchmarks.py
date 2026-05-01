@@ -389,9 +389,7 @@ def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
 
     @tasks.task()
     def multi_task(llm, df):
-        return single_task.evaluate(
-            llm=[llm], evaluation_data=df, max_attempts=2
-        )
+        return single_task.evaluate(llm=[llm], evaluation_data=df, max_attempts=2)
 
     df = pd.DataFrame({"x": [1, 2, 3]})
     with caplog.at_level("WARNING", logger="kaggle_benchmarks.tasks"):

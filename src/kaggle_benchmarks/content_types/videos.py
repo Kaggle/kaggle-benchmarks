@@ -16,8 +16,6 @@ import abc
 import mimetypes
 import re
 
-import panel as pn
-
 _YOUTUBE_URL_PATTERN = re.compile(
     r"^https?://(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)[\w-]+"
 )
@@ -49,8 +47,10 @@ class VideoURL(VideoContent):
     def url(self) -> str:
         return self._url
 
-    def __panel__(self) -> pn.viewable.Viewable:
+    def __panel__(self):
         """Renders the video as a clickable link."""
+        import panel as pn
+
         return pn.pane.HTML(f'<a href="{self.url}" target="_blank">{self.url}</a>')
 
     @property
