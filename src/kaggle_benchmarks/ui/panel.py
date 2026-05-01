@@ -15,6 +15,7 @@
 import dataclasses
 import io
 import json
+import threading
 from typing import Any
 
 import pandas as pd
@@ -321,7 +322,7 @@ SVG = """
 class PanelUI:
     def __init__(self):
         self.shadows = {}
-        self.depth = 0
+        self._local = threading.local()
         self.placeholder = pn.chat.ChatMessage(
             "",
             avatar=pn.pane.SVG(
@@ -342,6 +343,14 @@ class PanelUI:
         if ip is not None:
             ip.events.register("pre_run_cell", self.pre_run_cell)
             ip.events.register("post_run_cell", self.post_run_cell)
+
+    @property
+    def depth(self):
+        return getattr(self._local, "depth", 0)
+
+    @depth.setter
+    def depth(self, value):
+        self._local.depth = value
 
     @property
     def feed(self):
@@ -393,8 +402,7 @@ class PanelUI:
                 self[context.run].append(pane)
 
         else:
-            # Reachable under threading races (e.g. n_jobs > 1) when
-            # self.depth is concurrently inflated by another thread.
+            # Defensive fallback for unexpected depth/context states.
             return
 
     def end_chat(self, chat: chats.Chat):
@@ -480,7 +488,7 @@ class PanelUI:
     def pre_run_cell(self, info):
         self._feed = None
         self.shadows = {}
-        self.depth = 0
+        self._local = threading.local()
 
     def post_run_cell(self, result):
         if self._feed and isinstance(
