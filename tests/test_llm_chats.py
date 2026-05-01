@@ -290,6 +290,15 @@ def test_panel_ui_streaming_with_bound_handler():
     from kaggle_benchmarks.ui import panel as panel_ui
 
     handler = panel_ui.PanelUI()
+
+    # Replace new_chunk with a stub that verifies the message is
+    # registered (the ordering invariant) without calling Panel's
+    # internal .stream(), which rejects mock LLMResponse objects.
+    def ordering_check(message, chunk):
+        assert message in handler
+
+    handler.new_chunk = ordering_check
+
     events.manager.bind(handler)
     try:
         llm = Ferret()
