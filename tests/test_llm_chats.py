@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from kaggle_benchmarks import actors, chats, contexts, prompting, utils
+from kaggle_benchmarks import actors, chats, contexts, events, prompting, utils
 from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.llm_messages import LLMMessage
@@ -264,3 +264,23 @@ def test_invoke_llmmessage():
     assert len(mocked_chat.invocations) == 1
     assert mocked_chat.invocations[0][0] == messages
     assert mocked_chat.invocations[0][1] == {"temperature": 0.5}
+
+
+def test_panel_ui_tolerates_message_update_before_new_message():
+    """Regression test for the Kaggle Editor KeyError: in the non-streaming
+    LLMResponse path, status is set to SUCCESS (dispatching message_update)
+    before chat.append (dispatching new_message). PanelUI.message_update
+    must therefore tolerate messages it hasn't registered yet — when
+    new_message fires later, the pane is built from the already-finalized
+    message content."""
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+    events.manager.bind(handler)
+    try:
+        llm = Ferret()
+        assert not llm.stream_responses
+        with chats.new("test"):
+            llm.prompt("hello")
+    finally:
+        events.manager.unbind(handler)
