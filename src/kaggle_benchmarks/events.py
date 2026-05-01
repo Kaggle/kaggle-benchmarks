@@ -31,7 +31,7 @@ class EventManager:
             self.listeners.remove(listener)
 
     def dispatch(self, event, *args, **kwargs):
-        for listener in self.listeners:
+        for listener in list(self.listeners):
             if hasattr(listener, event):
                 getattr(listener, event)(*args, **kwargs)
 

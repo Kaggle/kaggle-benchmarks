@@ -394,3 +394,62 @@ def test_panel_ui_streaming_with_bound_handler():
             llm.prompt("hello")
     finally:
         events.manager.unbind(handler)
+
+
+def test_panel_ui_depth_is_per_thread():
+    """depth must be per-thread so concurrent new_run/end_run
+    pairs don't corrupt each other's nesting."""
+    import concurrent.futures
+    import time
+
+    from kaggle_benchmarks.ui import panel as panel_ui
+
+    handler = panel_ui.PanelUI()
+
+    errors = []
+
+    def run_nested(i):
+        try:
+            handler.depth += 1
+            assert handler.depth == 1, (
+                f"thread-{i}: depth should be 1 after increment, got {handler.depth}"
+            )
+            time.sleep(0.01)  # force interleaving
+            handler.depth -= 1
+            assert handler.depth == 0, (
+                f"thread-{i}: depth should be 0 after decrement, got {handler.depth}"
+            )
+        except AssertionError as e:
+            errors.append(e)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(run_nested, i) for i in range(8)]
+        concurrent.futures.wait(futures)
+
+    assert not errors, f"Depth leaked across threads: {errors}"
+
+
+def test_event_manager_dispatch_tolerates_unbind():
+    """dispatch must not crash if a listener unbinds itself during dispatch."""
+    from kaggle_benchmarks.events import EventManager
+
+    manager = EventManager()
+
+    class SelfUnbinder:
+        def on_event(self):
+            manager.unbind(self)
+
+    class Counter:
+        count = 0
+
+        def on_event(self):
+            self.count += 1
+
+    unbinder = SelfUnbinder()
+    counter = Counter()
+    manager.bind(unbinder)
+    manager.bind(counter)
+
+    # Must not raise RuntimeError from list mutation during iteration
+    manager.dispatch("on_event")
+    assert counter.count == 1
