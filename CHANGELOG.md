@@ -1,6 +1,14 @@
 # Changelog
 
-## Next Release
+## v0.5.0 (May 1st, 2026)
+
+* **Console UI output:** Added a new `ConsoleUI` for terminal/script environments with color, quiet mode, and structured run output. Auto-detects host environment (terminal vs notebook) and binds the appropriate UI handler. (#145, #149)
+* **Reasoning traces:** Added `reasoning` and `include_thoughts` as explicit `prompt()` parameters for accessing LLM thinking/reasoning output. (#133)
+* **PanelUI concurrency hardening:** Added defensive `in self` guards to all PanelUI event handlers (`new_chunk`, `end_content`, `end_run`, `new_run`, `new_tool_call`) to prevent `KeyError` crashes under `evaluate(n_jobs > 1)`. (#150, #152)
+* **Thread-safe PanelUI state management:** Replaced shared `depth` counter with per-thread `threading.local()` so concurrent `evaluate(n_jobs > 1)` workers track nesting independently. Snapshot `EventManager.dispatch()` listener list to prevent `RuntimeError` during self-unbind. (#154)
+* **Configurable task limits:** Made `task.name` and `task.description` max-length limits environment-variable driven (`KAGGLE_BENCHMARK_MAX_NAME_LENGTH`, `KAGGLE_BENCHMARK_MAX_DESCRIPTION_LENGTH`). (#134)
+* **Nested evaluate safety:** Coerce nested `evaluate()` `max_attempts` to 1 with a warning to prevent exponential retry blowup. (#143)
+* **Developer experience:** Added development and code review guides. (#141) Dropped noisy log when no `.env` file is found. (#144) Log effective `.env` path on load. (#140)
 
 ## v0.4.0 (Apr 24th, 2026)
 
