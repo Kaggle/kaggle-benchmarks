@@ -165,7 +165,17 @@ import pronouncing
 
 > **Rule:** Prefer `# !pip install ...` (commented) over `!pip install ...` so the file works everywhere. Only use uncommented magics when the file is exclusively for Kaggle notebook execution.
 
-> **Rule:** Do NOT wrap `.run()` or `.evaluate()` calls inside `if __name__ == "__main__":`. Benchmark files are notebook-style scripts — all code runs at the top level. Place `.run()` / `.evaluate()` directly after the task definition, in the same cell or the next cell.
+**IMPORTANT — No `if __name__` guards.** Think of benchmark `.py` files as notebooks, not modules. They are never imported — they are always executed directly.
+
+```python
+# ❌ WRONG — do not do this
+if __name__ == "__main__":
+    my_task.run(kbench.llm)
+
+# ✅ CORRECT — top-level, in its own cell
+# %%
+my_task.run(kbench.llm)
+```
 
 ---
 
