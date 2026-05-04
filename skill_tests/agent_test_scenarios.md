@@ -1,11 +1,11 @@
-# Test Scenarios: kaggle-benchmarks Skill File
+# Test Scenarios: kaggle-benchmarks Skill Files
 
-This document defines test scenarios for validating the [kaggle_benchmarks_skill.md](./kaggle_benchmarks_skill.md) skill file. Each scenario provides a **prompt** to give an agent that has the skill file as context, **expected answer criteria** the agent's response must satisfy, and a **source of truth** reference for verification.
+This document defines test scenarios for validating the skill files in [`skills/kaggle-benchmarks/`](../skills/kaggle-benchmarks/). Each scenario provides a **prompt** to give an agent that has the skill files as context, **expected answer criteria** the agent's response must satisfy, and a **source of truth** reference for verification.
 
 ## How to Use This Test Script
 
 1. Start a new agent conversation
-2. Provide the skill file `kaggle_benchmarks_skill.md` as context
+2. Provide the skill files from `skills/kaggle-benchmarks/` (SKILL.md + references/) as context
 3. For each scenario, send the **Prompt** to the agent
 4. Verify the agent's response against the **Expected Answer** criteria
 5. Mark each criterion as ✅ PASS or ❌ FAIL
@@ -203,7 +203,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Has `@kbench.task()` decorator
 - [ ] Does NOT try to use `user.send()` for the audio (uses `llm.prompt(audio=)` instead)
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 490–516 (`test_audio_local_file`, `test_audio_url`, `test_audio_base64`); Skill file §4 Audio
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 490–516 (`test_audio_local_file`, `test_audio_url`, `test_audio_base64`); `references/llm_interaction.md` Audio
 
 ---
 
@@ -219,7 +219,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses `kbench.assertions.assert_not_empty(response)`
 - [ ] Has `@kbench.task()` decorator
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 430–465 (`test_video_url`); Skill file §4 Videos
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 430–465 (`test_video_url`); `references/llm_interaction.md` Videos
 
 ---
 
@@ -237,7 +237,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Does NOT manually parse tool call JSON (uses automatic tool calling)
 - [ ] Has `@kbench.task()` decorator
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 660–685 (`test_simple_tool_use`); Skill file §7 "Custom Function Tools"
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 660–685 (`test_simple_tool_use`); `references/tools.md` "Custom Function Tools"
 
 ---
 
@@ -268,7 +268,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Has `@kbench.task()` decorator
 - [ ] Does NOT try-catch around the `llm.prompt()` call (the library handles tool errors)
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 741–762 (`test_tool_error_handling`); Skill file §7
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 741–762 (`test_tool_error_handling`); `references/tools.md`
 
 ---
 
@@ -446,7 +446,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Calls `.run(kbench.llm, kbench.judge_llm)`
 
 > **Note:** The golden test (`test_cookbook_examples.py` lines 157–170) does NOT check for None because it runs
-> with `continue_with_exceptions = False` globally. In user code, always check for None as shown in the skill file.
+> with `continue_with_exceptions = False` globally. In user code, always check for None as shown in `references/assertions.md`.
 
 **Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 149–180 (`assess_with_judge_task`)
 
@@ -464,7 +464,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Does NOT use plain Python `assert`
 - [ ] Has `@kbench.task()` decorator
 
-**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 98–118; Skill file §11 Pattern C
+**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 98–118; `references/examples.md` Pattern C
 
 ---
 
@@ -488,7 +488,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses `kbench.tools.python.script_runner.run_code(code)`
 - [ ] Uses `kbench.assertions.assert_equal("4", output.stdout.strip())`
 
-**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 151–189; Skill file §11 Pattern I
+**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 151–189; `references/examples.md` Pattern I
 
 ---
 
@@ -506,7 +506,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses the custom assertion inside a `@kbench.task()` decorated function
 - [ ] Does NOT use `@assertion_handler(raises_assertion_error=True)` unless explicitly needed
 
-**Source of Truth:** `src/kaggle_benchmarks/assertions.py` lines 113–175 (`assertion_handler`); Skill file §5 "Custom Assertions"
+**Source of Truth:** `src/kaggle_benchmarks/assertions.py` lines 113–175 (`assertion_handler`); `references/assertions.md` "Custom Assertions"
 
 ---
 
@@ -526,7 +526,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Returns True/False based on whether guess matches target
 - [ ] Calls `.run(kbench.llm, kbench.judge_llm, target="dog")`
 
-**Source of Truth:** `documentation/examples/play_20_questions.py` lines 38–76; Skill file §11 Pattern F
+**Source of Truth:** `documentation/examples/play_20_questions.py` lines 38–76; `references/examples.md` Pattern F
 
 ---
 
@@ -598,7 +598,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Explains plain `assert` IS caught by the task runner (doesn't crash the program) but is NOT tracked properly
 - [ ] Does NOT say plain assert crashes the program entirely
 
-**Source of Truth:** Skill file §5; `src/kaggle_benchmarks/tasks.py` lines 134–135
+**Source of Truth:** `references/assertions.md`; `src/kaggle_benchmarks/tasks.py` lines 134–135
 
 ---
 
@@ -615,7 +615,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Explains **primitive** (`int`, `bool`, `str`) — when you need a single value
 - [ ] Shows at least one example for each
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` (all `test_extract_*` tests); Skill file §4
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` (all `test_extract_*` tests); `references/llm_interaction.md`
 
 ---
 
@@ -636,7 +636,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Shows the fix: `def accuracy(llm) -> float:`
 - [ ] Explains that without annotation, it defaults to PassFail (ignores the returned value)
 
-**Source of Truth:** `src/kaggle_benchmarks/results.py` lines 63–111; Skill file §12
+**Source of Truth:** `src/kaggle_benchmarks/results.py` lines 63–111; `SKILL.md` Common Mistakes
 
 ---
 
@@ -651,7 +651,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Shows using `kbench.assertions.assert_fail("Judge failed")` as the fallback
 - [ ] Does NOT claim the function always returns a valid object
 
-**Source of Truth:** Skill file §5 "LLM-as-Judge"; `documentation/examples/assess_with_a_judge.py`
+**Source of Truth:** `references/assertions.md` "LLM-as-Judge"; `documentation/examples/assess_with_a_judge.py`
 
 ---
 
@@ -713,7 +713,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Both produce `PassFail` result type — pass is determined by assertions, not a return value
 - [ ] Does NOT say `-> None` causes an error or is unsupported
 
-**Source of Truth:** `src/kaggle_benchmarks/results.py` line 63 (`class PassFail(Result[type(None) | Unknown])`); Skill file §2 Return Types
+**Source of Truth:** `src/kaggle_benchmarks/results.py` line 63 (`class PassFail(Result[type(None) | Unknown])`); `references/tasks_and_running.md` Return Types
 
 ---
 
@@ -728,7 +728,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Shows example: `llm.prompt("Write a creative story", temperature=0.7)`
 - [ ] Does NOT suggest configuring temperature through a separate config object
 
-**Source of Truth:** `src/kaggle_benchmarks/actors/llms.py` line 180 (`temperature: float = 0`); Skill file §4
+**Source of Truth:** `src/kaggle_benchmarks/actors/llms.py` line 180 (`temperature: float = 0`); `references/llm_interaction.md`
 
 ---
 
@@ -745,13 +745,32 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Explains that uncommented `!pip` magics work on Kaggle but NOT when running as a standalone Python file locally
 - [ ] Does NOT generate a notebook file
 
-**Source of Truth:** `documentation/examples/potemkin_understanding.py` lines 21–27; Skill file §1 "File Structure: Cell Markers"
+**Source of Truth:** `documentation/examples/potemkin_understanding.py` lines 21–27; `references/tasks_and_running.md` "File Structure: Cell Markers"
+
+---
+
+### Scenario 6.11 — No `if __name__ == "__main__":` Guard
+
+**Prompt:**
+> Write a benchmark file with two tasks. The first task asks the LLM "What is Python?" and checks the response mentions "programming". The second task asks "What is 2+2?" and uses `schema=int` to get the answer. Run both tasks at the end of the file.
+
+**Expected Answer:**
+- [ ] Both tasks are defined with `@kbench.task()` decorator
+- [ ] Both `.run(kbench.llm)` calls are placed at the **module top level** (not inside any guard)
+- [ ] Does **NOT** wrap `.run()` or `.evaluate()` inside `if __name__ == "__main__":`
+- [ ] Uses `# %%` cell markers to separate sections
+- [ ] Uses kbench assertions (not plain `assert`)
+- [ ] Second task has `-> int` return type and uses `schema=int`
+
+> **CRITICAL:** The agent must NOT produce `if __name__ == "__main__":` blocks. Benchmark files are notebook-style scripts — all code runs at the top level. This is explicitly documented in `SKILL.md` Key Rules and `references/tasks_and_running.md`.
+
+**Source of Truth:** `SKILL.md` Key Rules; `references/tasks_and_running.md` "File Structure: Cell Markers"
 
 ---
 
 ## Category 7: Generalization — Domain-Specific Tasks
 
-These test the agent's ability to **combine** basic patterns from the skill file and apply **domain knowledge** to design new benchmarks. No scenario here maps directly to a single skill file example — the agent must generalize.
+These test the agent's ability to **combine** basic patterns from the skill files and apply **domain knowledge** to design new benchmarks. No scenario here maps directly to a single skill file example — the agent must generalize.
 
 ### Scenario 7.1 — Sentiment Analysis Pipeline (Structured + Dataset Eval)
 
@@ -768,7 +787,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 - [ ] Returns `-> float` from the main task
 - [ ] Uses `# %%` cell markers
 
-**Source of Truth:** Combines Pattern H (dataset eval) + Style 1 (dataclass schema) + sub-task composition from skill file §2-§4
+**Source of Truth:** Combines Pattern H (dataset eval) + Style 1 (dataclass schema) + sub-task composition from `references/tasks_and_running.md` and `references/llm_interaction.md`
 
 ---
 
@@ -786,7 +805,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 - [ ] Asserts `has_bug == True` AND verifies output of fixed code
 - [ ] Uses kbench assertions throughout (not plain assert)
 
-**Source of Truth:** Combines Pattern I (code analysis) + dataset eval + code execution from skill file §3-§7
+**Source of Truth:** Combines Pattern I (code analysis) + dataset eval + code execution from `references/tasks_and_running.md` and `references/tools.md`
 
 ---
 
@@ -964,7 +983,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 - [ ] Returns `-> dict` from the main task
 - [ ] Uses kbench assertions inside sub-tasks
 
-**Source of Truth:** Run object properties documented in skill file §3; combines sub-task composition + Run introspection
+**Source of Truth:** Run object properties documented in `references/tasks_and_running.md`; combines sub-task composition + Run introspection
 
 ---
 
@@ -1023,6 +1042,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 | 6.8 | -> None return type | Knowledge | Basic | |
 | 6.9 | Temperature param | Knowledge | Basic | |
 | 6.10 | Cell markers + magics | Knowledge | Basic | |
+| 6.11 | No `__name__` guard | Knowledge | Basic | |
 | 7.1 | Sentiment pipeline | Generalization | Advanced | |
 | 7.2 | Code review benchmark | Generalization | Advanced | |
 | 7.3 | Translation quality | Generalization | Advanced | |
