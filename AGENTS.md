@@ -108,3 +108,8 @@ cd cicd
 ./run.sh     # Run container
 ./jupyter.sh # Start Jupyter server
 ```
+
+## Agent Skills
+
+- **Writing Benchmarks**: See `skills/kaggle-benchmarks/SKILL.md` for detailed patterns and examples on writing benchmark tasks using the `kaggle_benchmarks` library.
+
