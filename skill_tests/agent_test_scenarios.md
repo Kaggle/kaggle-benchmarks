@@ -5,7 +5,7 @@ This document defines test scenarios for validating the skill files in [`skills/
 ## How to Use This Test Script
 
 1. Start a new agent conversation
-2. Provide the skill files from `skills/kaggle-benchmarks/` (SKILL.md + references/) as context
+2. Provide the skill file `skills/kaggle-benchmarks/SKILL.md` as context
 3. For each scenario, send the **Prompt** to the agent
 4. Verify the agent's response against the **Expected Answer** criteria
 5. Mark each criterion as ✅ PASS or ❌ FAIL
@@ -203,7 +203,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Has `@kbench.task()` decorator
 - [ ] Does NOT try to use `user.send()` for the audio (uses `llm.prompt(audio=)` instead)
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 490–516 (`test_audio_local_file`, `test_audio_url`, `test_audio_base64`); `references/llm_interaction.md` Audio
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 490–516 (`test_audio_local_file`, `test_audio_url`, `test_audio_base64`); Skill file §4 Audio
 
 ---
 
@@ -219,7 +219,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses `kbench.assertions.assert_not_empty(response)`
 - [ ] Has `@kbench.task()` decorator
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 430–465 (`test_video_url`); `references/llm_interaction.md` Videos
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 430–465 (`test_video_url`); Skill file §4 Videos
 
 ---
 
@@ -237,7 +237,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Does NOT manually parse tool call JSON (uses automatic tool calling)
 - [ ] Has `@kbench.task()` decorator
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 660–685 (`test_simple_tool_use`); `references/tools.md` "Custom Function Tools"
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 660–685 (`test_simple_tool_use`); Skill file §7 "Custom Function Tools"
 
 ---
 
@@ -268,7 +268,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Has `@kbench.task()` decorator
 - [ ] Does NOT try-catch around the `llm.prompt()` call (the library handles tool errors)
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 741–762 (`test_tool_error_handling`); `references/tools.md`
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 741–762 (`test_tool_error_handling`); Skill file §7
 
 ---
 
@@ -446,7 +446,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Calls `.run(kbench.llm, kbench.judge_llm)`
 
 > **Note:** The golden test (`test_cookbook_examples.py` lines 157–170) does NOT check for None because it runs
-> with `continue_with_exceptions = False` globally. In user code, always check for None as shown in `references/assertions.md`.
+> with `continue_with_exceptions = False` globally. In user code, always check for None as shown in Skill file §5.
 
 **Source of Truth:** `golden_tests/test_cookbook_examples.py` lines 149–180 (`assess_with_judge_task`)
 
@@ -464,7 +464,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Does NOT use plain Python `assert`
 - [ ] Has `@kbench.task()` decorator
 
-**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 98–118; `references/examples.md` Pattern C
+**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 98–118; Skill file §9 Pattern C
 
 ---
 
@@ -488,7 +488,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses `kbench.tools.python.script_runner.run_code(code)`
 - [ ] Uses `kbench.assertions.assert_equal("4", output.stdout.strip())`
 
-**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 151–189; `references/examples.md` Pattern I
+**Source of Truth:** `documentation/examples/demo_candidates_bm1.py` lines 151–189; Skill file §9 Pattern I
 
 ---
 
@@ -506,7 +506,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses the custom assertion inside a `@kbench.task()` decorated function
 - [ ] Does NOT use `@assertion_handler(raises_assertion_error=True)` unless explicitly needed
 
-**Source of Truth:** `src/kaggle_benchmarks/assertions.py` lines 113–175 (`assertion_handler`); `references/assertions.md` "Custom Assertions"
+**Source of Truth:** `src/kaggle_benchmarks/assertions.py` lines 113–175 (`assertion_handler`); Skill file §5 "Custom Assertions"
 
 ---
 
@@ -526,7 +526,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Returns True/False based on whether guess matches target
 - [ ] Calls `.run(kbench.llm, kbench.judge_llm, target="dog")`
 
-**Source of Truth:** `documentation/examples/play_20_questions.py` lines 38–76; `references/examples.md` Pattern F
+**Source of Truth:** `documentation/examples/play_20_questions.py` lines 38–76; Skill file §9 Pattern F
 
 ---
 
@@ -598,7 +598,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Explains plain `assert` IS caught by the task runner (doesn't crash the program) but is NOT tracked properly
 - [ ] Does NOT say plain assert crashes the program entirely
 
-**Source of Truth:** `references/assertions.md`; `src/kaggle_benchmarks/tasks.py` lines 134–135
+**Source of Truth:** Skill file §5; `src/kaggle_benchmarks/tasks.py` lines 134–135
 
 ---
 
@@ -615,7 +615,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Explains **primitive** (`int`, `bool`, `str`) — when you need a single value
 - [ ] Shows at least one example for each
 
-**Source of Truth:** `golden_tests/test_cookbook_examples.py` (all `test_extract_*` tests); `references/llm_interaction.md`
+**Source of Truth:** `golden_tests/test_cookbook_examples.py` (all `test_extract_*` tests); Skill file §4
 
 ---
 
@@ -651,7 +651,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Shows using `kbench.assertions.assert_fail("Judge failed")` as the fallback
 - [ ] Does NOT claim the function always returns a valid object
 
-**Source of Truth:** `references/assertions.md` "LLM-as-Judge"; `documentation/examples/assess_with_a_judge.py`
+**Source of Truth:** Skill file §5 "LLM-as-Judge"; `documentation/examples/assess_with_a_judge.py`
 
 ---
 
@@ -713,7 +713,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Both produce `PassFail` result type — pass is determined by assertions, not a return value
 - [ ] Does NOT say `-> None` causes an error or is unsupported
 
-**Source of Truth:** `src/kaggle_benchmarks/results.py` line 63 (`class PassFail(Result[type(None) | Unknown])`); `references/tasks_and_running.md` Return Types
+**Source of Truth:** `src/kaggle_benchmarks/results.py` line 63 (`class PassFail(Result[type(None) | Unknown])`); Skill file §2 Return Types
 
 ---
 
@@ -728,7 +728,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Shows example: `llm.prompt("Write a creative story", temperature=0.7)`
 - [ ] Does NOT suggest configuring temperature through a separate config object
 
-**Source of Truth:** `src/kaggle_benchmarks/actors/llms.py` line 180 (`temperature: float = 0`); `references/llm_interaction.md`
+**Source of Truth:** `src/kaggle_benchmarks/actors/llms.py` line 180 (`temperature: float = 0`); Skill file §4
 
 ---
 
@@ -745,7 +745,7 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Explains that uncommented `!pip` magics work on Kaggle but NOT when running as a standalone Python file locally
 - [ ] Does NOT generate a notebook file
 
-**Source of Truth:** `documentation/examples/potemkin_understanding.py` lines 21–27; `references/tasks_and_running.md` "File Structure: Cell Markers"
+**Source of Truth:** `documentation/examples/potemkin_understanding.py` lines 21–27; Skill file §1 "File Structure: Cell Markers"
 
 ---
 
@@ -762,9 +762,9 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 - [ ] Uses kbench assertions (not plain `assert`)
 - [ ] Second task has `-> int` return type and uses `schema=int`
 
-> **CRITICAL:** The agent must NOT produce `if __name__ == "__main__":` blocks. Benchmark files are notebook-style scripts — all code runs at the top level. This is explicitly documented in `SKILL.md` Key Rules and `references/tasks_and_running.md`.
+> **CRITICAL:** The agent must NOT produce `if __name__ == "__main__":` blocks. Benchmark files are notebook-style scripts — all code runs at the top level. This is explicitly documented in `SKILL.md` Key Rules and §1.
 
-**Source of Truth:** `SKILL.md` Key Rules; `references/tasks_and_running.md` "File Structure: Cell Markers"
+**Source of Truth:** `SKILL.md` Key Rules; §1 "File Structure: Cell Markers"
 
 ---
 
@@ -787,7 +787,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 - [ ] Returns `-> float` from the main task
 - [ ] Uses `# %%` cell markers
 
-**Source of Truth:** Combines Pattern H (dataset eval) + Style 1 (dataclass schema) + sub-task composition from `references/tasks_and_running.md` and `references/llm_interaction.md`
+**Source of Truth:** Combines Pattern H (dataset eval) + Style 1 (dataclass schema) + sub-task composition from Skill file §3 and §4
 
 ---
 
@@ -805,7 +805,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 - [ ] Asserts `has_bug == True` AND verifies output of fixed code
 - [ ] Uses kbench assertions throughout (not plain assert)
 
-**Source of Truth:** Combines Pattern I (code analysis) + dataset eval + code execution from `references/tasks_and_running.md` and `references/tools.md`
+**Source of Truth:** Combines Pattern I (code analysis) + dataset eval + code execution from Skill file §3 and §7
 
 ---
 
@@ -983,7 +983,7 @@ These test the agent's ability to **combine** basic patterns from the skill file
 - [ ] Returns `-> dict` from the main task
 - [ ] Uses kbench assertions inside sub-tasks
 
-**Source of Truth:** Run object properties documented in `references/tasks_and_running.md`; combines sub-task composition + Run introspection
+**Source of Truth:** Run object properties documented in Skill file §3; combines sub-task composition + Run introspection
 
 ---
 

@@ -6,21 +6,13 @@ This skill teaches AI coding agents how to write benchmark tasks using the `kagg
 
 ```
 skills/kaggle-benchmarks/
-├── SKILL.md                           # Entry point — quick reference, rules, common mistakes
-├── README.md                          # This file
-└── references/
-    ├── tasks_and_running.md           # Import styles, task definition, .run(), .evaluate()
-    ├── llm_interaction.md             # llm.prompt(), structured output, multimodal, reasoning
-    ├── assertions.md                  # All assertions, LLM-as-judge, custom assertions
-    ├── conversations.md               # chats.new(), chats.fork(), contexts
-    ├── tools.md                       # Python execution, web/HTML, custom tools
-    ├── advanced.md                    # Model loading, dataset eval, testing, env vars
-    └── examples.md                    # 9 complete benchmark patterns (A-I)
+├── SKILL.md    # Complete skill file — quick reference, API docs, and 9 example patterns
+└── README.md   # This file
 ```
 
 ## Installation
 
-Point your AI coding agent to read `SKILL.md`. The agent will follow references to `references/` files as needed.
+Point your AI coding agent to read `SKILL.md`.
 
 **Gemini CLI** — Copy to the auto-discovery location:
 ```bash
@@ -36,4 +28,4 @@ cp -r skills/kaggle-benchmarks ~/.gemini/skills/kaggle-benchmarks
 
 ## Testing
 
-See `skill_tests/agent_test_scenarios.md` for 54 validated test scenarios covering all skill patterns.
+See `skill_tests/agent_test_scenarios.md` for validated test scenarios covering all skill patterns.
