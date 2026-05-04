@@ -19,11 +19,6 @@ Point your AI coding agent to read `SKILL.md`.
 cp -r skills/kaggle-benchmarks ~/.gemini/skills/kaggle-benchmarks
 ```
 
-**Claude Code** — Add to your `CLAUDE.md`:
-```
-@skills/kaggle-benchmarks/SKILL.md
-```
-
 **Other tools** — Ask your agent to read `skills/kaggle-benchmarks/SKILL.md`.
 
 ## Testing
