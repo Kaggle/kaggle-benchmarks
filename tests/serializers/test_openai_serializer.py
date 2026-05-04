@@ -183,6 +183,29 @@ def test_dump_messages():
     assert list(serializer.dump_messages(msgs)) == expected_raw_messages
 
 
+def test_dump_image_message_with_extra_api_params():
+    serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
+    image_content = ImageURL(
+        url="http://example.com/a.png", extra_api_params={"detail": "low"}
+    )
+    message = messages.Message(content=image_content, sender=actors.user)
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "http://example.com/a.png",
+                        "detail": "low",
+                    },
+                },
+            ],
+        }
+    ]
+
+
 def test_dump_chat():
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     msgs = [
@@ -257,6 +280,77 @@ def test_dump_audio_message_model_proxy():
                 {
                     "type": "input_audio",
                     "input_audio": {"data": "abc123", "format": "wav"},
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_image_message_with_extra_api_params_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    image_content = ImageBase64(
+        b64_string="...", mime_type="image/png", extra_api_params={"detail": "low"}
+    )
+    message = messages.Message(content=image_content, sender=actors.user)
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,...", "detail": "low"},
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_video_message_with_extra_api_params_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=videos.VideoURL(
+            url="https://youtube.com/watch?v=dummy", extra_api_params={"max_frames": 10}
+        ),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://youtube.com/watch?v=dummy",
+                        "max_frames": 10,
+                    },
+                },
+            ],
+        }
+    ]
+
+
+def test_dump_audio_message_with_extra_api_params_model_proxy():
+    serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
+    message = messages.Message(
+        content=audios.AudioContent(
+            b64_string="abc123", mime_type="audio/wav", extra_api_params={"language": "en"}
+        ),
+        sender=actors.user,
+    )
+    raw_messages = list(serializer.dump_message(message))
+    assert raw_messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": "abc123",
+                        "format": "wav",
+                        "language": "en",
+                    },
                 },
             ],
         }

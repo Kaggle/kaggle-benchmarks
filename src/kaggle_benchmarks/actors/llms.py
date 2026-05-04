@@ -87,6 +87,7 @@ print(outer_t)
 
 import dataclasses
 import enum
+import inspect
 import json
 import re
 import typing
@@ -183,7 +184,16 @@ class LLMChat(actors.Actor):
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
+        extra_api_params: dict[str, Any] | None = None,
     ) -> T:
+        """Sends a message to the LLM and returns the parsed response.
+
+        Args:
+            extra_api_params: Additional provider-specific API parameters
+                (e.g. top_p, max_tokens, max_output_tokens). Cannot include
+                parameters already on prompt() or respond() signatures
+                (seed, temperature, schema, system, etc.).
+        """
         if image is not None:
             match image:
                 case images.ImageURL():
@@ -206,13 +216,27 @@ class LLMChat(actors.Actor):
             actors.user.send(audio)
 
         actors.user.send(message)
-        return self.respond(
-            schema=schema,
-            seed=seed,
-            temperature=temperature if self.support_temperature else None,
-            tools=tools if tools is not None else [],
-            reasoning=reasoning,
-        ).content
+
+        extra = extra_api_params or {}
+        _reserved = (
+            set(inspect.signature(type(self).prompt).parameters)
+            | set(inspect.signature(type(self).respond).parameters)
+        ) - {"self", "message", "extra_api_params", "kwargs"}
+        conflicts = set(extra) & _reserved
+        if conflicts:
+            raise ValueError(
+                f"{conflicts} cannot be set via extra_api_params. "
+                f"Use the corresponding prompt() parameter instead."
+            )
+
+        kwargs = {
+            "seed": seed,
+            "temperature": temperature if self.support_temperature else None,
+            "tools": tools if tools is not None else [],
+            "reasoning": reasoning,
+        }
+
+        return self.respond(schema=schema, **kwargs, **extra).content
 
     @chats.emits_message
     def respond(
@@ -360,13 +384,15 @@ class OpenAI(LLMChat):
             kwargs.pop("seed", None)
 
         if reasoning is not None:
-            kwargs["reasoning_effort"] = reasoning
+            # extra_api_params takes precedence if reasoning_effort was
+            # already set by the caller.
+            kwargs.setdefault("reasoning_effort", reasoning)
             # The double-nested extra_body is intentional: the outer one is
             # consumed by the OpenAI SDK (merged into the request body), the
             # inner one arrives at Model Proxy as a top-level field where it
             # reads google.thinking_config.  Without include_thoughts, the
             # frontend drops thinking traces from the response.
-            if reasoning != "none":
+            if kwargs["reasoning_effort"] != "none":
                 kwargs.setdefault("extra_body", {})
                 kwargs["extra_body"].setdefault("extra_body", {})
                 kwargs["extra_body"]["extra_body"].setdefault("google", {})
@@ -535,7 +561,8 @@ class GoogleGenAI(LLMChat):
         if system:
             config_params["system_instruction"] = system
 
-        if reasoning is not None:
+        if reasoning is not None and "thinking_config" not in kwargs:
+            # Only set thinking_config if not already overwritten by the caller.
             level = self._REASONING_LEVEL_MAP[reasoning]
             if level is None:
                 config_params["thinking_config"] = types.ThinkingConfig(

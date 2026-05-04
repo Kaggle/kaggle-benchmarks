@@ -107,6 +107,15 @@ def test_prompt_thinking_config(reasoning, expected_level):
     assert tc.include_thoughts is True
 
 
+def test_prompt_forwards_extra_api_params():
+    """Tests that extra_api_params from prompt() reach the config."""
+    llm = MockedGoogleGenAI()
+    llm.prompt("Think hard", extra_api_params={"top_p": 0.95, "max_output_tokens": 500})
+
+    assert llm.config.top_p == 0.95
+    assert llm.config.max_output_tokens == 500
+
+
 def test_split_response_separates_content_and_thinking():
     """Tests that _split_response separates content from thought parts."""
     llm = MockedGoogleGenAI()
@@ -213,6 +222,24 @@ def test_thinking_captured_in_response(mocker):
     assert response == "There are 3 r's."
     last_message = t.messages[-1]
     assert last_message.reasoning_traces == "Let me count the letters..."
+
+
+def test_prompt_reasoning_none():
+    """Tests that reasoning='none' maps to thinking_budget=0."""
+    llm = MockedGoogleGenAI()
+    llm.prompt("Think hard", reasoning="none")
+
+    assert llm.config.thinking_config.thinking_budget == 0
+
+
+def test_extra_api_params_rejects_sdk_params():
+    """Tests that extra_api_params rejects params already on prompt()/respond() signatures."""
+    llm = MockedGoogleGenAI()
+    with pytest.raises(ValueError, match="cannot be set via extra_api_params"):
+        llm.prompt("Hi", temperature=0.5, extra_api_params={"temperature": 0.9})
+
+    with pytest.raises(ValueError, match="cannot be set via extra_api_params"):
+        llm.prompt("Hi", seed=42, extra_api_params={"seed": 99})
 
 
 @pytest.mark.parametrize("streaming", [True, False])

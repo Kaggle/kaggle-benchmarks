@@ -15,6 +15,7 @@
 import abc
 import mimetypes
 import re
+from typing import Any
 
 _YOUTUBE_URL_PATTERN = re.compile(
     r"^https?://(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)[\w-]+"
@@ -22,6 +23,9 @@ _YOUTUBE_URL_PATTERN = re.compile(
 
 
 class VideoContent(abc.ABC):
+    def __init__(self, extra_api_params: dict[str, Any] | None = None):
+        self.extra_api_params = dict(extra_api_params) if extra_api_params else {}
+
     @property
     @abc.abstractmethod
     def url(self) -> str: ...
@@ -40,7 +44,8 @@ class VideoContent(abc.ABC):
 
 
 class VideoURL(VideoContent):
-    def __init__(self, url: str):
+    def __init__(self, url: str, extra_api_params: dict[str, Any] | None = None):
+        super().__init__(extra_api_params=extra_api_params)
         self._url = url
 
     @property
@@ -64,7 +69,7 @@ class VideoURL(VideoContent):
         }
 
 
-def from_url(url: str) -> VideoURL:
+def from_url(url: str, extra_api_params: dict[str, Any] | None = None) -> VideoURL:
     """Creates VideoContent from a video URL (e.g. a YouTube link).
 
     Currently only YouTube URLs are supported.
@@ -75,4 +80,4 @@ def from_url(url: str) -> VideoURL:
             "Only YouTube URLs are currently supported "
             "(e.g. https://www.youtube.com/watch?v=aqz-KE-bpKQ)."
         )
-    return VideoURL(url)
+    return VideoURL(url, extra_api_params=extra_api_params)

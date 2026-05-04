@@ -14,15 +14,23 @@
 
 import base64
 import mimetypes
+from typing import Any
 
 import httpx
 
 
 class AudioContent:
-    def __init__(self, b64_string: str, mime_type: str, caption: str | None = None):
+    def __init__(
+        self,
+        b64_string: str,
+        mime_type: str,
+        caption: str | None = None,
+        extra_api_params: dict[str, Any] | None = None,
+    ):
         self._b64_string = b64_string
         self._mime_type = mime_type
         self.caption = caption
+        self.extra_api_params = dict(extra_api_params) if extra_api_params else {}
 
     @property
     def b64_string(self) -> str:
@@ -69,7 +77,10 @@ class AudioContent:
 
 
 def from_url(
-    url: str, caption: str | None = None, timeout: float = 30.0
+    url: str,
+    caption: str | None = None,
+    timeout: float = 30.0,
+    extra_api_params: dict[str, Any] | None = None,
 ) -> AudioContent:
     """Creates AudioContent from a URL by fetching and base64-encoding the audio."""
     try:
@@ -86,21 +97,28 @@ def from_url(
         base64.b64encode(response.content).decode(),
         mime_type,
         caption=caption,
+        extra_api_params=extra_api_params,
     )
 
 
-def from_path(path: str, caption: str | None = None) -> AudioContent:
+def from_path(
+    path: str, caption: str | None = None, extra_api_params: dict[str, Any] | None = None
+) -> AudioContent:
     """Creates AudioContent from a local audio file path."""
     with open(path, "rb") as audio_file:
         return AudioContent(
             base64.b64encode(audio_file.read()).decode(),
             mimetypes.guess_type(path)[0] or "audio/*",
             caption=caption,
+            extra_api_params=extra_api_params,
         )
 
 
 def from_base64(
-    b64_string: str | bytes, format: str = "mp3", caption: str | None = None
+    b64_string: str | bytes,
+    format: str = "mp3",
+    caption: str | None = None,
+    extra_api_params: dict[str, Any] | None = None,
 ) -> AudioContent:
     """Creates AudioContent directly from a base64 string."""
     if isinstance(b64_string, bytes):
@@ -109,4 +127,6 @@ def from_base64(
         base64.b64decode(b64_string, validate=True)
     except ValueError as e:
         raise ValueError(f"Invalid base64 audio data: {e}") from e
-    return AudioContent(b64_string, mime_type=f"audio/{format}", caption=caption)
+    return AudioContent(
+        b64_string, mime_type=f"audio/{format}", caption=caption, extra_api_params=extra_api_params
+    )

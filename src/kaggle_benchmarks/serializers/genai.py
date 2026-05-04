@@ -14,6 +14,8 @@
 
 import base64
 import logging
+import warnings
+from typing import Any
 
 from google.genai import types
 
@@ -21,6 +23,20 @@ from kaggle_benchmarks import llm_messages, messages
 from kaggle_benchmarks import tools as tool_utils
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers.base import BaseSerializer
+
+_PART_FIELDS = set(types.Part.model_fields.keys())
+
+
+def _filter_part_params(extra_api_params: dict[str, Any]) -> dict[str, Any]:
+    """Filters extra_api_params to only valid Part fields, warning on unsupported ones."""
+    unsupported = set(extra_api_params) - _PART_FIELDS
+    if unsupported:
+        warnings.warn(
+            f"Ignoring unsupported extra_api_params for GenAI Part: {unsupported}. "
+            f"Supported fields: {_PART_FIELDS}",
+            stacklevel=2,
+        )
+    return {k: v for k, v in extra_api_params.items() if k in _PART_FIELDS}
 
 
 class GenAISerializer(BaseSerializer):
@@ -64,17 +80,25 @@ class GenAISerializer(BaseSerializer):
                         # The API expects the raw base64 string, not bytes.
                         data=image.b64_string,
                         mime_type=image.mime_type,
-                    )
+                    ),
+                    **_filter_part_params(image.extra_api_params),
                 )
             ],
         )
 
     def dump_video(self, message: messages.Message[videos.VideoContent]):
-        """Serializes video URLs natively via types.Part.from_uri for the GenAI client."""
+        """Serializes video URLs natively as FileData parts for the GenAI client."""
         video = message.content
         yield types.Content(
             role=self.get_role(message.sender),
-            parts=[types.Part.from_uri(file_uri=video.url, mime_type=video.mime_type)],
+            parts=[
+                types.Part(
+                    file_data=types.FileData(
+                        file_uri=video.url, mime_type=video.mime_type
+                    ),
+                    **_filter_part_params(video.extra_api_params),
+                )
+            ],
         )
 
     def dump_audio(self, message: messages.Message[audios.AudioContent]):
@@ -84,9 +108,12 @@ class GenAISerializer(BaseSerializer):
         if audio_content.caption:
             parts.append(types.Part.from_text(text=audio_content.caption))
         parts.append(
-            types.Part.from_bytes(
-                data=base64.b64decode(audio_content.b64_string),
-                mime_type=audio_content.mime_type,
+            types.Part(
+                inline_data=types.Blob(
+                    data=base64.b64decode(audio_content.b64_string),
+                    mime_type=audio_content.mime_type,
+                ),
+                **_filter_part_params(audio_content.extra_api_params),
             )
         )
         yield types.Content(

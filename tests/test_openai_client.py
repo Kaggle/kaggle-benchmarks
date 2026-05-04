@@ -211,6 +211,12 @@ def test_prompt_reasoning_sets_effort_and_thinking_config(model):
     assert extra["include_thoughts"] is True
 
 
+def test_prompt_forwards_extra_api_params():
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Hi", extra_api_params={"max_tokens": 500})
+    assert llm.kwargs["max_tokens"] == 500
+
+
 def test_reasoning_content_captured_in_response(mocker):
     """Tests that reasoning_content is captured as reasoning_traces.
 
@@ -375,6 +381,22 @@ def test_think_tags_captured_in_response(mocker):
     assert response == "There are 3 r's."
     last_message = t.messages[-1]
     assert last_message.reasoning_traces == "Counting the letters..."
+
+
+def test_extra_api_params_rejects_sdk_params():
+    """Tests that extra_api_params rejects params already on prompt()/respond() signatures."""
+    llm = MockedOpenAI(model="test-model")
+    with pytest.raises(ValueError, match="cannot be set via extra_api_params"):
+        llm.prompt("Hi", seed=42, extra_api_params={"seed": 99})
+
+
+def test_prompt_reasoning_none_sets_effort_without_thinking_config():
+    """Tests that reasoning='none' sets reasoning_effort but skips thinking_config."""
+    llm = MockedOpenAI(model="test-model")
+    llm.prompt("Hi", reasoning="none")
+
+    assert llm.kwargs["reasoning_effort"] == "none"
+    assert "extra_body" not in llm.kwargs
 
 
 def test_invoke_prompt():
