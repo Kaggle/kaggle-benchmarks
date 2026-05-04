@@ -92,6 +92,8 @@ import pronouncing
 
 > **Rule:** Prefer `# !pip install ...` (commented) over `!pip install ...` so the file works everywhere. Only use uncommented magics when the file is exclusively for Kaggle notebook execution.
 
+> **Rule:** Do NOT wrap `.run()` or `.evaluate()` calls inside `if __name__ == "__main__":`. Benchmark files are notebook-style scripts — all code runs at the top level. Place `.run()` / `.evaluate()` directly after the task definition, in the same cell or the next cell.
+
 ---
 
 ## 2. Defining Tasks
@@ -1057,6 +1059,7 @@ print(len(fruits))
 | Not checking `assess_response_with_judge` for `None` | Always check: `if assessment is None:` |
 | Using `kbench.llm` locally without Kaggle configured | Use model proxy or set env vars |
 | Forgetting `schema=` when needing structured output | Pass `schema=MyDataclass` to `llm.prompt()` |
+| Wrapping `.run()` / `.evaluate()` in `if __name__ == "__main__":` | Place them at module top level — benchmark files are scripts, not importable modules |
 | Using `user.send()` with image URLs | `user.send()` passes URLs as-is; prefer `llm.prompt(image=)` for auto-conversion |
 | Not isolating judge conversations | Use `with kbench.chats.new("judge"):` |
 | Multiple tasks sharing conversation history | Each `.run()` creates its own conversation |
