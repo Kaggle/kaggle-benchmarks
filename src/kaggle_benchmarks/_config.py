@@ -268,6 +268,12 @@ class Config:
         self.interactive_mode = True
         self.apply()
 
+    # TODO: add a `disable_interactive_mode()` for API symmetry with
+    # disable_console_mode. Implementation needs to explicitly unbind any
+    # existing PanelUI handler — apply()'s auto-detect block no longer enters
+    # the panel branch in notebooks, so toggling interactive_mode=False alone
+    # would leave a stale handler bound.
+
     def enable_console_mode(self, quiet: bool = False, color: bool | None = None):
         self.console_mode = True
         self.console_quiet = quiet
