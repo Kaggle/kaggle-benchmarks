@@ -164,6 +164,12 @@ def _parse_tool_call(call_data: dict) -> ToolInvocation:
     )
 
 
+class ToolInvocationLimitExhausted(Exception):
+    """Raised when the tool invocation loop exceeds max_tool_calls."""
+
+    pass
+
+
 class LLMChat(actors.Actor):
     """A chat agent that interacts with a Large Language Model (LLM)."""
 
@@ -259,22 +265,27 @@ class LLMChat(actors.Actor):
         if tools:
             kwargs["tools"] = tools
 
-        response = self.respond(schema=schema, **kwargs, **extra)
-
-        # Tool invocation loop: if the LLM returns tool calls, invoke each
-        # tool, send the results back into the chat, and ask the LLM again.
+        # Tool invocation loop: fork the chat to isolate tool-calling
+        # round-trips from the main conversation, matching PR #12's design.
         if tools:
-            for _ in range(max_tool_calls):
-                tool_calls = response._meta.get("tool_calls")
-                if not tool_calls:
-                    break
-                for call_data in tool_calls:
-                    invocation = _parse_tool_call(call_data)
-                    result = invoke_tool(invocation, tools)
-                    # Send the tool result as a message from a Tool actor so
-                    # serializers can dispatch on ToolInvocationResult content.
-                    actors.Tool(name=invocation.name).send(result)
-                response = self.respond(schema=schema, **kwargs, **extra)
+            with chats.fork(name="Tool loop") as _subchat:
+                for _ in range(max_tool_calls):
+                    response = self.respond(schema=schema, **kwargs, **extra)
+
+                    tool_calls = response._meta.get("tool_calls")
+                    if not tool_calls:
+                        break
+
+                    for call_data in tool_calls:
+                        invocation = _parse_tool_call(call_data)
+                        result = invoke_tool(invocation, tools)
+                        actors.Tool(name=invocation.name).send(result)
+                else:
+                    raise ToolInvocationLimitExhausted(
+                        f"Exceeded {max_tool_calls} tool invocation rounds."
+                    )
+        else:
+            response = self.respond(schema=schema, **kwargs, **extra)
 
         return response.content
 
