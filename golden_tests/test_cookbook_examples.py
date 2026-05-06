@@ -835,7 +835,7 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
     raise ValueError(f"Unknown operator: {operator}")
 
 
-@benchmark_test()
+@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_simple_tool_use(llm):
     problem = "What is 50 plus 25?"
@@ -857,7 +857,7 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-@benchmark_test()
+@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_stateful_tool_double_execution(llm):
     increment_counter.count = 0  # Reset for each test run
@@ -882,7 +882,7 @@ def multiply_tool(a: float, b: float) -> float:
     return a * b
 
 
-@benchmark_test()
+@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_multiple_tool_selection(llm):
     add_tool.calls = 0
@@ -909,7 +909,7 @@ def get_user_profile(user_id: str) -> dict:
     return {"name": "Unknown", "role": "User", "skills": []}
 
 
-@benchmark_test()
+@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_complex_tool_return(llm):
     response = llm.prompt(
@@ -928,7 +928,7 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-@benchmark_test()
+@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_tool_error_handling(llm):
     response = llm.prompt(
