@@ -191,33 +191,47 @@ class Config:
         # otherwise auto-detect based on environment.
         use_panel = self.interactive_mode
         use_console = self.console_mode
+        host_env = detect_host_environment()
 
         if (
             not use_panel
             and not use_console
             and self.execution_mode != ExecutionMode.TESTING
         ):
-            # Auto-detect: any notebook kernel -> PanelUI, otherwise -> ConsoleUI
-            if detect_host_environment() == HostEnvironment.TERMINAL:
+            # Only auto-enable ConsoleUI in terminals. In notebook kernels, leave
+            # the handler unbound and rely on cell-output rendering via
+            # __panel__/_repr_mimebundle_. Users can opt in to live PanelUI
+            # streaming via enable_interactive_mode() or INTERACTIVE_UI=True.
+            if host_env == HostEnvironment.TERMINAL:
                 use_console = True
-            else:
-                use_panel = True
+
+        # Initialize Panel for cell-output rendering in any notebook kernel,
+        # and whenever PanelUI is being explicitly enabled. _repr_mimebundle_
+        # on Run/Runs/Chat/Message uses Panel widgets, which need
+        # pn.extension() (run as a side effect of importing setup_panel) to
+        # register their notebook comms. The TESTING guard keeps tests that
+        # patch detect_host_environment from triggering Panel imports.
+        notebook_kernel = (
+            host_env != HostEnvironment.TERMINAL
+            and self.execution_mode != ExecutionMode.TESTING
+        )
+        if use_panel or notebook_kernel:
+            from kaggle_benchmarks.ui import (  # noqa: F401
+                ipython_magics,
+                setup_panel,
+            )
 
         if use_panel:
             import panel as pn
 
             pn.config.theme = self.ui_theme  # type: ignore
             from kaggle_benchmarks import events
-            from kaggle_benchmarks.ui import (  # noqa: F401
-                ipython_magics,
-                panel,
-                setup_panel,
-            )
+            from kaggle_benchmarks.ui import panel as panel_ui
 
-            if not isinstance(self.ui_handler, panel.PanelUI):
+            if not isinstance(self.ui_handler, panel_ui.PanelUI):
                 if self.ui_handler is not None:
                     events.manager.unbind(self.ui_handler)
-                self.ui_handler = panel.PanelUI()
+                self.ui_handler = panel_ui.PanelUI()
                 events.manager.bind(self.ui_handler)
 
         elif use_console:
@@ -253,6 +267,12 @@ class Config:
     def enable_interactive_mode(self):
         self.interactive_mode = True
         self.apply()
+
+    # TODO: add a `disable_interactive_mode()` for API symmetry with
+    # disable_console_mode. Implementation needs to explicitly unbind any
+    # existing PanelUI handler — apply()'s auto-detect block no longer enters
+    # the panel branch in notebooks, so toggling interactive_mode=False alone
+    # would leave a stale handler bound.
 
     def enable_console_mode(self, quiet: bool = False, color: bool | None = None):
         self.console_mode = True
