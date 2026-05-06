@@ -335,7 +335,9 @@ def test_dump_audio_message_with_extra_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=audios.AudioContent(
-            b64_string="abc123", mime_type="audio/wav", extra_api_params={"language": "en"}
+            b64_string="abc123",
+            mime_type="audio/wav",
+            extra_api_params={"language": "en"},
         ),
         sender=actors.user,
     )

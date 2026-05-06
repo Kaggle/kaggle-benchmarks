@@ -102,7 +102,9 @@ def from_url(
 
 
 def from_path(
-    path: str, caption: str | None = None, extra_api_params: dict[str, Any] | None = None
+    path: str,
+    caption: str | None = None,
+    extra_api_params: dict[str, Any] | None = None,
 ) -> AudioContent:
     """Creates AudioContent from a local audio file path."""
     with open(path, "rb") as audio_file:
@@ -128,5 +130,8 @@ def from_base64(
     except ValueError as e:
         raise ValueError(f"Invalid base64 audio data: {e}") from e
     return AudioContent(
-        b64_string, mime_type=f"audio/{format}", caption=caption, extra_api_params=extra_api_params
+        b64_string,
+        mime_type=f"audio/{format}",
+        caption=caption,
+        extra_api_params=extra_api_params,
     )
