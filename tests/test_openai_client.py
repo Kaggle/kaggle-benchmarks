@@ -197,13 +197,9 @@ def test_invoke():
     assert llm.kwargs.get("response_format") is None
 
 
-@pytest.mark.parametrize(
-    "model",
-    ["google/gemini-2.5-flash", "anthropic/claude-sonnet", "openai/gpt-5.4"],
-)
-def test_prompt_reasoning_sets_effort_and_thinking_config(model):
-    """Tests that reasoning sets reasoning_effort and include_thoughts for all models."""
-    llm = MockedOpenAI(model=model)
+def test_prompt_reasoning_sets_effort_and_thinking_config():
+    """Tests that reasoning sets reasoning_effort and thinking_config for Google models."""
+    llm = MockedOpenAI(model="google/gemini-2.5-flash")
     llm.prompt("Think hard", reasoning="high")
 
     assert llm.kwargs["reasoning_effort"] == "high"
@@ -397,6 +393,23 @@ def test_prompt_reasoning_none_sets_effort_without_thinking_config():
 
     assert llm.kwargs["reasoning_effort"] == "none"
     assert "extra_body" not in llm.kwargs
+
+
+def test_reasoning_extra_body_only_for_google_models():
+    """Tests that google thinking_config extra_body is only added for google/ models."""
+    google_llm = MockedOpenAI(model="google/gemini-2.5-flash")
+    google_llm.prompt("Hi", reasoning="high")
+    assert "extra_body" in google_llm.kwargs
+
+    openai_llm = MockedOpenAI(model="openai/gpt-5.4-2026-03-05")
+    openai_llm.prompt("Hi", reasoning="high")
+    assert "extra_body" not in openai_llm.kwargs
+    assert openai_llm.kwargs["reasoning_effort"] == "high"
+
+    anthropic_llm = MockedOpenAI(model="anthropic/claude-sonnet-4-6@default")
+    anthropic_llm.prompt("Hi", reasoning="high")
+    assert "extra_body" not in anthropic_llm.kwargs
+    assert anthropic_llm.kwargs["reasoning_effort"] == "high"
 
 
 def test_invoke_prompt():

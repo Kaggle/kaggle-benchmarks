@@ -392,7 +392,7 @@ class OpenAI(LLMChat):
             # inner one arrives at Model Proxy as a top-level field where it
             # reads google.thinking_config.  Without include_thoughts, the
             # frontend drops thinking traces from the response.
-            if kwargs["reasoning_effort"] != "none":
+            if kwargs["reasoning_effort"] != "none" and self.model.startswith("google/"):
                 kwargs.setdefault("extra_body", {})
                 kwargs["extra_body"].setdefault("extra_body", {})
                 kwargs["extra_body"]["extra_body"].setdefault("google", {})
