@@ -102,6 +102,11 @@ from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
+from kaggle_benchmarks.tools.base import ToolInvocation, invoke_tool
+from kaggle_benchmarks.tools.functions import (
+    function_to_genai_tool,
+    function_to_openai_tool,
+)
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -146,6 +151,19 @@ class LLMResponse:
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
+def _parse_tool_call(call_data: dict) -> ToolInvocation:
+    """Converts an OpenAI-format tool call dict to a ToolInvocation."""
+    func = call_data["function"]
+    arguments = func["arguments"]
+    if isinstance(arguments, str):
+        arguments = json.loads(arguments)
+    return ToolInvocation(
+        name=func["name"],
+        arguments=arguments,
+        call_id=call_data.get("id"),
+    )
+
+
 class LLMChat(actors.Actor):
     """A chat agent that interacts with a Large Language Model (LLM)."""
 
@@ -185,6 +203,7 @@ class LLMChat(actors.Actor):
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
         extra_api_params: dict[str, Any] | None = None,
+        max_tool_calls: int = 5,
     ) -> T:
         """Sends a message to the LLM and returns the parsed response.
 
@@ -193,6 +212,9 @@ class LLMChat(actors.Actor):
                 (e.g. top_p, max_tokens, max_output_tokens). Cannot include
                 parameters already on prompt() or respond() signatures
                 (seed, temperature, schema, system, etc.).
+            max_tool_calls: Maximum number of tool invocation round-trips
+                before stopping the loop. Only relevant when tools are
+                provided.
         """
         if image is not None:
             match image:
@@ -232,11 +254,29 @@ class LLMChat(actors.Actor):
         kwargs = {
             "seed": seed,
             "temperature": temperature if self.support_temperature else None,
-            "tools": tools if tools is not None else [],
             "reasoning": reasoning,
         }
+        if tools:
+            kwargs["tools"] = tools
 
-        return self.respond(schema=schema, **kwargs, **extra).content
+        response = self.respond(schema=schema, **kwargs, **extra)
+
+        # Tool invocation loop: if the LLM returns tool calls, invoke each
+        # tool, send the results back into the chat, and ask the LLM again.
+        if tools:
+            for _ in range(max_tool_calls):
+                tool_calls = response._meta.get("tool_calls")
+                if not tool_calls:
+                    break
+                for call_data in tool_calls:
+                    invocation = _parse_tool_call(call_data)
+                    result = invoke_tool(invocation, tools)
+                    # Send the tool result as a message from a Tool actor so
+                    # serializers can dispatch on ToolInvocationResult content.
+                    actors.Tool(name=invocation.name).send(result)
+                response = self.respond(schema=schema, **kwargs, **extra)
+
+        return response.content
 
     @chats.emits_message
     def respond(
@@ -377,6 +417,11 @@ class OpenAI(LLMChat):
             messages = [Message(sender=actors.system, content=system)] + messages
 
         raw_messages = list(self.serializer.dump_messages(messages))
+
+        # Convert Python callables to OpenAI-format tool schema dicts.
+        raw_tools = kwargs.pop("tools", [])
+        if raw_tools:
+            kwargs["tools"] = [function_to_openai_tool(t) for t in raw_tools]
 
         if self._should_remove_seed():
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
@@ -561,6 +606,20 @@ class GoogleGenAI(LLMChat):
         if system:
             config_params["system_instruction"] = system
 
+        # Convert Python callables to GenAI FunctionDeclarations.
+        # The GenAI SDK accepts callables natively via
+        # FunctionDeclaration.from_callable_with_api_option, so we convert
+        # each function and wrap them in a types.Tool.
+        tools_list = kwargs.pop("tools", [])
+        if tools_list:
+            config_params["tools"] = [
+                types.Tool(
+                    function_declarations=[
+                        function_to_genai_tool(t) for t in tools_list
+                    ]
+                )
+            ]
+
         if reasoning is not None and "thinking_config" not in kwargs:
             # Only set thinking_config if not already overwritten by the caller.
             level = self._REASONING_LEVEL_MAP[reasoning]
@@ -612,8 +671,29 @@ class GoogleGenAI(LLMChat):
                 )
 
             content, thinking = self._split_response(response)
+
+            # Extract function calls from response parts and normalise them
+            # to the OpenAI-style dict format so the tool loop in prompt()
+            # can use _parse_tool_call() uniformly for both providers.
+            tool_calls = None
+            parts = response.candidates[0].content.parts or []
+            fn_calls = [p.function_call for p in parts if p.function_call]
+            if fn_calls:
+                tool_calls = [
+                    {
+                        "id": f"call_{i}",
+                        "type": "function",
+                        "function": {
+                            "name": fc.name,
+                            "arguments": dict(fc.args) if fc.args else {},
+                        },
+                    }
+                    for i, fc in enumerate(fn_calls)
+                ]
+
             return LLMResponse(
                 content=content,
                 reasoning_traces=thinking,
+                tool_calls=tool_calls,
                 meta=self._get_usage_meta(response.usage_metadata),
             )

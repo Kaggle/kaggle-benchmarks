@@ -51,10 +51,11 @@ def test_get_function_schema_with_unserializable_arg():
 def test_function_to_openai_tool():
     tool = function_to_openai_tool(sample_function)
     assert tool["type"] == "function"
-    assert tool["name"] == "sample_function"
-    assert tool["description"] == "This is a sample function."
-    assert tool["parameters"]["properties"]["a"]["type"] == "integer"
-    assert "a" in tool["parameters"]["required"]
+    func = tool["function"]
+    assert func["name"] == "sample_function"
+    assert func["description"] == "This is a sample function."
+    assert func["parameters"]["properties"]["a"]["type"] == "integer"
+    assert "a" in func["parameters"]["required"]
 
 
 def test_function_to_openai_pydantic():
@@ -67,9 +68,10 @@ def test_function_to_openai_pydantic():
         return args.a
 
     tool = function_to_openai_tool(sample_function_pydantic)
-    assert tool["name"] == "sample_function_pydantic"
-    assert tool["parameters"]["properties"]["args"]["$ref"] == "#/$defs/Args"
-    defs = tool["parameters"]["$defs"]
+    func = tool["function"]
+    assert func["name"] == "sample_function_pydantic"
+    assert func["parameters"]["properties"]["args"]["$ref"] == "#/$defs/Args"
+    defs = func["parameters"]["$defs"]
     assert defs["Args"]["properties"]["a"]["type"] == "integer"
     assert defs["Args"]["properties"]["b"]["type"] == "string"
 

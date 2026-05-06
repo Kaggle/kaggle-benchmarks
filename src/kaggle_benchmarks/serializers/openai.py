@@ -61,10 +61,17 @@ class OpenAICompletionSerializer(BaseSerializer):
 
     def dump_text_message(self, message: messages.Message):
         """Serializes a standard textual payload."""
-        yield {
+        msg = {
             "role": self.get_role(message.sender),
-            "content": message.content,
+            "content": message.content or None,
         }
+        # When an assistant message carried tool calls, include them in
+        # the serialized payload so the API can match subsequent tool
+        # result messages by their call IDs.
+        tool_calls = message._meta.get("tool_calls")
+        if tool_calls and self.get_role(message.sender) == "assistant":
+            msg["tool_calls"] = tool_calls
+        yield msg
 
     def dump_tool_invocation(
         self, message: messages.Message[tool_utils.ToolInvocationResult]
@@ -154,3 +161,18 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
         yield from self.dump_text_message(
             messages.Message(sender=message.sender, content=str(message.content))
         )
+
+    def dump_tool_invocation(
+        self, message: messages.Message[tool_utils.ToolInvocationResult]
+    ):
+        """Serializes a tool result using the Chat Completions format.
+
+        Model Proxy uses the Chat Completions API, which expects tool results
+        as {"role": "tool", "content": "...", "tool_call_id": "..."}.
+        """
+        result = message.content
+        yield {
+            "role": "tool",
+            "content": str(result.output),
+            "tool_call_id": str(result.call_id) if result.call_id else "",
+        }

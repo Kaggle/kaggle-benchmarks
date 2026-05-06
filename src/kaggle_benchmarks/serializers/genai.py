@@ -61,9 +61,29 @@ class GenAISerializer(BaseSerializer):
 
     def dump_text_message(self, message: messages.Message[str]):
         """Serializes a standard textual payload into a Part object."""
-        yield types.Content(
-            role=self.get_role(message.sender), parts=[types.Part(text=message.content)]
-        )
+        parts = []
+        if message.content:
+            parts.append(types.Part(text=message.content))
+
+        # When an assistant message carried tool calls, include them as
+        # function_call Parts so the GenAI API sees the model's tool call
+        # decisions in the conversation history.
+        tool_calls = message._meta.get("tool_calls")
+        if tool_calls and self.get_role(message.sender) == "model":
+            for tc in tool_calls:
+                func = tc.get("function", {})
+                parts.append(
+                    types.Part.from_function_call(
+                        name=func.get("name", ""),
+                        args=func.get("arguments", {}),
+                    )
+                )
+
+        # Ensure at least one part is present to avoid empty Content objects.
+        if not parts:
+            parts.append(types.Part(text=""))
+
+        yield types.Content(role=self.get_role(message.sender), parts=parts)
 
     def dump_image(self, message: messages.Message[images.ImageContent]):
         """Serializes images natively as inline data Blobs for the GenAI client."""

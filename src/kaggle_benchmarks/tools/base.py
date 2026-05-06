@@ -107,7 +107,21 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
             call_id=call.call_id,
         )
     try:
-        output = tool(**call.arguments)
+        # Filter arguments to only those the function accepts.
+        # Some backends (e.g. Model Proxy) inject extra fields like
+        # 'signature' into tool call arguments that the actual function
+        # does not expect.
+        sig = inspect.signature(tool)
+        has_var_keyword = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
+        if has_var_keyword:
+            filtered_args = call.arguments
+        else:
+            accepted = set(sig.parameters.keys())
+            filtered_args = {k: v for k, v in call.arguments.items() if k in accepted}
+
+        output = tool(**filtered_args)
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,

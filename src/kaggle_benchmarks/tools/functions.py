@@ -59,9 +59,11 @@ def function_to_openai_tool(func: Callable) -> dict:
 
     return {
         "type": "function",
-        "name": func.__name__,
-        "description": (func.__doc__ or "").strip(),
-        "parameters": parameters,
+        "function": {
+            "name": func.__name__,
+            "description": (func.__doc__ or "").strip(),
+            "parameters": parameters,
+        },
     }
 
 
