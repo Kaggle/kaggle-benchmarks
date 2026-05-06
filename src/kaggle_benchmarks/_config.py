@@ -214,7 +214,6 @@ class Config:
         if host_env != HostEnvironment.TERMINAL:
             from kaggle_benchmarks.ui import (  # noqa: F401
                 ipython_magics,
-                panel as _panel_ui_mod,
                 setup_panel,
             )
 
@@ -225,8 +224,10 @@ class Config:
             from kaggle_benchmarks import events
             from kaggle_benchmarks.ui import (  # noqa: F401
                 ipython_magics,
-                panel as panel_ui,
                 setup_panel,
+            )
+            from kaggle_benchmarks.ui import (
+                panel as panel_ui,
             )
 
             if not isinstance(self.ui_handler, panel_ui.PanelUI):
