@@ -191,6 +191,7 @@ class Config:
         # otherwise auto-detect based on environment.
         use_panel = self.interactive_mode
         use_console = self.console_mode
+        host_env = detect_host_environment()
 
         if (
             not use_panel
@@ -201,8 +202,21 @@ class Config:
             # the handler unbound and rely on cell-output rendering via
             # __panel__/_repr_mimebundle_. Users can opt in to live PanelUI
             # streaming via enable_interactive_mode() or INTERACTIVE_UI=True.
-            if detect_host_environment() == HostEnvironment.TERMINAL:
+            if host_env == HostEnvironment.TERMINAL:
                 use_console = True
+
+        # Initialize Panel for cell-output rendering in any notebook kernel.
+        # _repr_mimebundle_ on Run/Runs/Chat/Message uses Panel widgets, which
+        # need pn.extension() (run as a side effect of importing setup_panel)
+        # to register their notebook comms. This runs even when PanelUI is not
+        # event-bound, since the passive cell-output path is independent of
+        # live event streaming.
+        if host_env != HostEnvironment.TERMINAL:
+            from kaggle_benchmarks.ui import (  # noqa: F401
+                ipython_magics,
+                panel as _panel_ui_mod,
+                setup_panel,
+            )
 
         if use_panel:
             import panel as pn
@@ -211,14 +225,14 @@ class Config:
             from kaggle_benchmarks import events
             from kaggle_benchmarks.ui import (  # noqa: F401
                 ipython_magics,
-                panel,
+                panel as panel_ui,
                 setup_panel,
             )
 
-            if not isinstance(self.ui_handler, panel.PanelUI):
+            if not isinstance(self.ui_handler, panel_ui.PanelUI):
                 if self.ui_handler is not None:
                     events.manager.unbind(self.ui_handler)
-                self.ui_handler = panel.PanelUI()
+                self.ui_handler = panel_ui.PanelUI()
                 events.manager.bind(self.ui_handler)
 
         elif use_console:

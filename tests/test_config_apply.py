@@ -20,6 +20,8 @@ opt in via enable_interactive_mode() / INTERACTIVE_UI=True. Terminals
 keep the auto-on ConsoleUI introduced in #149.
 """
 
+import sys
+
 import pytest
 
 from kaggle_benchmarks import _config, events
@@ -86,6 +88,29 @@ def test_terminal_default_autobinds_console_ui(cfg, patch_host_env):
 
     assert isinstance(cfg.ui_handler, console_ui.ConsoleUI)
     assert cfg.ui_handler in events.manager.listeners
+
+
+@pytest.mark.parametrize(
+    "host_env",
+    [HostEnvironment.JUPYTER, HostEnvironment.VSCODE_NOTEBOOK],
+)
+def test_notebook_kernel_initializes_setup_panel(cfg, patch_host_env, host_env):
+    """In a notebook host env, apply() must import setup_panel so
+    pn.extension() runs and cell-output rendering via _repr_mimebundle_
+    works — even when no event handler is bound."""
+    patch_host_env(host_env)
+    cfg.execution_mode = ExecutionMode.NOTEBOOK
+    cfg.interactive_mode = False
+    cfg.console_mode = False
+    cfg.ui_handler = None
+    events.manager.listeners = []
+
+    cfg.apply()
+
+    assert "kaggle_benchmarks.ui.setup_panel" in sys.modules
+    # Apply should still leave no event-bound handler.
+    assert cfg.ui_handler is None
+    assert events.manager.listeners == []
 
 
 @pytest.mark.parametrize(
