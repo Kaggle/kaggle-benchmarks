@@ -205,13 +205,17 @@ class Config:
             if host_env == HostEnvironment.TERMINAL:
                 use_console = True
 
-        # Initialize Panel for cell-output rendering in any notebook kernel.
-        # _repr_mimebundle_ on Run/Runs/Chat/Message uses Panel widgets, which
-        # need pn.extension() (run as a side effect of importing setup_panel)
-        # to register their notebook comms. This runs even when PanelUI is not
-        # event-bound, since the passive cell-output path is independent of
-        # live event streaming.
-        if host_env != HostEnvironment.TERMINAL:
+        # Initialize Panel for cell-output rendering in any notebook kernel,
+        # and whenever PanelUI is being explicitly enabled. _repr_mimebundle_
+        # on Run/Runs/Chat/Message uses Panel widgets, which need
+        # pn.extension() (run as a side effect of importing setup_panel) to
+        # register their notebook comms. The TESTING guard keeps tests that
+        # patch detect_host_environment from triggering Panel imports.
+        notebook_kernel = (
+            host_env != HostEnvironment.TERMINAL
+            and self.execution_mode != ExecutionMode.TESTING
+        )
+        if use_panel or notebook_kernel:
             from kaggle_benchmarks.ui import (  # noqa: F401
                 ipython_magics,
                 setup_panel,
@@ -222,13 +226,7 @@ class Config:
 
             pn.config.theme = self.ui_theme  # type: ignore
             from kaggle_benchmarks import events
-            from kaggle_benchmarks.ui import (  # noqa: F401
-                ipython_magics,
-                setup_panel,
-            )
-            from kaggle_benchmarks.ui import (
-                panel as panel_ui,
-            )
+            from kaggle_benchmarks.ui import panel as panel_ui
 
             if not isinstance(self.ui_handler, panel_ui.PanelUI):
                 if self.ui_handler is not None:
