@@ -23,6 +23,7 @@
     `assess_response_with_judge`](#model-based-assertions-with-assess_response_with_judge)
 - [4. Evaluating Multiple Models on
   Kaggle](#4-evaluating-multiple-models-on-kaggle)
+- [5. Choosing a UI](#5-choosing-a-ui)
 
 This guide provides a deeper dive into the core APIs of the
 `kaggle-benchmarks` library. We’ll cover how to define tasks, interact
@@ -643,3 +644,43 @@ template.
 2.  On the created task page, use “Evaluate More Models” button to
     select the models you want to evaluate. Kaggle will then run your
     task, swapping in each model you choose to generate the leaderboard.
+
+## 5. Choosing a UI
+
+`kaggle-benchmarks` renders runs differently depending on where you
+execute them:
+
+- **Notebook kernels** (Jupyter, Kaggle, VSCode) display each `Run` via
+  its cell output (Panel-based rich widgets). No live event-bound UI is
+  attached by default, so heavy benchmarks (e.g. video QA) won't tax
+  the kernel with continuous redraws.
+- **Terminals / scripts** auto-bind `ConsoleUI`, which prints a
+  structured transcript of each run.
+
+### Opting in to live PanelUI streaming in notebooks
+
+If you want the live, streaming Panel UI inside a notebook (e.g. while
+iterating on a small task and you want to watch tokens arrive), opt in
+explicitly:
+
+``` python
+import kaggle_benchmarks as kbench
+
+kbench.config.enable_interactive_mode()
+```
+
+Equivalently, set `INTERACTIVE_UI=True` in your environment before
+importing the library.
+
+### Console output
+
+In a terminal, `ConsoleUI` is on by default. To force it on (for
+example, when running inside a notebook for log-friendly output) or
+tune its behavior, use:
+
+``` python
+kbench.config.enable_console_mode(quiet=False, color=None)
+```
+
+The corresponding environment variables are `BENCHMARK_CONSOLE_UI`,
+`BENCHMARK_CONSOLE_QUIET`, and `BENCHMARK_CONSOLE_COLOR`.
