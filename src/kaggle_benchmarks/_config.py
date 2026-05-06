@@ -197,11 +197,12 @@ class Config:
             and not use_console
             and self.execution_mode != ExecutionMode.TESTING
         ):
-            # Auto-detect: any notebook kernel -> PanelUI, otherwise -> ConsoleUI
+            # Only auto-enable ConsoleUI in terminals. In notebook kernels, leave
+            # the handler unbound and rely on cell-output rendering via
+            # __panel__/_repr_mimebundle_. Users can opt in to live PanelUI
+            # streaming via enable_interactive_mode() or INTERACTIVE_UI=True.
             if detect_host_environment() == HostEnvironment.TERMINAL:
                 use_console = True
-            else:
-                use_panel = True
 
         if use_panel:
             import panel as pn
