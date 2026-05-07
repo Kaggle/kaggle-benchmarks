@@ -120,11 +120,12 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         has_var_keyword = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
         )
+        args = call.arguments or {}
         if has_var_keyword:
-            filtered_args = call.arguments
+            filtered_args = args
         else:
             accepted = set(sig.parameters.keys())
-            filtered_args = {k: v for k, v in call.arguments.items() if k in accepted}
+            filtered_args = {k: v for k, v in args.items() if k in accepted}
 
         output = tool(**filtered_args)
         return ToolInvocationResult(

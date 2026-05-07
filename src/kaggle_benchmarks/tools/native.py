@@ -33,7 +33,7 @@ T = TypeVar("T")
 DEFAULT_MAX_TOOL_ROUNDS = 10
 
 
-def native_agent(
+def native_tool_agent(
     llm,
     tools: list[Callable],
     schema: type[T] = str,
@@ -46,6 +46,10 @@ def native_agent(
     conversation, then loops: call ``llm.respond()`` → check for tool_calls
     → invoke tools → send results → repeat until the LLM responds without
     tool calls or ``max_tool_rounds`` is exhausted.
+
+    This is the counterpart of ``tools.simulate.simulate_agent`` (PR #12),
+    which uses structured output to emulate tool calling for models that
+    lack native support.
 
     Args:
         llm: The LLM chat actor to use.

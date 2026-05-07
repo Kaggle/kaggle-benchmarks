@@ -45,6 +45,11 @@ def _always_fails() -> str:
     raise ValueError("Simulated error")
 
 
+def _no_args() -> str:
+    """A tool that takes no arguments."""
+    return "ok"
+
+
 class TestToolInvocationLoop:
     """Tests for the prompt() tool invocation loop."""
 
@@ -126,3 +131,13 @@ class TestToolInvocationLoop:
 
         with pytest.raises(ToolInvocationLimitExhausted):
             llm.prompt("Keep calling tools.", tools=[_add])
+
+    def test_none_arguments_handled(self):
+        """When the model returns None arguments, the tool still executes."""
+        tool_response = _make_tool_call_response("_no_args", None)
+        final_response = LLMMessage(sender=None, content="done")
+
+        llm = MockedChat(responses=[tool_response, final_response])
+        result = llm.prompt("Call the tool.", tools=[_no_args])
+
+        assert result == "done"

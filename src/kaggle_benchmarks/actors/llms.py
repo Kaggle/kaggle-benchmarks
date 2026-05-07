@@ -106,7 +106,7 @@ from kaggle_benchmarks.tools.functions import (
     function_to_genai_tool,
     function_to_openai_tool,
 )
-from kaggle_benchmarks.tools.native import native_agent
+from kaggle_benchmarks.tools.native import native_tool_agent
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -241,7 +241,7 @@ class LLMChat(actors.Actor):
         }
 
         if tools:
-            response = native_agent(self, tools, schema=schema, **kwargs, **extra)
+            response = native_tool_agent(self, tools, schema=schema, **kwargs, **extra)
         else:
             response = self.respond(schema=schema, **kwargs, **extra)
 
