@@ -268,6 +268,7 @@ class LLMChat(actors.Actor):
         # Tool invocation loop: fork the chat to isolate tool-calling
         # round-trips from the main conversation, matching PR #12's design.
         if tools:
+            exhausted = False
             with chats.fork(name="Tool loop") as _subchat:
                 for _ in range(max_tool_calls):
                     response = self.respond(schema=schema, **kwargs, **extra)
@@ -281,9 +282,12 @@ class LLMChat(actors.Actor):
                         result = invoke_tool(invocation, tools)
                         actors.Tool(name=invocation.name).send(result)
                 else:
-                    raise ToolInvocationLimitExhausted(
-                        f"Exceeded {max_tool_calls} tool invocation rounds."
-                    )
+                    exhausted = True
+
+            if exhausted:
+                raise ToolInvocationLimitExhausted(
+                    f"Exceeded {max_tool_calls} tool invocation rounds."
+                )
         else:
             response = self.respond(schema=schema, **kwargs, **extra)
 
