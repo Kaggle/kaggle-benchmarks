@@ -41,6 +41,22 @@ class DummyPydantic(pydantic.BaseModel):
 B64_STRING = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
 # A shared set of message formats and their expected outputs.
+
+
+def _make_function_call_part(name: str, args: dict, call_id: str) -> types.Part:
+    """Builds a function_call Part with the id field set."""
+    part = types.Part.from_function_call(name=name, args=args)
+    part.function_call.id = call_id
+    return part
+
+
+def _make_function_response_part(name: str, response: dict, call_id: str) -> types.Part:
+    """Builds a function_response Part with the id field set."""
+    part = types.Part.from_function_response(name=name, response=response)
+    part.function_response.id = call_id
+    return part
+
+
 MESSAGE_FORMATS = [
     pytest.param(
         messages.Message(content="Hello", sender=actors.user),
@@ -134,7 +150,7 @@ MESSAGE_FORMATS = [
             types.Content(
                 role="system",
                 parts=[
-                    types.Part.from_function_call(name="test_tool", args={}),
+                    _make_function_call_part("test_tool", {}, "123"),
                 ],
             )
         ],
@@ -154,8 +170,8 @@ MESSAGE_FORMATS = [
             types.Content(
                 role="system",
                 parts=[
-                    types.Part.from_function_response(
-                        name="test_tool", response={"result": "result"}
+                    _make_function_response_part(
+                        "test_tool", {"result": "result"}, "123"
                     ),
                 ],
             )
@@ -203,8 +219,8 @@ MESSAGE_FORMATS = [
             types.Content(
                 role="user",
                 parts=[
-                    types.Part.from_function_response(
-                        name="test_tool", response={"result": "result"}
+                    _make_function_response_part(
+                        "test_tool", {"result": "result"}, "123"
                     ),
                 ],
             )

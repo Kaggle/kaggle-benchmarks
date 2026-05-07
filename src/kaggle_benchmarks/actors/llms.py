@@ -102,11 +102,11 @@ from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
-from kaggle_benchmarks.tools.base import ToolInvocation, invoke_tool
 from kaggle_benchmarks.tools.functions import (
     function_to_genai_tool,
     function_to_openai_tool,
 )
+from kaggle_benchmarks.tools.native import native_agent
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -149,19 +149,6 @@ class LLMResponse:
     reasoning_traces: str | None = None
     tool_calls: list[Any] | None = None
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
-
-
-def _parse_tool_call(call_data: dict) -> ToolInvocation:
-    """Converts an OpenAI-format tool call dict to a ToolInvocation."""
-    func = call_data["function"]
-    arguments = func["arguments"]
-    if isinstance(arguments, str):
-        arguments = json.loads(arguments)
-    return ToolInvocation(
-        name=func["name"],
-        arguments=arguments,
-        call_id=call_data.get("id"),
-    )
 
 
 class LLMChat(actors.Actor):
@@ -252,24 +239,9 @@ class LLMChat(actors.Actor):
             "temperature": temperature if self.support_temperature else None,
             "reasoning": reasoning,
         }
+
         if tools:
-            kwargs["tools"] = tools
-
-        # Tool invocation loop: fork the chat to isolate tool-calling
-        # round-trips from the main conversation, matching PR #12's design.
-        if tools:
-            with chats.fork(name="Tool loop") as _subchat:
-                while True:
-                    response = self.respond(schema=schema, **kwargs, **extra)
-
-                    tool_calls = response._meta.get("tool_calls")
-                    if not tool_calls:
-                        break
-
-                    for call_data in tool_calls:
-                        invocation = _parse_tool_call(call_data)
-                        result = invoke_tool(invocation, tools)
-                        actors.Tool(name=invocation.name).send(result)
+            response = native_agent(self, tools, schema=schema, **kwargs, **extra)
         else:
             response = self.respond(schema=schema, **kwargs, **extra)
 

@@ -14,8 +14,11 @@
 
 """Tests for the tool invocation loop in LLMChat.prompt()."""
 
+import pytest
+
 from kaggle_benchmarks import assertions, chats
 from kaggle_benchmarks.llm_messages import LLMMessage
+from kaggle_benchmarks.tools.base import ToolInvocationLimitExhausted
 from tests.mocks import MockedChat
 
 
@@ -114,3 +117,12 @@ class TestToolInvocationLoop:
         chat = chats.get_current_chat()
         nested = [item for item in chat.history if isinstance(item, chats.Chat)]
         assert len(nested) == 0
+
+    def test_tool_invocation_limit_exhausted(self):
+        """ToolInvocationLimitExhausted is raised when max rounds are exceeded."""
+        # Create a cycling response that always requests a tool call.
+        tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
+        llm = MockedChat(responses=[tool_response], cycle=True)
+
+        with pytest.raises(ToolInvocationLimitExhausted):
+            llm.prompt("Keep calling tools.", tools=[_add])

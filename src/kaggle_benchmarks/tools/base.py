@@ -14,11 +14,16 @@
 
 import dataclasses
 import inspect
+import json
 from typing import Any, Callable, Generic, TypeVar
 
 import pydantic
 
 T = TypeVar("T")
+
+
+class ToolInvocationLimitExhausted(Exception):
+    """Raised when the tool invocation loop exceeds the maximum number of rounds."""
 
 
 @dataclasses.dataclass
@@ -138,3 +143,16 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
             output=error_message,
             call_id=call.call_id,
         )
+
+
+def parse_tool_call(call_data: dict) -> ToolInvocation:
+    """Converts an OpenAI-format tool call dict to a ToolInvocation."""
+    func = call_data["function"]
+    arguments = func["arguments"]
+    if isinstance(arguments, str):
+        arguments = json.loads(arguments)
+    return ToolInvocation(
+        name=func["name"],
+        arguments=arguments,
+        call_id=call_data.get("id"),
+    )
