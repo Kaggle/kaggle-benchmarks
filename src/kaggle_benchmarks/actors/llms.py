@@ -476,6 +476,14 @@ class OpenAI(LLMChat):
         if isinstance(response, openai.Stream):
             return self._get_stream_response(response)
         else:
+            # Handle cases where the API returns no choices (e.g.
+            # Anthropic models proxied through the OpenAI endpoint can
+            # return choices=None on multi-turn tool conversations).
+            if not response.choices:
+                return LLMResponse(
+                    content="",
+                    meta=self._get_usage_meta(response.usage),
+                )
             message = response.choices[0].message
             tool_calls = message.tool_calls
             content = message.content or ""
@@ -648,19 +656,27 @@ class GoogleGenAI(LLMChat):
             # can use _parse_tool_call() uniformly for both providers.
             tool_calls = None
             parts = response.candidates[0].content.parts or []
-            fn_calls = [p.function_call for p in parts if p.function_call]
-            if fn_calls:
-                tool_calls = [
-                    {
-                        "id": f"call_{i}",
+            fn_parts = [p for p in parts if p.function_call]
+            if fn_parts:
+                tool_calls = []
+                for i, part in enumerate(fn_parts):
+                    fc = part.function_call
+                    tc: dict[str, Any] = {
+                        "id": fc.id or f"call_{i}",
                         "type": "function",
                         "function": {
                             "name": fc.name,
                             "arguments": dict(fc.args) if fc.args else {},
                         },
                     }
-                    for i, fc in enumerate(fn_calls)
-                ]
+                    # Preserve Part-level fields required for GenAI
+                    # round-tripping (e.g. Gemini 3.x models require
+                    # thought_signature on function_call Parts).
+                    if getattr(part, "thought_signature", None):
+                        tc["_thought_signature"] = part.thought_signature
+                    if getattr(part, "thought", None):
+                        tc["_thought"] = part.thought
+                    tool_calls.append(tc)
 
             return LLMResponse(
                 content=content,

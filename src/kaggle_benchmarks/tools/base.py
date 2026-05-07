@@ -34,6 +34,29 @@ class ToolInvocation:
     arguments: dict[str, Any]
     call_id: str | None = None
 
+    @classmethod
+    def from_api_dict(cls, call_data: dict) -> "ToolInvocation":
+        """Creates a ToolInvocation from a normalised tool call dict.
+
+        Both backends normalise their tool call responses to the same
+        dict schema::
+
+            {"id": ..., "function": {"name": ..., "arguments": ...}}
+
+        The OpenAI backend produces this natively from the Chat
+        Completions response, while the GenAI backend converts
+        ``function_call`` Parts to this format in ``GoogleGenAI._call_api``.
+        """
+        func = call_data["function"]
+        arguments = func["arguments"]
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+        return cls(
+            name=func["name"],
+            arguments=arguments,
+            call_id=call_data.get("id"),
+        )
+
 
 @dataclasses.dataclass
 class ToolInvocationResult:
@@ -120,6 +143,8 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         has_var_keyword = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
         )
+        # Guard against None arguments: some models return arguments=null
+        # instead of arguments={} for tools that take no parameters.
         args = call.arguments or {}
         if has_var_keyword:
             filtered_args = args
@@ -147,13 +172,8 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
 
 
 def parse_tool_call(call_data: dict) -> ToolInvocation:
-    """Converts an OpenAI-format tool call dict to a ToolInvocation."""
-    func = call_data["function"]
-    arguments = func["arguments"]
-    if isinstance(arguments, str):
-        arguments = json.loads(arguments)
-    return ToolInvocation(
-        name=func["name"],
-        arguments=arguments,
-        call_id=call_data.get("id"),
-    )
+    """Converts a normalised tool call dict to a ToolInvocation.
+
+    Convenience wrapper around :meth:`ToolInvocation.from_api_dict`.
+    """
+    return ToolInvocation.from_api_dict(call_data)

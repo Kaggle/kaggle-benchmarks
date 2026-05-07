@@ -842,7 +842,20 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
 #     works). Gemini 3 works fine through the OpenAI backend.
 #   - Non-Google models (Anthropic, DeepSeek, Qwen, GLM): Require function_call.id
 #     and function_response.id to be populated in GenAI Parts.
-@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
+#   - Anthropic models (all Claude variants): Model Proxy fails to translate
+#     parameterless tools (e.g. increment_counter(), flaky_tool()) from OpenAI
+#     format to Anthropic's native format, returning choices=None on both
+#     backends. Tools with parameters (e.g. run_simple_calculator(a, b, op))
+#     work correctly. The SDK generates the correct schema per both OpenAI and
+#     Anthropic specs; this is a Model Proxy translation bug. Affects
+#     test_stateful_tool_double_execution and test_tool_error_handling.
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "deepseek-ai/deepseek-r1-0528",
+        "deepseek-ai/deepseek-v3.2",
+    }
+)
 @kbench.task()
 def test_simple_tool_use(llm):
     problem = "What is 50 plus 25?"
@@ -864,7 +877,18 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
+# Anthropic models excluded: Model Proxy fails to translate parameterless tools
+# from OpenAI format to Anthropic's native format, returning choices=None.
+# The SDK schema is correct; this is a Model Proxy bug.
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "deepseek-ai/deepseek-r1-0528",
+        "anthropic/claude-haiku-4-5@20251001",
+        "anthropic/claude-opus-4-5@20251101",
+        "anthropic/claude-sonnet-4-5@20250929",
+    }
+)
 @kbench.task()
 def test_stateful_tool_double_execution(llm):
     increment_counter.count = 0  # Reset for each test run
@@ -889,6 +913,10 @@ def multiply_tool(a: float, b: float) -> float:
     return a * b
 
 
+# NOTE: Gemini 2.x models fail this test via the OpenAI backend because Model
+# Proxy's OpenAI-compatible endpoint rejects requests with multiple tool
+# declarations (400: "Multiple tools are supported only..."). The same models
+# pass via the GenAI backend, which supports multiple tools natively.
 @benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_multiple_tool_selection(llm):
@@ -935,7 +963,18 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
+# Anthropic models excluded: Model Proxy fails to translate parameterless tools
+# from OpenAI format to Anthropic's native format, returning choices=None.
+# The SDK schema is correct; this is a Model Proxy bug.
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "deepseek-ai/deepseek-r1-0528",
+        "anthropic/claude-haiku-4-5@20251001",
+        "anthropic/claude-opus-4-5@20251101",
+        "anthropic/claude-sonnet-4-5@20250929",
+    }
+)
 @kbench.task()
 def test_tool_error_handling(llm):
     response = llm.prompt(

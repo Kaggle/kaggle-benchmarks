@@ -77,6 +77,13 @@ class GenAISerializer(BaseSerializer):
                     args=func.get("arguments", {}),
                 )
                 part.function_call.id = tc.get("id")
+                # Restore Part-level fields preserved during normalisation
+                # (e.g. Gemini 3.x requires thought_signature on
+                # function_call Parts in multi-turn conversations).
+                if "_thought_signature" in tc:
+                    part.thought_signature = tc["_thought_signature"]
+                if "_thought" in tc:
+                    part.thought = tc["_thought"]
                 parts.append(part)
 
         # Ensure at least one part is present to avoid empty Content objects.

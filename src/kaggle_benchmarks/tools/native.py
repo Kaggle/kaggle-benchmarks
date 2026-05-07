@@ -23,9 +23,9 @@ to emulate tool calling for models that lack native support.
 from typing import Any, Callable, TypeVar
 
 from kaggle_benchmarks.tools.base import (
+    ToolInvocation,
     ToolInvocationLimitExhausted,
     invoke_tool,
-    parse_tool_call,
 )
 
 T = TypeVar("T")
@@ -79,7 +79,7 @@ def native_tool_agent(
                 return response
 
             for call_data in tool_calls:
-                invocation = parse_tool_call(call_data)
+                invocation = ToolInvocation.from_api_dict(call_data)
                 result = invoke_tool(invocation, tools)
                 actors.Tool(name=invocation.name).send(result)
 
