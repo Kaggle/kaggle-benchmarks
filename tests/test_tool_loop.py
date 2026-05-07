@@ -14,10 +14,7 @@
 
 """Tests for the tool invocation loop in LLMChat.prompt()."""
 
-import pytest
-
 from kaggle_benchmarks import assertions, chats
-from kaggle_benchmarks.actors.llms import ToolInvocationLimitExhausted
 from kaggle_benchmarks.llm_messages import LLMMessage
 from tests.mocks import MockedChat
 
@@ -79,18 +76,6 @@ class TestToolInvocationLoop:
         result = llm.prompt("Call the tool.", tools=[_always_fails])
 
         assert result == "The tool failed."
-
-    def test_tool_invocation_limit_exhausted(self):
-        """Raises ToolInvocationLimitExhausted when max_tool_calls is exceeded."""
-        # Create a mock that always returns tool calls (never a final answer).
-        tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
-        llm = MockedChat(
-            responses=[tool_response],
-            cycle=True,
-        )
-
-        with pytest.raises(ToolInvocationLimitExhausted):
-            llm.prompt("What is 1 + 2?", tools=[_add], max_tool_calls=3)
 
     def test_extra_arguments_filtered(self):
         """Extra arguments from the API (like 'signature') are filtered out."""

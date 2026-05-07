@@ -164,12 +164,6 @@ def _parse_tool_call(call_data: dict) -> ToolInvocation:
     )
 
 
-class ToolInvocationLimitExhausted(Exception):
-    """Raised when the tool invocation loop exceeds max_tool_calls."""
-
-    pass
-
-
 class LLMChat(actors.Actor):
     """A chat agent that interacts with a Large Language Model (LLM)."""
 
@@ -209,7 +203,6 @@ class LLMChat(actors.Actor):
         audio: audios.AudioContent | None = None,
         reasoning: ReasoningLevel | None = None,
         extra_api_params: dict[str, Any] | None = None,
-        max_tool_calls: int = 5,
     ) -> T:
         """Sends a message to the LLM and returns the parsed response.
 
@@ -218,9 +211,6 @@ class LLMChat(actors.Actor):
                 (e.g. top_p, max_tokens, max_output_tokens). Cannot include
                 parameters already on prompt() or respond() signatures
                 (seed, temperature, schema, system, etc.).
-            max_tool_calls: Maximum number of tool invocation round-trips
-                before stopping the loop. Only relevant when tools are
-                provided.
         """
         if image is not None:
             match image:
@@ -268,9 +258,8 @@ class LLMChat(actors.Actor):
         # Tool invocation loop: fork the chat to isolate tool-calling
         # round-trips from the main conversation, matching PR #12's design.
         if tools:
-            exhausted = False
             with chats.fork(name="Tool loop") as _subchat:
-                for _ in range(max_tool_calls):
+                while True:
                     response = self.respond(schema=schema, **kwargs, **extra)
 
                     tool_calls = response._meta.get("tool_calls")
@@ -281,13 +270,6 @@ class LLMChat(actors.Actor):
                         invocation = _parse_tool_call(call_data)
                         result = invoke_tool(invocation, tools)
                         actors.Tool(name=invocation.name).send(result)
-                else:
-                    exhausted = True
-
-            if exhausted:
-                raise ToolInvocationLimitExhausted(
-                    f"Exceeded {max_tool_calls} tool invocation rounds."
-                )
         else:
             response = self.respond(schema=schema, **kwargs, **extra)
 
@@ -452,7 +434,9 @@ class OpenAI(LLMChat):
             # inner one arrives at Model Proxy as a top-level field where it
             # reads google.thinking_config.  Without include_thoughts, the
             # frontend drops thinking traces from the response.
-            if kwargs["reasoning_effort"] != "none" and self.model.startswith("google/"):
+            if kwargs["reasoning_effort"] != "none" and self.model.startswith(
+                "google/"
+            ):
                 kwargs.setdefault("extra_body", {})
                 kwargs["extra_body"].setdefault("extra_body", {})
                 kwargs["extra_body"]["extra_body"].setdefault("google", {})
