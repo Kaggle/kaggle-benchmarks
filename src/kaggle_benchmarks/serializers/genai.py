@@ -72,12 +72,12 @@ class GenAISerializer(BaseSerializer):
         if tool_calls and self.get_role(message.sender) == "model":
             for tc in tool_calls:
                 func = tc.get("function", {})
-                parts.append(
-                    types.Part.from_function_call(
-                        name=func.get("name", ""),
-                        args=func.get("arguments", {}),
-                    )
+                part = types.Part.from_function_call(
+                    name=func.get("name", ""),
+                    args=func.get("arguments", {}),
                 )
+                part.function_call.id = tc.get("id")
+                parts.append(part)
 
         # Ensure at least one part is present to avoid empty Content objects.
         if not parts:
@@ -177,10 +177,14 @@ class GenAISerializer(BaseSerializer):
         self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
     ):
         if isinstance(call, tool_utils.ToolInvocationResult):
-            yield types.Part.from_function_response(
+            part = types.Part.from_function_response(
                 name=call.name, response={"result": call.output}
             )
+            part.function_response.id = call.call_id
+            yield part
 
         else:
             args = call.arguments
-            yield types.Part.from_function_call(name=call.name, args=args)
+            part = types.Part.from_function_call(name=call.name, args=args)
+            part.function_call.id = call.call_id
+            yield part

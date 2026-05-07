@@ -835,6 +835,13 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
     raise ValueError(f"Unknown operator: {operator}")
 
 
+# TODO(tool-calling): Multi-turn tool calling via the GenAI backend has known
+# limitations on Model Proxy:
+#   - gemini-3-flash-preview / gemini-3.1-flash-lite-preview: Multi-turn tool
+#     calling is broken in the GenAI → Gemini 3 translation layer (single-turn
+#     works). Gemini 3 works fine through the OpenAI backend.
+#   - Non-Google models (Anthropic, DeepSeek, Qwen, GLM): Require function_call.id
+#     and function_response.id to be populated in GenAI Parts.
 @benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
 @kbench.task()
 def test_simple_tool_use(llm):
