@@ -185,7 +185,7 @@ class GenAISerializer(BaseSerializer):
     ):
         if isinstance(call, tool_utils.ToolInvocationResult):
             part = types.Part.from_function_response(
-                name=call.name, response={"result": call.output}
+                name=call.name, response={"result": call.text}
             )
             part.function_response.id = call.call_id
             yield part

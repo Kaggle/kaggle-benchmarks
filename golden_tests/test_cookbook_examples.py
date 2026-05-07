@@ -817,9 +817,6 @@ def test_image_with_media_resolution(llm, api):
 
 # %%
 # --- Test Case: Tool Use ---
-# This doesn't work with "genai" API for now
-# So test it with `-k "openai"` only.
-# TODO: Rewrite this test after tool refactoring.
 
 
 def run_simple_calculator(a: float, b: float, operator: str) -> float:
@@ -835,23 +832,10 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
     raise ValueError(f"Unknown operator: {operator}")
 
 
-# TODO(tool-calling): Multi-turn tool calling via the GenAI backend has known
-# limitations on Model Proxy:
-#   - gemini-3-flash-preview / gemini-3.1-flash-lite-preview: Multi-turn tool
-#     calling is broken in the GenAI → Gemini 3 translation layer (single-turn
-#     works). Gemini 3 works fine through the OpenAI backend.
-#   - Non-Google models (Anthropic, DeepSeek, Qwen, GLM): Require function_call.id
-#     and function_response.id to be populated in GenAI Parts.
-#   - Anthropic models (all Claude variants): Model Proxy fails to translate
-#     parameterless tools (e.g. increment_counter(), flaky_tool()) from OpenAI
-#     format to Anthropic's native format, returning choices=None on both
-#     backends. Tools with parameters (e.g. run_simple_calculator(a, b, op))
-#     work correctly. The SDK generates the correct schema per both OpenAI and
-#     Anthropic specs; this is a Model Proxy translation bug. Affects
-#     test_stateful_tool_double_execution and test_tool_error_handling.
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
     }
@@ -877,16 +861,12 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-# Anthropic models excluded: Model Proxy fails to translate parameterless tools
-# from OpenAI format to Anthropic's native format, returning choices=None.
-# The SDK schema is correct; this is a Model Proxy bug.
+# Anthropic: fails on parameterless tools (Model Proxy bug, not SDK).
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
-        "anthropic/claude-haiku-4-5@20251001",
-        "anthropic/claude-opus-4-5@20251101",
-        "anthropic/claude-sonnet-4-5@20250929",
     }
 )
 @kbench.task()
@@ -913,11 +893,15 @@ def multiply_tool(a: float, b: float) -> float:
     return a * b
 
 
-# NOTE: Gemini 2.x models fail this test via the OpenAI backend because Model
-# Proxy's OpenAI-compatible endpoint rejects requests with multiple tool
-# declarations (400: "Multiple tools are supported only..."). The same models
-# pass via the GenAI backend, which supports multiple tools natively.
-@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
+# Gemini 2.x via OpenAI backend rejects multiple tool declarations (400).
+# GenAI backend handles multiple tools correctly.
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_multiple_tool_selection(llm):
     add_tool.calls = 0
@@ -944,7 +928,13 @@ def get_user_profile(user_id: str) -> dict:
     return {"name": "Unknown", "role": "User", "skills": []}
 
 
-@benchmark_test(exclude={"google/gemma-3-12b", "deepseek-ai/deepseek-r1-0528"})
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_complex_tool_return(llm):
     response = llm.prompt(
@@ -963,16 +953,12 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-# Anthropic models excluded: Model Proxy fails to translate parameterless tools
-# from OpenAI format to Anthropic's native format, returning choices=None.
-# The SDK schema is correct; this is a Model Proxy bug.
+# Anthropic: fails on parameterless tools (Model Proxy bug, not SDK).
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
-        "anthropic/claude-haiku-4-5@20251001",
-        "anthropic/claude-opus-4-5@20251101",
-        "anthropic/claude-sonnet-4-5@20250929",
     }
 )
 @kbench.task()
@@ -985,4 +971,132 @@ def test_tool_error_handling(llm):
         r"(?i)error|failed|valueerror",
         response,
         expectation="Model should report the tool failure.",
+    )
+
+
+# %%
+# --- Test Case: Multi-Step Tool Chain ---
+
+
+def lookup_city_population(city: str) -> int:
+    """Looks up the population of a city. Returns the population as an integer."""
+    populations = {"Tokyo": 14_000_000, "Paris": 2_100_000, "London": 9_000_000}
+    return populations.get(city, 0)
+
+
+def format_population(population: int) -> str:
+    """Formats a population number with thousands separators."""
+    return f"{population:,}"
+
+
+@pytest.mark.slow
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
+@kbench.task()
+def test_multi_step_tool_chain(llm):
+    """Tests that the LLM can chain tool calls: look up a value then format it."""
+    response = llm.prompt(
+        "What is the population of Tokyo? "
+        "First look it up with lookup_city_population, "
+        "then format the result with format_population.",
+        tools=[lookup_city_population, format_population],
+    )
+
+    kbench.assertions.assert_tool_was_invoked(lookup_city_population)
+    kbench.assertions.assert_contains_regex(
+        r"14.000.000",
+        response,
+        expectation="Response should contain the formatted population of Tokyo.",
+    )
+
+
+# %%
+# Anthropic works with parametered tools; parameterless failures are a
+# Model Proxy bug. This test verifies the distinction.
+
+ANTHROPIC_MODELS = {name for name in TEST_LLM_NAMES if "anthropic" in name.lower()}
+
+
+def celsius_to_fahrenheit(celsius: float) -> float:
+    """Converts a temperature from Celsius to Fahrenheit."""
+    return (celsius * 9 / 5) + 32
+
+
+@benchmark_test(include=ANTHROPIC_MODELS)
+@kbench.task()
+def test_anthropic_parametered_tool(llm):
+    """Verifies Anthropic models work with tools that have parameters."""
+    response = llm.prompt(
+        "Convert 100 degrees Celsius to Fahrenheit using the tool.",
+        tools=[celsius_to_fahrenheit],
+    )
+
+    kbench.assertions.assert_tool_was_invoked(celsius_to_fahrenheit)
+    kbench.assertions.assert_contains_regex(
+        r"212",
+        response,
+        expectation="Model should return 212 (100°C = 212°F).",
+    )
+
+
+# %%
+# --- Test Case: Tools with Structured Output ---
+
+
+class CityInfo(BaseModel):
+    """Structured info about a city."""
+
+    name: str = Field(description="The city name.")
+    population: int = Field(description="The city's population.")
+
+
+def get_city_data(city_name: str) -> dict:
+    """Returns data about a city including its population."""
+    data = {
+        "Berlin": {"name": "Berlin", "population": 3_700_000},
+        "Sydney": {"name": "Sydney", "population": 5_300_000},
+    }
+    return data.get(city_name, {"name": city_name, "population": 0})
+
+
+# TODO: schema= + tools= is broken on all backends:
+# - OpenAI SDK requires strict=True on tools when response_format is set.
+# - GenAI: tool loop passes schema= every round, causing the model to return
+#   tool_calls instead of schema-formatted content on intermediate rounds.
+# Fix: apply schema= only on the final (no tool_calls) round.
+@pytest.mark.xfail(reason="schema + tools not yet supported")
+@benchmark_test(
+    exclude={
+        "google/gemma-3-12b",
+        "google/gemini-2.0-flash",
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
+@kbench.task()
+def test_tool_with_schema_output(llm):
+    """Tests that tools and schema= work together: tool provides data,
+    LLM returns structured output."""
+    result = llm.prompt(
+        "Look up the city data for Berlin and return it as a CityInfo.",
+        tools=[get_city_data],
+        schema=CityInfo,
+    )
+
+    kbench.assertions.assert_tool_was_invoked(get_city_data)
+    kbench.assertions.assert_true(
+        isinstance(result, CityInfo),
+        f"Expected CityInfo, got {type(result).__name__}",
+    )
+    kbench.assertions.assert_equal(
+        "Berlin", result.name, expectation="City name should be Berlin."
+    )
+    kbench.assertions.assert_equal(
+        3_700_000,
+        result.population,
+        expectation="Population should be 3,700,000.",
     )

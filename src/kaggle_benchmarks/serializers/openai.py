@@ -118,7 +118,7 @@ class OpenAICompletionSerializer(BaseSerializer):
         if isinstance(call, tool_utils.ToolInvocationResult):
             yield {
                 "type": "function_call_output",
-                "output": str(call.output),
+                "output": call.text,
                 "call_id": str(call.call_id),
             }
 
@@ -173,6 +173,6 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
         result = message.content
         yield {
             "role": "tool",
-            "content": str(result.output),
+            "content": result.text,
             "tool_call_id": str(result.call_id) if result.call_id else "",
         }

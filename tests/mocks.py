@@ -20,6 +20,12 @@ from kaggle_benchmarks.llm_messages import LLMMessage
 
 
 class MockedChat(actors.LLMChat):
+    """A mock LLMChat that returns pre-configured responses.
+
+    Note: invoke() returns LLMMessage (not LLMResponse), exercising a
+    different branch in LLMChat.respond() than real backends.
+    """
+
     def __init__(
         self, responses: list[LLMMessage[str]], name="MockedChat", cycle=False, **kwargs
     ):
@@ -48,7 +54,28 @@ class MockedChat(actors.LLMChat):
             **kwargs,
         )
 
-    def invoke(self, messages, **kwargs):
+    @staticmethod
+    def make_tool_call_response(
+        name: str,
+        arguments: dict | None = None,
+        call_id: str = "call_1",
+    ) -> LLMMessage[str]:
+        """Creates an LLMMessage that simulates a tool call from the LLM.
+
+        Sets tool_calls in _meta to match the dict format that real
+        backends produce (normalised to OpenAI-style dicts).
+        """
+        msg = LLMMessage(sender=None, content="")
+        msg._meta["tool_calls"] = [
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {"name": name, "arguments": arguments},
+            }
+        ]
+        return msg
+
+    def invoke(self, messages, tools=None, **kwargs):
         self.invocations.append((messages, kwargs))
         try:
             response = next(self.response)

@@ -46,9 +46,13 @@ class ToolInvocation:
         The OpenAI backend produces this natively from the Chat
         Completions response, while the GenAI backend converts
         ``function_call`` Parts to this format in ``GoogleGenAI._call_api``.
+
+        Handles edge cases from various backends:
+        - ``arguments`` may be a JSON string (OpenAI) or a dict (GenAI).
+        - ``arguments`` may be ``None`` for parameterless tools.
         """
         func = call_data["function"]
-        arguments = func["arguments"]
+        arguments = func.get("arguments") or {}
         if isinstance(arguments, str):
             arguments = json.loads(arguments)
         return cls(
@@ -66,8 +70,18 @@ class ToolInvocationResult:
     arguments: dict[str, Any]
     call_id: str | None = None
     output: Any = None
+    error: str | None = None
+
+    @property
+    def text(self) -> str:
+        """Returns a string representation of the result or error."""
+        if self.error:
+            return self.error
+        return str(self.output)
 
     def describe(self):
+        if self.error:
+            return f"{self.name}({self.arguments}): Error: {self.error}"
         return f"{self.name}({self.arguments}) -> {self.output}"
 
 
@@ -127,11 +141,10 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
     """Invokes a tool and returns the result."""
     tool = next((t for t in tools if t.__name__ == call.name), None)
     if tool is None:
-        error_message = f"Error: Tool '{call.name}' not found."
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            output=error_message,
+            error=f"Error: Tool '{call.name}' not found.",
             call_id=call.call_id,
         )
     try:
@@ -143,8 +156,6 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         has_var_keyword = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
         )
-        # Guard against None arguments: some models return arguments=null
-        # instead of arguments={} for tools that take no parameters.
         args = call.arguments or {}
         if has_var_keyword:
             filtered_args = args
@@ -162,18 +173,9 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        error_message = f"Error invoking tool '{call.name}': {e}"
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            output=error_message,
+            error=f"Error invoking tool '{call.name}': {e}",
             call_id=call.call_id,
         )
-
-
-def parse_tool_call(call_data: dict) -> ToolInvocation:
-    """Converts a normalised tool call dict to a ToolInvocation.
-
-    Convenience wrapper around :meth:`ToolInvocation.from_api_dict`.
-    """
-    return ToolInvocation.from_api_dict(call_data)

@@ -91,6 +91,7 @@ import inspect
 import json
 import re
 import typing
+import uuid
 from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeVar
 
 import openai
@@ -173,6 +174,7 @@ class LLMChat(actors.Actor):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        tools: list[Any] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
@@ -297,6 +299,8 @@ class LLMChat(actors.Actor):
         if isinstance(invoke_response, LLMResponse):
             # A response can have either content, tool_calls, or both in some cases.
             response.content = invoke_response.content or ""
+            # TODO: Move tool_calls to a typed field on Message once all
+            # invoke() impls return LLMResponse instead of LLMMessage.
             response._meta["tool_calls"] = invoke_response.tool_calls
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
@@ -378,6 +382,7 @@ class OpenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        tools: list[Any] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
@@ -387,10 +392,9 @@ class OpenAI(LLMChat):
 
         raw_messages = list(self.serializer.dump_messages(messages))
 
-        # Convert Python callables to OpenAI-format tool schema dicts.
-        raw_tools = kwargs.pop("tools", [])
-        if raw_tools:
-            kwargs["tools"] = [function_to_openai_tool(t) for t in raw_tools]
+        # Convert callables to OpenAI-format tool schemas.
+        if tools:
+            kwargs["tools"] = [function_to_openai_tool(t) for t in tools]
 
         if self._should_remove_seed():
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
@@ -577,6 +581,7 @@ class GoogleGenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        tools: list[Any] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
@@ -585,17 +590,11 @@ class GoogleGenAI(LLMChat):
         if system:
             config_params["system_instruction"] = system
 
-        # Convert Python callables to GenAI FunctionDeclarations.
-        # The GenAI SDK accepts callables natively via
-        # FunctionDeclaration.from_callable_with_api_option, so we convert
-        # each function and wrap them in a types.Tool.
-        tools_list = kwargs.pop("tools", [])
-        if tools_list:
+        # Convert callables to GenAI FunctionDeclarations.
+        if tools:
             config_params["tools"] = [
                 types.Tool(
-                    function_declarations=[
-                        function_to_genai_tool(t) for t in tools_list
-                    ]
+                    function_declarations=[function_to_genai_tool(t) for t in tools]
                 )
             ]
 
@@ -653,7 +652,7 @@ class GoogleGenAI(LLMChat):
 
             # Extract function calls from response parts and normalise them
             # to the OpenAI-style dict format so the tool loop in prompt()
-            # can use _parse_tool_call() uniformly for both providers.
+            # can use ToolInvocation.from_api_dict() uniformly for both providers.
             tool_calls = None
             parts = response.candidates[0].content.parts or []
             fn_parts = [p for p in parts if p.function_call]
@@ -662,16 +661,16 @@ class GoogleGenAI(LLMChat):
                 for i, part in enumerate(fn_parts):
                     fc = part.function_call
                     tc: dict[str, Any] = {
-                        "id": fc.id or f"call_{i}",
+                        "id": fc.id or f"call_{uuid.uuid4().hex[:8]}",
                         "type": "function",
                         "function": {
                             "name": fc.name,
                             "arguments": dict(fc.args) if fc.args else {},
                         },
                     }
-                    # Preserve Part-level fields required for GenAI
-                    # round-tripping (e.g. Gemini 3.x models require
-                    # thought_signature on function_call Parts).
+                    # TODO(genai-sdk): thought_signature is an SDK-internal
+                    # field required for Gemini 3.x round-tripping. Revisit
+                    # once the GenAI SDK stabilises the thought API.
                     if getattr(part, "thought_signature", None):
                         tc["_thought_signature"] = part.thought_signature
                     if getattr(part, "thought", None):
