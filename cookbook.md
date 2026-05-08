@@ -291,6 +291,41 @@ results = solve_question.evaluate(llm=[kbench.llm], evaluation_data=df)
 print(results.as_dataframe())
 ```
 
+### Recipe: Best Practices for Large Datasets (Caching & Retries)
+
+When running benchmarks on large datasets (like MMLU or GSM8K), runs can take hours and may fail midway due to API rate limits, timeouts, or transient errors. 
+
+You can use the framework's built-in caching and retry mechanisms to handle these failures gracefully without losing progress.
+
+``` python
+import kaggle_benchmarks as kbench
+import pandas as pd
+
+# 1. Load your large dataset
+df = pd.read_csv("large_dataset.csv")
+
+
+@kbench.task(name="large_scale_eval")
+def evaluate_sample(llm, question, expected_answer) -> bool:
+    response = llm.prompt(question)
+    return expected_answer.lower() in response.lower()
+
+
+# 2. Use enable_cache() and evaluate() with retry parameters
+with kbench.enable_cache():
+    runs = evaluate_sample.evaluate(
+        llm=[kbench.llm],
+        evaluation_data=df,
+        max_attempts=3,  # Retry failed samples up to 3 times within this run
+        retry_delay=5,  # Wait 5 seconds between retries
+        remove_run_files=False,  # Keep per-sample files for safety
+    )
+
+# 3. Calculate aggregate score
+accuracy = runs.as_dataframe()["result"].mean()
+print(f"Final Accuracy: {accuracy:.4f}")
+```
+
 ### Recipe: Comparing Multiple Models Side-by-Side
 
 Typically, you should write your task for a single LLM using the
