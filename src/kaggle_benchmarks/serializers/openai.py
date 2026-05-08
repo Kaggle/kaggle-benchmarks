@@ -51,6 +51,16 @@ class OpenAICompletionSerializer(BaseSerializer):
 
     def dump_llm_message(self, message: llm_messages.LLMMessage):
         """Extracts tool calls and results, injecting them into the sequence before standard text output."""
+        # This path handles LLMMessage objects in the chat history.
+        # Currently only MockedChat (tests/mocks.py) returns LLMMessage from
+        # invoke(). Once respond() migrates to create LLMMessage instead of
+        # plain Message (see TODO in messages.py), this becomes the primary
+        # serialization path for assistant messages.
+        #
+        # NOTE: _dump_invocation emits a separate assistant message per tool
+        # call. For multi-tool scenarios, these should be batched into a
+        # single {"role": "assistant", "tool_calls": [...]} message. Fix
+        # when the LLMMessage migration happens.
         for call in message.tool_calls or []:
             yield from self._dump_invocation(call)
 
@@ -76,7 +86,13 @@ class OpenAICompletionSerializer(BaseSerializer):
     def dump_tool_invocation(
         self, message: messages.Message[tool_utils.ToolInvocationResult]
     ):
-        yield from self._dump_invocation(message.content)
+        """Serializes a tool result as a Chat Completions tool message."""
+        result = message.content
+        yield {
+            "role": "tool",
+            "content": result.text,
+            "tool_call_id": str(result.call_id) if result.call_id else "",
+        }
 
     _SUPPORTED_AUDIO_FORMATS = {"mp3", "wav"}
 
@@ -107,19 +123,29 @@ class OpenAICompletionSerializer(BaseSerializer):
     def _dump_invocation(
         self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
     ):
+        """Serializes tool calls/results for the legacy LLMMessage path."""
+        # Emit the function call as a Chat Completions tool_call.
         yield {
-            "call_id": call.call_id,
-            "arguments": json.dumps(call.arguments)
-            if not isinstance(call.arguments, str)
-            else call.arguments,
-            "name": call.name,
-            "type": "function_call",
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": str(call.call_id),
+                    "type": "function",
+                    "function": {
+                        "name": call.name,
+                        "arguments": json.dumps(call.arguments)
+                        if not isinstance(call.arguments, str)
+                        else call.arguments,
+                    },
+                }
+            ],
         }
         if isinstance(call, tool_utils.ToolInvocationResult):
             yield {
-                "type": "function_call_output",
-                "output": call.text,
-                "call_id": str(call.call_id),
+                "role": "tool",
+                "content": call.text,
+                "tool_call_id": str(call.call_id),
             }
 
 
@@ -161,18 +187,3 @@ class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
         yield from self.dump_text_message(
             messages.Message(sender=message.sender, content=str(message.content))
         )
-
-    def dump_tool_invocation(
-        self, message: messages.Message[tool_utils.ToolInvocationResult]
-    ):
-        """Serializes a tool result using the Chat Completions format.
-
-        Model Proxy uses the Chat Completions API, which expects tool results
-        as {"role": "tool", "content": "...", "tool_call_id": "..."}.
-        """
-        result = message.content
-        yield {
-            "role": "tool",
-            "content": result.text,
-            "tool_call_id": str(result.call_id) if result.call_id else "",
-        }
