@@ -53,8 +53,8 @@ class OpenAICompletionSerializer(BaseSerializer):
         """Extracts tool calls and results, injecting them into the sequence before standard text output."""
         # This path handles LLMMessage objects in the chat history.
         # Currently only MockedChat (tests/mocks.py) returns LLMMessage from
-        # invoke(). Once respond() migrates to create LLMMessage instead of
-        # plain Message (see TODO in messages.py), this becomes the primary
+        # invoke(). Once built-in LLMs also return LLMMessage from invoke()
+        # (PR #115 added this path to respond()), this becomes the primary
         # serialization path for assistant messages.
         #
         # NOTE: _dump_invocation emits a separate assistant message per tool

@@ -36,9 +36,9 @@ class ToolInvocation:
 
     @classmethod
     def from_api_dict(cls, call_data: dict) -> "ToolInvocation":
-        """Creates a ToolInvocation from a normalised tool call dict.
+        """Creates a ToolInvocation from a normalized tool call dict.
 
-        Both backends normalise their tool call responses to the same
+        Both backends normalize their tool call responses to the same
         dict schema::
 
             {"id": ..., "function": {"name": ..., "arguments": ...}}
@@ -149,9 +149,11 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         )
     try:
         # Filter arguments to only those the function accepts.
-        # Some backends (e.g. Model Proxy) inject extra fields like
-        # 'signature' into tool call arguments that the actual function
-        # does not expect.
+        # Model Proxy injects a 'signature' field (opaque base64 blob) into
+        # tool call arguments for Google models (gemini-2.5-*, gemini-3-*)
+        # routed through the OpenAI-compatible endpoint. This field is not
+        # part of the function schema and would cause a TypeError if passed
+        # through. GenAI backend and non-Google models are not affected.
         sig = inspect.signature(tool)
         has_var_keyword = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()

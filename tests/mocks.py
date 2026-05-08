@@ -63,7 +63,7 @@ class MockedChat(actors.LLMChat):
         """Creates an LLMMessage that simulates a tool call from the LLM.
 
         Sets tool_calls in _meta to match the dict format that real
-        backends produce (normalised to OpenAI-style dicts).
+        backends produce (normalized to OpenAI-style dicts).
         """
         msg = LLMMessage(sender=None, content="")
         msg._meta["tool_calls"] = [

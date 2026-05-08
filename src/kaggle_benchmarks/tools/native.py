@@ -34,14 +34,12 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-DEFAULT_MAX_TOOL_ROUNDS = 10
-
 
 def native_tool_agent(
     llm: LLMChat,
     tools: list[Callable],
     schema: type[T] = str,
-    max_tool_rounds: int = DEFAULT_MAX_TOOL_ROUNDS,
+    max_tool_rounds: int = 10,
     **respond_kwargs: Any,
 ) -> Message:
     """Runs a multi-turn tool calling loop.
@@ -70,13 +68,16 @@ def native_tool_agent(
     # Lazy imports to avoid circular dependencies (actors → tools → actors).
     from kaggle_benchmarks import actors, chats
 
-    # TODO: Read tool_calls from a typed field once all invoke() impls
-    # return LLMResponse instead of LLMMessage.
+    # TODO: invoke() currently returns LLMResponse, so respond() creates a
+    # plain Message and stuffs tool_calls into response._meta (an untyped
+    # dict). Once invoke() returns LLMMessage directly (PR #115 added this
+    # path to respond()), replace the _meta lookup below with
+    # response.tool_calls.
     with chats.fork(name="Tool loop"):
         for _ in range(max_tool_rounds):
             response = llm.respond(schema=schema, tools=tools, **respond_kwargs)
 
-            tool_calls = response._meta.get("tool_calls")
+            tool_calls = response._meta.get("tool_calls")  # TODO: response.tool_calls
             if not tool_calls:
                 return response
 

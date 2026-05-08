@@ -648,7 +648,7 @@ class GoogleGenAI(LLMChat):
 
             content, thinking = self._split_response(response)
 
-            # Extract function calls from response parts and normalise to
+            # Extract function calls from response parts and normalize to
             # OpenAI-style dicts so native_tool_agent() can use
             # ToolInvocation.from_api_dict() uniformly for both backends.
             parts = response.candidates[0].content.parts or []
