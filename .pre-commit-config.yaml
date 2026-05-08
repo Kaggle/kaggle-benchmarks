@@ -24,4 +24,4 @@ repos:
   hooks:
   - id: addlicense
     args: [ "-c", "Kaggle Inc.", "-l", "apache", "*.py" ]
-    exclude: ^(src/kaggle_benchmarks/kaggle/benchmark_types_pb2\.py|\.github/)
+    exclude: ^(src/kaggle_benchmarks/kaggle/benchmark_types_pb2\.py|\.github/|golden_tests/test_cookbook_examples_report\.yaml)
