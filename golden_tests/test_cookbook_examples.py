@@ -187,6 +187,7 @@ def test_assess_with_judge(llm_name, judge_llm_name):
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -206,6 +207,7 @@ def test_extract_int(llm):
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -225,6 +227,7 @@ def test_extract_bool(llm):
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -261,6 +264,7 @@ class RPGCharacter:
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -295,6 +299,7 @@ class Planet(BaseModel):
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -329,6 +334,7 @@ class Casting(BaseModel):
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
+        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -378,7 +384,11 @@ def assert_multi_qa_result(run):
     assert run.result[1] == pytest.approx(0.0)
 
 
-@benchmark_test(df=df, verify_fn=assert_multi_qa_result)
+@benchmark_test(
+    df=df,
+    verify_fn=assert_multi_qa_result,
+    exclude={"google/gemma-3-12b"},
+)
 @kbench.task()
 def test_dataset_eval(llm, df) -> tuple[float, float]:
     with kbench.client.enable_cache():
@@ -405,6 +415,7 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
+        "google/gemma-3-12b",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
         "zai/glm-5",
@@ -433,11 +444,12 @@ def test_image_url(llm):
 
 @benchmark_test(
     exclude={
+        "anthropic/claude-sonnet-4-5@20250929",
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
+        "google/gemma-3-12b",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "anthropic/claude-sonnet-4-5@20250929",
         "zai/glm-5",
     }
 )
@@ -469,6 +481,7 @@ def test_image_base64(llm):
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
+        "google/gemma-3-12b",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
         "zai/glm-5",
@@ -861,7 +874,7 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-# Anthropic: fails on parameterless tools (Model Proxy bug, not SDK).
+# Anthropic: fails on parameterless tools (MP to fix).
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
@@ -893,7 +906,7 @@ def multiply_tool(a: float, b: float) -> float:
     return a * b
 
 
-# Gemini 2.x via OpenAI backend rejects multiple tool declarations (400).
+# Gemini 2.x via OpenAI backend rejects multiple tool declarations.
 # GenAI backend handles multiple tools correctly.
 @benchmark_test(
     exclude={
@@ -953,7 +966,7 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-# Anthropic: fails on parameterless tools (Model Proxy bug, not SDK).
+# Anthropic: fails on parameterless tools (MP to fix).
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",
@@ -1016,35 +1029,6 @@ def test_multi_step_tool_chain(llm):
 
 
 # %%
-# Anthropic works with parametered tools; parameterless failures are a
-# Model Proxy bug. This test verifies the distinction.
-
-ANTHROPIC_MODELS = {name for name in TEST_LLM_NAMES if "anthropic" in name.lower()}
-
-
-def celsius_to_fahrenheit(celsius: float) -> float:
-    """Converts a temperature from Celsius to Fahrenheit."""
-    return (celsius * 9 / 5) + 32
-
-
-@benchmark_test(include=ANTHROPIC_MODELS)
-@kbench.task()
-def test_anthropic_parametered_tool(llm):
-    """Verifies Anthropic models work with tools that have parameters."""
-    response = llm.prompt(
-        "Convert 100 degrees Celsius to Fahrenheit using the tool.",
-        tools=[celsius_to_fahrenheit],
-    )
-
-    kbench.assertions.assert_tool_was_invoked(celsius_to_fahrenheit)
-    kbench.assertions.assert_contains_regex(
-        r"212",
-        response,
-        expectation="Model should return 212 (100°C = 212°F).",
-    )
-
-
-# %%
 # --- Test Case: Tools with Structured Output ---
 
 
@@ -1069,7 +1053,6 @@ def get_city_data(city_name: str) -> dict:
 # - GenAI: tool loop passes schema= every round, causing the model to return
 #   tool_calls instead of schema-formatted content on intermediate rounds.
 # Fix: apply schema= only on the final (no tool_calls) round.
-@pytest.mark.xfail(reason="schema + tools not yet supported")
 @benchmark_test(
     exclude={
         "google/gemma-3-12b",

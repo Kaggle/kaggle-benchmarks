@@ -299,8 +299,6 @@ class LLMChat(actors.Actor):
         if isinstance(invoke_response, LLMResponse):
             # A response can have either content, tool_calls, or both in some cases.
             response.content = invoke_response.content or ""
-            # TODO: Move tool_calls to a typed field on Message once all
-            # invoke() impls return LLMResponse instead of LLMMessage.
             response._meta["tool_calls"] = invoke_response.tool_calls
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
@@ -392,7 +390,7 @@ class OpenAI(LLMChat):
 
         raw_messages = list(self.serializer.dump_messages(messages))
 
-        # Convert callables to OpenAI-format tool schemas.
+        # Convert callables to OpenAI tool schemas.
         if tools:
             kwargs["tools"] = [function_to_openai_tool(t) for t in tools]
 
@@ -650,15 +648,15 @@ class GoogleGenAI(LLMChat):
 
             content, thinking = self._split_response(response)
 
-            # Extract function calls from response parts and normalise them
-            # to the OpenAI-style dict format so the tool loop in prompt()
-            # can use ToolInvocation.from_api_dict() uniformly for both providers.
-            tool_calls = None
+            # Extract function calls from response parts and normalise to
+            # OpenAI-style dicts so native_tool_agent() can use
+            # ToolInvocation.from_api_dict() uniformly for both backends.
             parts = response.candidates[0].content.parts or []
             fn_parts = [p for p in parts if p.function_call]
+            tool_calls = None
             if fn_parts:
                 tool_calls = []
-                for i, part in enumerate(fn_parts):
+                for part in fn_parts:
                     fc = part.function_call
                     tc: dict[str, Any] = {
                         "id": fc.id or f"call_{uuid.uuid4().hex[:8]}",
@@ -668,9 +666,9 @@ class GoogleGenAI(LLMChat):
                             "arguments": dict(fc.args) if fc.args else {},
                         },
                     }
-                    # TODO(genai-sdk): thought_signature is an SDK-internal
-                    # field required for Gemini 3.x round-tripping. Revisit
-                    # once the GenAI SDK stabilises the thought API.
+                    # TODO(genai-sdk): thought_signature is SDK-internal,
+                    # required for Gemini 3.x round-tripping. Revisit once
+                    # the GenAI SDK stabilises the thought API.
                     if getattr(part, "thought_signature", None):
                         tc["_thought_signature"] = part.thought_signature
                     if getattr(part, "thought", None):
