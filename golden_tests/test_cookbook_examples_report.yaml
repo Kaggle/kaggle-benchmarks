@@ -173,7 +173,7 @@ genai://google/gemini-3-flash-preview:
     test_image_with_media_resolution: passed
     test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
-    test_reasoning_captures_traces: passed
+    test_reasoning_captures_traces: failed
     test_reasoning_param: passed
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
@@ -287,28 +287,6 @@ genai://qwen/qwen3-next-80b-a3b-instruct:
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: failed
-genai://xai/grok-4.20-0309-non-reasoning:
-  config:
-    structured_output: true
-  tests:
-    test_complex_tool_return: failed
-    test_dataset_eval: failed
-    test_extract_bool: failed
-    test_extract_composite_pydantic: failed
-    test_extract_dataclass: failed
-    test_extract_dict: failed
-    test_extract_int: failed
-    test_extract_pydantic: failed
-    test_image_base64: failed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_multi_step_tool_chain: failed
-    test_multiple_tool_selection: failed
-    test_reasoning_param: failed
-    test_simple_tool_use: failed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
-    test_tool_with_schema_output: failed
 openai://anthropic/claude-opus-4-7@default:
   config:
     structured_output: true
@@ -362,7 +340,7 @@ openai://deepseek-ai/deepseek-r1-0528:
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
     test_extract_dict: passed
-    test_extract_int: passed
+    test_extract_int: failed
     test_extract_pydantic: passed
     test_reasoning_param: passed
 openai://deepseek-ai/deepseek-v3.2:
@@ -557,8 +535,8 @@ openai://openai/gpt-5.5-2026-04-23:
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
     test_tool_with_schema_output: failed
 openai://qwen/qwen3-235b-a22b-instruct-2507:
   config:
@@ -597,26 +575,4 @@ openai://qwen/qwen3-next-80b-a3b-instruct:
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
-    test_tool_with_schema_output: failed
-openai://xai/grok-4.20-0309-non-reasoning:
-  config:
-    structured_output: true
-  tests:
-    test_complex_tool_return: passed
-    test_dataset_eval: passed
-    test_extract_bool: failed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_image_base64: failed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_multi_step_tool_chain: passed
-    test_multiple_tool_selection: passed
-    test_reasoning_param: failed
-    test_simple_tool_use: passed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
     test_tool_with_schema_output: failed

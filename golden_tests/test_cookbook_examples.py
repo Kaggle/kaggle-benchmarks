@@ -60,7 +60,7 @@ TEST_LLM_NAMES = {
     "openai/gpt-5.5-2026-04-23",
     "deepseek-ai/deepseek-r1-0528",
     "deepseek-ai/deepseek-v3.2",
-    "xai/grok-4.20-0309-non-reasoning",
+    # xai/grok-4.20 excluded: genai→xAI tool/reasoning routing is broken in MP.
     "google/gemini-3.1-flash-lite-preview",
 }
 
@@ -184,7 +184,8 @@ def test_assess_with_judge(llm_name, judge_llm_name):
 # --- Test Case: Structured Output (Integer Extraction) ---
 
 
-# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (openai): deepseek-r1 — nondeterministic on structured int extraction.
 @benchmark_test()
 @kbench.task()
 def test_extract_int(llm):
@@ -200,7 +201,7 @@ def test_extract_int(llm):
 # --- Test Case: Structured Output (Bool Extraction) ---
 
 
-# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 @benchmark_test()
 @kbench.task()
 def test_extract_bool(llm):
@@ -216,7 +217,7 @@ def test_extract_bool(llm):
 # --- Test Case: Structured Output (Dict Extraction) ---
 
 
-# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 @benchmark_test()
 @kbench.task()
 def test_extract_dict(llm):
@@ -249,7 +250,7 @@ class RPGCharacter:
     inventory: str
 
 
-# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 @benchmark_test()
 @kbench.task()
 def test_extract_dataclass(llm):
@@ -280,7 +281,7 @@ class Planet(BaseModel):
     moons: list[str] = Field(default_factory=list, description="List of major moons")
 
 
-# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 @benchmark_test()
 @kbench.task()
 def test_extract_pydantic(llm):
@@ -311,7 +312,7 @@ class Casting(BaseModel):
     actors: list[Actor]
 
 
-# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 @benchmark_test()
 @kbench.task()
 def test_extract_composite_pydantic(llm):
@@ -417,7 +418,7 @@ def test_image_url(llm):
 
 
 # Excluded: text-only models that don't support image inputs via Model Proxy.
-# Known failures: gpt-5.5, grok-4.20 — model reports "no image attached" for 1x1 pixel.
+# Known failures: gpt-5.5 — model reports "no image attached" for 1x1 pixel.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
@@ -586,7 +587,7 @@ def test_audio_url(llm):
 # support it (not all models return traces).
 
 
-# Known failures: gemini-2.0-flash, gemma-4-31b, grok-4.20 — do not support reasoning.
+# Known failures: gemini-2.0-flash, gemma-4-31b — do not support reasoning.
 @benchmark_test()
 @kbench.task()
 def test_reasoning_param(llm):
@@ -610,6 +611,7 @@ def test_reasoning_param(llm):
 
 
 # Only Gemini models expose reasoning traces via the API.
+# Known failures: gemini-3-flash-preview — intermittently returns empty traces.
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
@@ -841,7 +843,7 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-# Known failures: claude, gpt-5.5, grok-4.20 — parameterless tool schema (MP to fix).
+# Known failures: claude — does not invoke parameterless tools.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
@@ -928,7 +930,7 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-# Known failures: claude, gpt-5.5, grok-4.20 — parameterless tool schema (MP to fix).
+# Known failures: claude — does not invoke parameterless tools.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
