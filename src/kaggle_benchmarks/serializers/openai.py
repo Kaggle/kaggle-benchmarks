@@ -123,7 +123,7 @@ class OpenAICompletionSerializer(BaseSerializer):
     def _dump_invocation(
         self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
     ):
-        """Serializes tool calls/results for the legacy LLMMessage path."""
+        """Serializes tool calls/results for the LLMMessage path."""
         # Emit the function call as a Chat Completions tool_call.
         yield {
             "role": "assistant",

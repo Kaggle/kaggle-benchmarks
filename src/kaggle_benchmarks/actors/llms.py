@@ -668,7 +668,7 @@ class GoogleGenAI(LLMChat):
                     }
                     # TODO(genai-sdk): thought_signature is SDK-internal,
                     # required for Gemini 3.x round-tripping. Revisit once
-                    # the GenAI SDK stabilises the thought API.
+                    # the GenAI SDK stabilizes the thought API.
                     if getattr(part, "thought_signature", None):
                         tc["_thought_signature"] = part.thought_signature
                     if getattr(part, "thought", None):

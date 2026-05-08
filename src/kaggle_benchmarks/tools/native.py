@@ -75,6 +75,9 @@ def native_tool_agent(
     # response.tool_calls.
     with chats.fork(name="Tool loop"):
         for _ in range(max_tool_rounds):
+            # TODO: schema= is applied on every round, including intermediate
+            # rounds where the model returns tool calls. This can confuse some
+            # backends. Apply schema= only on the final (no tool_calls) round.
             response = llm.respond(schema=schema, tools=tools, **respond_kwargs)
 
             tool_calls = response._meta.get("tool_calls")  # TODO: response.tool_calls

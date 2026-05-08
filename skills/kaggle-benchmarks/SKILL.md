@@ -841,7 +841,7 @@ def error_handling_task(llm):
 > **Tool calling behavior:** When you pass `tools=` to `prompt()`, the library
 > automatically handles the tool invocation loop: it sends the tool schemas to the LLM,
 > executes any requested tool calls, feeds results back, and repeats until the LLM
-> returns a final text answer (up to `max_tool_calls=5` rounds by default).
+> returns a final text answer (up to `max_tool_rounds=10` rounds by default).
 > This works on both `genai` and `openai` API backends.
 >
 > **Verifying tool usage:** Use `kbench.assertions.assert_tool_was_invoked(fn)`
