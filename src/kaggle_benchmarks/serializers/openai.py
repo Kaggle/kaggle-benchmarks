@@ -51,18 +51,36 @@ class OpenAICompletionSerializer(BaseSerializer):
 
     def dump_llm_message(self, message: llm_messages.LLMMessage):
         """Extracts tool calls and results, injecting them into the sequence before standard text output."""
-        # This path handles LLMMessage objects in the chat history.
-        # Currently only MockedChat (tests/mocks.py) returns LLMMessage from
-        # invoke(). Once built-in LLMs also return LLMMessage from invoke()
-        # (PR #115 added this path to respond()), this becomes the primary
-        # serialization path for assistant messages.
-        #
-        # NOTE: _dump_invocation emits a separate assistant message per tool
-        # call. For multi-tool scenarios, these should be batched into a
-        # single {"role": "assistant", "tool_calls": [...]} message. Fix
-        # when the LLMMessage migration happens.
-        for call in message.tool_calls or []:
-            yield from self._dump_invocation(call)
+        if message.tool_calls:
+            tool_calls_payload = []
+            tool_results = []
+            for call in message.tool_calls:
+                tool_calls_payload.append(
+                    {
+                        "id": str(call.call_id),
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": json.dumps(call.arguments)
+                            if not isinstance(call.arguments, str)
+                            else call.arguments,
+                        },
+                    }
+                )
+                if isinstance(call, tool_utils.ToolInvocationResult):
+                    tool_results.append(
+                        {
+                            "role": "tool",
+                            "content": call.text,
+                            "tool_call_id": str(call.call_id),
+                        }
+                    )
+            yield {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": tool_calls_payload,
+            }
+            yield from tool_results
 
         if message.content is not None and message.content != "":
             yield from self.dump_message(
@@ -75,12 +93,16 @@ class OpenAICompletionSerializer(BaseSerializer):
             "role": self.get_role(message.sender),
             "content": message.content or None,
         }
-        # When an assistant message carried tool calls, include them in
-        # the serialized payload so the API can match subsequent tool
-        # result messages by their call IDs.
-        tool_calls = message._meta.get("tool_calls")
+
+        # TODO: Remove once respond() returns LLMMessage for assistant
+        # messages. Today, assistant messages with tool calls arrive here as
+        # plain Message (not LLMMessage), so we must attach tool_calls
+        # manually. After the migration, they'll route to dump_llm_message
+        # instead and these lines become unnecessary.
+        tool_calls = message.tool_calls
         if tool_calls and self.get_role(message.sender) == "assistant":
             msg["tool_calls"] = tool_calls
+
         yield msg
 
     def dump_tool_invocation(
@@ -119,34 +141,6 @@ class OpenAICompletionSerializer(BaseSerializer):
             "role": self.get_role(message.sender),
             "content": caption + [{"type": "input_audio", "input_audio": input_audio}],
         }
-
-    def _dump_invocation(
-        self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
-    ):
-        """Serializes tool calls/results for the LLMMessage path."""
-        # Emit the function call as a Chat Completions tool_call.
-        yield {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": str(call.call_id),
-                    "type": "function",
-                    "function": {
-                        "name": call.name,
-                        "arguments": json.dumps(call.arguments)
-                        if not isinstance(call.arguments, str)
-                        else call.arguments,
-                    },
-                }
-            ],
-        }
-        if isinstance(call, tool_utils.ToolInvocationResult):
-            yield {
-                "role": "tool",
-                "content": call.text,
-                "tool_call_id": str(call.call_id),
-            }
 
 
 class ModelProxyOpenAISerializer(OpenAICompletionSerializer):

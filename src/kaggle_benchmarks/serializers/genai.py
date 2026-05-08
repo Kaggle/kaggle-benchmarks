@@ -68,7 +68,7 @@ class GenAISerializer(BaseSerializer):
         # When an assistant message carried tool calls, include them as
         # function_call Parts so the GenAI API sees the model's tool call
         # decisions in the conversation history.
-        tool_calls = message._meta.get("tool_calls")
+        tool_calls = message.tool_calls
         if tool_calls and self.get_role(message.sender) == "model":
             for tc in tool_calls:
                 func = tc.get("function", {})

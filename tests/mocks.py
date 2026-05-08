@@ -54,27 +54,6 @@ class MockedChat(actors.LLMChat):
             **kwargs,
         )
 
-    @staticmethod
-    def make_tool_call_response(
-        name: str,
-        arguments: dict | None = None,
-        call_id: str = "call_1",
-    ) -> LLMMessage[str]:
-        """Creates an LLMMessage that simulates a tool call from the LLM.
-
-        Sets tool_calls in _meta to match the dict format that real
-        backends produce (normalized to OpenAI-style dicts).
-        """
-        msg = LLMMessage(sender=None, content="")
-        msg._meta["tool_calls"] = [
-            {
-                "id": call_id,
-                "type": "function",
-                "function": {"name": name, "arguments": arguments},
-            }
-        ]
-        return msg
-
     def invoke(self, messages, tools=None, **kwargs):
         self.invocations.append((messages, kwargs))
         try:

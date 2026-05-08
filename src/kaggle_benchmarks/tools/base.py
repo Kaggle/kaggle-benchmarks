@@ -15,7 +15,7 @@
 import dataclasses
 import inspect
 import json
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, Self, TypeVar
 
 import pydantic
 
@@ -35,7 +35,7 @@ class ToolInvocation:
     call_id: str | None = None
 
     @classmethod
-    def from_api_dict(cls, call_data: dict) -> "ToolInvocation":
+    def from_api_dict(cls, call_data: dict) -> Self:
         """Creates a ToolInvocation from a normalized tool call dict.
 
         Both backends normalize their tool call responses to the same
@@ -141,31 +141,28 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
     """Invokes a tool and returns the result."""
     tool = next((t for t in tools if t.__name__ == call.name), None)
     if tool is None:
+        error_message = f"Error: Tool '{call.name}' not found."
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            error=f"Error: Tool '{call.name}' not found.",
+            error=error_message,
             call_id=call.call_id,
         )
     try:
-        # Filter arguments to only those the function accepts.
+        # Strip known infrastructure fields injected by intermediaries.
         # Model Proxy injects a 'signature' field (opaque base64 blob) into
         # tool call arguments for Google models (gemini-2.5-*, gemini-3-*)
         # routed through the OpenAI-compatible endpoint. This field is not
         # part of the function schema and would cause a TypeError if passed
         # through. GenAI backend and non-Google models are not affected.
-        sig = inspect.signature(tool)
-        has_var_keyword = any(
-            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-        )
-        args = call.arguments or {}
-        if has_var_keyword:
-            filtered_args = args
-        else:
-            accepted = set(sig.parameters.keys())
-            filtered_args = {k: v for k, v in args.items() if k in accepted}
+        _INFRASTRUCTURE_FIELDS = {"signature"}
+        args = {
+            k: v
+            for k, v in (call.arguments or {}).items()
+            if k not in _INFRASTRUCTURE_FIELDS
+        }
 
-        output = tool(**filtered_args)
+        output = tool(**args)
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
@@ -175,9 +172,10 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
     except KeyboardInterrupt:
         raise
     except Exception as e:
+        error_message = f"Error invoking tool '{call.name}': {e}"
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            error=f"Error invoking tool '{call.name}': {e}",
+            error=error_message,
             call_id=call.call_id,
         )
