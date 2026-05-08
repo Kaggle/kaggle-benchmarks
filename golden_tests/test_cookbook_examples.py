@@ -52,15 +52,15 @@ TEST_LLM_NAMES = {
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
-    "google/gemma-3-12b",
+    "google/gemma-4-31b",
     "qwen/qwen3-235b-a22b-instruct-2507",
     "qwen/qwen3-next-80b-a3b-instruct",
-    "anthropic/claude-haiku-4-5@20251001",
-    "anthropic/claude-opus-4-5@20251101",
-    "anthropic/claude-sonnet-4-5@20250929",
+    "anthropic/claude-sonnet-4-6@default",
+    "anthropic/claude-opus-4-7@default",
+    "openai/gpt-5.5-2026-04-23",
     "deepseek-ai/deepseek-r1-0528",
     "deepseek-ai/deepseek-v3.2",
-    "zai/glm-5",
+    "xai/grok-4.20-0309-non-reasoning",
     "google/gemini-3.1-flash-lite-preview",
 }
 
@@ -184,12 +184,8 @@ def test_assess_with_judge(llm_name, judge_llm_name):
 # --- Test Case: Structured Output (Integer Extraction) ---
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-        "zai/glm-5",
-    }
-)
+# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_int(llm):
     text = "The Apollo 11 mission landed on the Moon in 1969."
@@ -204,12 +200,8 @@ def test_extract_int(llm):
 # --- Test Case: Structured Output (Bool Extraction) ---
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-        "zai/glm-5",
-    }
-)
+# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_bool(llm):
     text = "I absolutely loved this movie! It was fantastic."
@@ -224,12 +216,8 @@ def test_extract_bool(llm):
 # --- Test Case: Structured Output (Dict Extraction) ---
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-        "zai/glm-5",
-    }
-)
+# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_dict(llm):
     text = "Contact info: John Doe, age 42, works as a Software Engineer."
@@ -261,12 +249,8 @@ class RPGCharacter:
     inventory: str
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-        "zai/glm-5",
-    }
-)
+# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_dataclass(llm):
     character = llm.prompt(
@@ -296,12 +280,8 @@ class Planet(BaseModel):
     moons: list[str] = Field(default_factory=list, description="List of major moons")
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-        "zai/glm-5",
-    }
-)
+# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_pydantic(llm):
     planet = llm.prompt("Provide information about the planet Jupiter.", schema=Planet)
@@ -331,12 +311,8 @@ class Casting(BaseModel):
     actors: list[Actor]
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-        "zai/glm-5",
-    }
-)
+# Known failures (genai): gpt-5.5, grok-4.20 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_composite_pydantic(llm):
     casting = llm.prompt("List the 6 main characters of Friends.", schema=Casting)
@@ -387,7 +363,6 @@ def assert_multi_qa_result(run):
 @benchmark_test(
     df=df,
     verify_fn=assert_multi_qa_result,
-    exclude={"google/gemma-3-12b"},
 )
 @kbench.task()
 def test_dataset_eval(llm, df) -> tuple[float, float]:
@@ -411,14 +386,13 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
 # --- Test Case: Image inputs (URL) ---
 
 
+# Excluded: text-only models that don't support image inputs via Model Proxy.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
-        "google/gemma-3-12b",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -442,15 +416,14 @@ def test_image_url(llm):
 # --- Test Case: Image inputs (Base64) ---
 
 
+# Excluded: text-only models that don't support image inputs via Model Proxy.
+# Known failures: gpt-5.5, grok-4.20 — model reports "no image attached" for 1x1 pixel.
 @benchmark_test(
     exclude={
-        "anthropic/claude-sonnet-4-5@20250929",
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
-        "google/gemma-3-12b",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -477,14 +450,13 @@ def test_image_base64(llm):
 # --- Test Case: Image inputs (local file) ---
 
 
+# Excluded: text-only models that don't support image inputs via Model Proxy.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
-        "google/gemma-3-12b",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -507,6 +479,7 @@ def test_image_local_file(llm):
 # --- Test Case: Video inputs (URL) ---
 
 
+# Only Gemini models support video input via Model Proxy.
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
@@ -613,12 +586,8 @@ def test_audio_url(llm):
 # support it (not all models return traces).
 
 
-@benchmark_test(
-    exclude={
-        "google/gemini-2.0-flash",
-        "google/gemma-3-12b",
-    },
-)
+# Known failures: gemini-2.0-flash, gemma-4-31b, grok-4.20 — do not support reasoning.
+@benchmark_test()
 @kbench.task()
 def test_reasoning_param(llm):
     """Tests that the unified reasoning parameter works across providers."""
@@ -640,11 +609,12 @@ def test_reasoning_param(llm):
 # when reasoning is enabled, accessible via message.reasoning_traces.
 
 
+# Only Gemini models expose reasoning traces via the API.
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
         "google/gemini-2.5-pro",
-        "anthropic/claude-sonnet-4-5@20250929",
+        "google/gemini-3-flash-preview",
     },
 )
 @kbench.task()
@@ -847,10 +817,7 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
 
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
     }
 )
 @kbench.task()
@@ -874,11 +841,9 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-# Anthropic: fails on parameterless tools (MP to fix).
+# Known failures: claude, gpt-5.5, grok-4.20 — parameterless tool schema (MP to fix).
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
     }
 )
@@ -910,8 +875,6 @@ def multiply_tool(a: float, b: float) -> float:
 # GenAI backend handles multiple tools correctly.
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
     }
 )
@@ -941,10 +904,9 @@ def get_user_profile(user_id: str) -> dict:
     return {"name": "Unknown", "role": "User", "skills": []}
 
 
+# Known failures: gemini-2.0-flash returns incorrect role on both APIs.
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
     }
 )
@@ -966,11 +928,9 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-# Anthropic: fails on parameterless tools (MP to fix).
+# Known failures: claude, gpt-5.5, grok-4.20 — parameterless tool schema (MP to fix).
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
     }
 )
@@ -1002,11 +962,10 @@ def format_population(population: int) -> str:
     return f"{population:,}"
 
 
+# Known failures (openai): Gemini 2.x rejects multiple tool declarations.
 @pytest.mark.slow
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
     }
 )
@@ -1053,11 +1012,11 @@ def get_city_data(city_name: str) -> dict:
 # - GenAI: tool loop passes schema= every round, causing the model to return
 #   tool_calls instead of schema-formatted content on intermediate rounds.
 # Fix: apply schema= only on the final (no tool_calls) round.
+# V3.2: returns plain text instead of structured JSON when both are combined.
 @benchmark_test(
     exclude={
-        "google/gemma-3-12b",
-        "google/gemini-2.0-flash",
         "deepseek-ai/deepseek-r1-0528",
+        "deepseek-ai/deepseek-v3.2",
     }
 )
 @kbench.task()
