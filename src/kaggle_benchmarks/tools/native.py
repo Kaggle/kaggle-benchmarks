@@ -45,9 +45,17 @@ def native_tool_agent(
     """Runs a multi-turn tool calling loop.
 
     Forks the chat to isolate tool-calling round-trips from the main
-    conversation, then loops: call ``llm.respond()`` → check for tool_calls
-    → invoke tools → send results → repeat until the LLM responds without
-    tool calls or ``max_tool_rounds`` is exhausted.
+    conversation. The loop runs in two phases:
+
+    1. **Tool rounds** — calls ``llm.respond(tools=…)`` without ``schema=``
+       to avoid backend conflicts (OpenAI requires ``strict=True`` on tools
+       when ``response_format`` is set; GenAI models return tool_calls instead
+       of schema-formatted content). Repeats until the model stops requesting
+       tools or ``max_tool_rounds`` is exhausted.
+
+    2. **Schema formatting** — if ``schema`` is not ``str``, makes one final
+       ``llm.respond(schema=…)`` call (no tools) so the response conforms to
+       the requested output type.
 
     Args:
         llm: The LLM chat actor to use.
@@ -65,26 +73,39 @@ def native_tool_agent(
         ToolInvocationLimitExhausted: If the LLM keeps requesting tool calls
             beyond ``max_tool_rounds`` iterations.
     """
-    # Lazy imports to avoid circular dependencies (actors → tools → actors).
     from kaggle_benchmarks import actors, chats
+
+    response = None
+    exhausted = True
 
     with chats.fork(name="Tool loop"):
         for _ in range(max_tool_rounds):
-            # TODO: Pass schema= only on a final call without tools, not on
-            # every round. Use a two-phase loop: tools-only rounds, then a
-            # schema-only call once the model stops requesting tool calls.
-            response = llm.respond(schema=schema, tools=tools, **respond_kwargs)
+            response = llm.respond(tools=tools, **respond_kwargs)
 
             # TODO: Use response.tool_calls once respond() returns LLMMessage.
             tool_calls = response._meta.get("tool_calls")
             if not tool_calls:
-                return response
+                exhausted = False
+                break
 
             for call_data in tool_calls:
                 invocation = ToolInvocation.from_api_dict(call_data)
                 result = invoke_tool(invocation, tools)
                 actors.Tool(name=invocation.name).send(result)
 
-    raise ToolInvocationLimitExhausted(
-        f"Tool invocation limit of {max_tool_rounds} rounds exhausted"
-    )
+        if not exhausted and schema is not str:
+            # User message required: some models (e.g. Claude) reject requests
+            # where the conversation ends with an assistant message.
+            actors.user.send(
+                "Now format your previous answer using the requested schema."
+            )
+            response = llm.respond(schema=schema, **respond_kwargs)
+
+    # Raised outside `with chats.fork()` because the context manager may
+    # swallow exceptions when no parent run is active (see contexts.enter).
+    if exhausted:
+        raise ToolInvocationLimitExhausted(
+            f"Tool invocation limit of {max_tool_rounds} rounds exhausted"
+        )
+
+    return response

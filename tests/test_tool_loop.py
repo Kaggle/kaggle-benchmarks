@@ -14,6 +14,7 @@
 
 """Tests for the tool invocation loop in LLMChat.prompt()."""
 
+import pydantic
 import pytest
 
 from kaggle_benchmarks import assertions, chats
@@ -356,3 +357,88 @@ def test_tool_not_found_through_loop():
     result = llm.prompt("Call the tool.", tools=[_add])
 
     assert result == "That tool doesn't exist."
+
+
+# ---------------------------------------------------------------------------
+# Two-phase tool loop tests (schema + tools)
+# ---------------------------------------------------------------------------
+
+
+class _CityInfo(pydantic.BaseModel):
+    """Test schema for structured output."""
+
+    name: str
+    population: int
+
+
+def _get_city(city_name: str) -> dict:
+    """Returns city data."""
+    return {"name": city_name, "population": 1_000_000}
+
+
+def test_schema_not_passed_during_tool_rounds():
+    """During tool rounds, respond() should NOT receive schema=.
+    The schema-only call happens as a separate final invocation."""
+    tool_response = _make_tool_call_response("_get_city", {"city_name": "Berlin"})
+    text_response = LLMMessage(sender=None, content="Berlin has 1M people.")
+    schema_response = LLMMessage(
+        sender=None, content='{"name": "Berlin", "population": 1000000}'
+    )
+
+    llm = MockedChat(
+        responses=[tool_response, text_response, schema_response],
+        support_structured_outputs=True,
+    )
+    result = llm.prompt("Look up Berlin.", tools=[_get_city], schema=_CityInfo)
+
+    assert isinstance(result, _CityInfo)
+    # 3 invocations: tool call, text answer (no schema), schema-only call.
+    assert len(llm.invocations) == 3
+
+    # Tool rounds (invocations 0 and 1): should NOT have response_format.
+    _, kwargs_round1 = llm.invocations[0]
+    assert "response_format" not in kwargs_round1
+
+    _, kwargs_round2 = llm.invocations[1]
+    assert "response_format" not in kwargs_round2
+
+    # Final call (invocation 2): should have response_format for the schema.
+    _, kwargs_round3 = llm.invocations[2]
+    assert "response_format" in kwargs_round3
+    assert kwargs_round3["response_format"] == _CityInfo
+
+
+def test_no_extra_call_when_schema_is_str():
+    """When schema=str (default), no extra schema-only call is made."""
+    tool_response = _make_tool_call_response("_get_city", {"city_name": "Berlin"})
+    final_response = LLMMessage(sender=None, content="Berlin has 1M people.")
+
+    llm = MockedChat(responses=[tool_response, final_response])
+    result = llm.prompt("Look up Berlin.", tools=[_get_city])
+
+    assert result == "Berlin has 1M people."
+    # Only 2 invocations: tool call + final text answer. No extra schema call.
+    assert len(llm.invocations) == 2
+
+
+def test_schema_call_sees_tool_history():
+    """The schema-only call should see the tool conversation history."""
+    tool_response = _make_tool_call_response("_get_city", {"city_name": "Berlin"})
+    text_response = LLMMessage(sender=None, content="Berlin has 1M people.")
+    schema_response = LLMMessage(
+        sender=None, content='{"name": "Berlin", "population": 1000000}'
+    )
+
+    llm = MockedChat(
+        responses=[tool_response, text_response, schema_response],
+        support_structured_outputs=True,
+    )
+    llm.prompt("Look up Berlin.", tools=[_get_city], schema=_CityInfo)
+
+    # The third invocation (schema call) should include messages from the
+    # tool loop — at minimum the tool result and the text answer.
+    messages_round3, _ = llm.invocations[2]
+    # Should have more messages than the first round (user prompt only)
+    # because tool results and LLM responses were appended.
+    messages_round1, _ = llm.invocations[0]
+    assert len(messages_round3) > len(messages_round1)

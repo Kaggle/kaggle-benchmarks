@@ -611,7 +611,8 @@ def test_reasoning_param(llm):
 
 
 # Only Gemini models expose reasoning traces via the API.
-# Known failures: gemini-3-flash-preview — intermittently returns empty traces.
+# Known failures: gemini-3-flash-preview — intermittently returns empty traces
+# (flaky, currently passing).
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
@@ -965,6 +966,7 @@ def format_population(population: int) -> str:
 
 
 # Known failures (openai): Gemini 2.x rejects multiple tool declarations.
+# Known failures (genai): deepseek-v3.2 — flaky 500 errors on multi-step chains.
 @pytest.mark.slow
 @benchmark_test(
     exclude={
@@ -1009,12 +1011,13 @@ def get_city_data(city_name: str) -> dict:
     return data.get(city_name, {"name": city_name, "population": 0})
 
 
-# TODO: schema= + tools= is broken on all backends:
-# - OpenAI SDK requires strict=True on tools when response_format is set.
-# - GenAI: tool loop passes schema= every round, causing the model to return
-#   tool_calls instead of schema-formatted content on intermediate rounds.
-# Fix: apply schema= only on the final (no tool_calls) round.
-# V3.2: returns plain text instead of structured JSON when both are combined.
+# Known failures:
+# - Gemini 2.0-flash / 2.5-pro (flaky): the model sometimes refuses to call
+#   the tool when the user prompt references a schema type (e.g. "CityInfo")
+#   that isn't explained during the tool-calling phase. The two-phase loop
+#   withholds schema= from tool rounds, so the model doesn't know what
+#   "CityInfo" means and asks for clarification instead of calling the tool.
+#   This does not affect Gemini 3.x or other model families.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
