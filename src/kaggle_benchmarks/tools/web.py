@@ -21,7 +21,7 @@ import nest_asyncio
 from playwright.async_api import async_playwright
 
 from kaggle_benchmarks import actors, chats
-from kaggle_benchmarks.envs import LocalEnvironment
+from kaggle_benchmarks.envs import InternalUnsafeLocalEnvironment
 
 # required as jupyter runs its own asyncio loop
 nest_asyncio.apply()
@@ -96,7 +96,7 @@ async def async_take_snapshot(
 class Browser(actors.Actor):
     def __init__(self):
         super().__init__(role="tool", avatar="🌐", name="Browser")
-        self.env = LocalEnvironment()
+        self.env = InternalUnsafeLocalEnvironment(_internal=True)
 
     def __enter__(self):
         return self
