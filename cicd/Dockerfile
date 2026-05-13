@@ -1,7 +1,8 @@
 # TOP LAYER: This builds on top of the cached environment.
 # Use the tag for the newest cached base image layer
+ARG BASE_IMAGE_NAME=gcr.io/kaggle-private-byod/personal-benchmarks-base
 ARG BASE_IMAGE_TAG=latest
-FROM gcr.io/kaggle-private-byod/personal-benchmarks-base:${BASE_IMAGE_TAG}
+FROM ${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}
 
 WORKDIR /benchmarks
 
