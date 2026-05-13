@@ -13,11 +13,12 @@
 # limitations under the License.
 
 steps:
-  - id: "build-image"
+  - id: "build-image-3.11"
     name: "gcr.io/cloud-builders/docker"
     args:
       [
         "build",
+        "--build-arg", "BASE_IMAGE_TAG=latest",
         "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}",
         "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest",
         "--file=${_DOCKERFILE_PATH}",
@@ -27,26 +28,56 @@ steps:
     env:
       - "DOCKER_BUILDKIT=1"
 
-  - id: "push-image"
+  - id: "build-image-3.12"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}", "--all-tags"]
-    waitFor: ["build-image"]
+    args:
+      [
+        "build",
+        "--build-arg", "BASE_IMAGE_TAG=python3.12",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.12",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:python3.12",
+        "--file=${_DOCKERFILE_PATH}",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "push-image-3.11"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"]
+    waitFor: ["build-image-3.11"]
+
+  - id: "push-image-3.11-latest"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest"]
+    waitFor: ["build-image-3.11"]
+
+  - id: "push-image-3.12"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.12"]
+    waitFor: ["build-image-3.12"]
+
+  - id: "push-image-3.12-tag"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:python3.12"]
+    waitFor: ["build-image-3.12"]
 
   - id: test-3.11
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
     dir: /benchmarks
     entrypoint: uv
     args: ["run", "--python", "3.11", "--group", "test", "pytest", "tests"]
-    waitFor: ["push-image"]
+    waitFor: ["push-image-3.11"]
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
 
   - id: test-3.12
-    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.12"
     dir: /benchmarks
     entrypoint: uv
     args: ["run", "--python", "3.12", "--group", "test", "pytest", "tests"]
-    waitFor: ["push-image"]
+    waitFor: ["push-image-3.12"]
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
 
@@ -55,7 +86,7 @@ steps:
     dir: /benchmarks
     entrypoint: uvx
     args: ["ruff", "check"]
-    waitFor: ["push-image"]
+    waitFor: ["push-image-3.11"]
 
 images:
   - "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}"

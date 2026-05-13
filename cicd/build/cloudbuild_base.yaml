@@ -13,18 +13,43 @@
 # limitations under the License.
 
 steps:
-  - id: "build-base"
+  - id: "build-base-3.11"
     name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "${_REPO}/${_NAME}:latest", "-f", "cicd/Dockerfile.base", "."]
+    args:
+      [
+        "build",
+        "--build-arg", "PYTHON_IMAGE_TAG=3.11-slim",
+        "-t", "${_REPO}/${_NAME}:python3.11",
+        "-f", "cicd/Dockerfile.base",
+        ".",
+      ]
     waitFor: ["-"]
     env:
       - "DOCKER_BUILDKIT=1"
 
-  - id: "push-base"
+  - id: "build-base-3.12"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_REPO}/${_NAME}:latest"]
-    waitFor: ["build-base"]
+    args:
+      [
+        "build",
+        "--build-arg", "PYTHON_IMAGE_TAG=3.12-slim",
+        "-t", "${_REPO}/${_NAME}:python3.12",
+        "-f", "cicd/Dockerfile.base",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
 
+  - id: "push-base-3.11"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_REPO}/${_NAME}:python3.11"]
+    waitFor: ["build-base-3.11"]
+
+  - id: "push-base-3.12"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_REPO}/${_NAME}:python3.12"]
+    waitFor: ["build-base-3.12"]
 
 images:
   - "${_REPO}/${_NAME}"

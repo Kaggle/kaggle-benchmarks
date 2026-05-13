@@ -13,11 +13,12 @@
 # limitations under the License.
 
 steps:
-  - id: "build-base-pr"
+  - id: "build-base-pr-3.11"
     name: "gcr.io/cloud-builders/docker"
     args:
       [
         "build",
+        "--build-arg", "PYTHON_IMAGE_TAG=3.11-slim",
         "-t", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}",
         "-f", "cicd/Dockerfile.base",
         ".",
@@ -26,10 +27,29 @@ steps:
     env:
       - "DOCKER_BUILDKIT=1"
 
-  - id: "push-base-pr"
+  - id: "build-base-pr-3.12"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "--build-arg", "PYTHON_IMAGE_TAG=3.12-slim",
+        "-t", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.12",
+        "-f", "cicd/Dockerfile.base",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "push-base-pr-3.11"
     name: "gcr.io/cloud-builders/docker"
     args: ["push", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}"]
-    waitFor: ["build-base-pr"]
+    waitFor: ["build-base-pr-3.11"]
+
+  - id: "push-base-pr-3.12"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.12"]
+    waitFor: ["build-base-pr-3.12"]
 
 images:
   - "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}"
