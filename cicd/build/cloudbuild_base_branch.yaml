@@ -43,7 +43,7 @@ steps:
 
   - id: "push-base-pr-3.11"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}"]
+    args: ["push", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.11"]
     waitFor: ["build-base-pr-3.11"]
 
   - id: "push-base-pr-3.12"
