@@ -13,6 +13,46 @@
 # limitations under the License.
 
 steps:
+  # ── Stage 1: Build and push base images ──────────────────────────────
+  - id: "build-base-3.11"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "--build-arg", "PYTHON_IMAGE_TAG=3.11-slim",
+        "-t", "${_IMAGE_REPO_NAME}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.11",
+        "-f", "cicd/Dockerfile.base",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "build-base-3.12"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "--build-arg", "PYTHON_IMAGE_TAG=3.12-slim",
+        "-t", "${_IMAGE_REPO_NAME}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.12",
+        "-f", "cicd/Dockerfile.base",
+        ".",
+      ]
+    waitFor: ["-"]
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - id: "push-base-3.11"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.11"]
+    waitFor: ["build-base-3.11"]
+
+  - id: "push-base-3.12"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_REPO_NAME}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.12"]
+    waitFor: ["build-base-3.12"]
+
+  # ── Stage 2: Build top-layer images (depends on base) ────────────────
   - id: "build-image-3.11"
     name: "gcr.io/cloud-builders/docker"
     args:
@@ -25,7 +65,7 @@ steps:
         "--file=${_DOCKERFILE_PATH}",
         ".",
       ]
-    waitFor: ["-"]
+    waitFor: ["push-base-3.11"]
     env:
       - "DOCKER_BUILDKIT=1"
 
@@ -41,18 +81,14 @@ steps:
         "--file=${_DOCKERFILE_PATH}",
         ".",
       ]
-    waitFor: ["-"]
+    waitFor: ["push-base-3.12"]
     env:
       - "DOCKER_BUILDKIT=1"
 
+  # ── Stage 3: Push top-layer images ───────────────────────────────────
   - id: "push-image-3.11"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"]
-    waitFor: ["build-image-3.11"]
-
-  - id: "push-image-3.11-latest"
-    name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest"]
+    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.11"]
     waitFor: ["build-image-3.11"]
 
   - id: "push-image-3.12"
@@ -60,13 +96,9 @@ steps:
     args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.12"]
     waitFor: ["build-image-3.12"]
 
-  - id: "push-image-3.12-tag"
-    name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:python3.12"]
-    waitFor: ["build-image-3.12"]
-
+  # ── Stage 4: Test and lint ───────────────────────────────────────────
   - id: test-3.11
-    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.11"
     dir: /benchmarks
     entrypoint: uv
     args: ["run", "--python", "3.11", "--group", "test", "pytest", "tests"]
@@ -84,7 +116,7 @@ steps:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
 
   - id: ruff
-    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.11"
     dir: /benchmarks
     entrypoint: uvx
     args: ["ruff", "check"]
