@@ -18,8 +18,8 @@ steps:
     args:
       [
         "build",
-        "--build-arg", "BASE_IMAGE_TAG=latest",
-        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}",
+        "--build-arg", "BASE_IMAGE_TAG=${COMMIT_SHA}-python3.11",
+        "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.11",
         "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:latest",
         "--file=${_DOCKERFILE_PATH}",
         ".",
@@ -33,7 +33,7 @@ steps:
     args:
       [
         "build",
-        "--build-arg", "BASE_IMAGE_TAG=python3.12",
+        "--build-arg", "BASE_IMAGE_TAG=${COMMIT_SHA}-python3.12",
         "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}-python3.12",
         "--tag=${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:python3.12",
         "--file=${_DOCKERFILE_PATH}",

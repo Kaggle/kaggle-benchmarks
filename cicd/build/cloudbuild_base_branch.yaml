@@ -19,7 +19,7 @@ steps:
       [
         "build",
         "--build-arg", "PYTHON_IMAGE_TAG=3.11-slim",
-        "-t", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}",
+        "-t", "${_BASE_IMAGE_REPO}/${_BASE_IMAGE_NAME}:${COMMIT_SHA}-python3.11",
         "-f", "cicd/Dockerfile.base",
         ".",
       ]
