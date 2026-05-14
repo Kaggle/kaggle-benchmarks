@@ -542,6 +542,7 @@ def test_corporate_takeover_chatroom():
                     "rescue_plan": "Asset Strip & Liquidate",
                 }
             ),  # Phase 3: Sealed bid
+            "YES. Beta betrayed us by bidding $80M and proposing Project Phoenix.",  # Phase 5: Query response
         ],
         name="Alpha",
     )
@@ -583,6 +584,7 @@ def test_corporate_takeover_chatroom():
             "rescue_plan": "Rescue & Retain Jobs",
         },
         "chosen_acquirer_decision": "We officially choose Company Beta's rescue offer!",
+        "alpha_suspicions_assessment": "YES. Beta betrayed us by bidding $80M and proposing Project Phoenix.",
     }
 
     main_room = run.chat.history[0]
@@ -592,27 +594,29 @@ def test_corporate_takeover_chatroom():
     # 1. Assert that the Target (Gamma) is completely blind to Alpha/Beta's Hostile Alliance collusion!
     gamma_perspective = main_room._build_perspective(gamma)
     for msg in gamma_perspective:
-        assert "Hostile Alliance" not in msg.content
-        assert "asset-strip Gamma" not in msg.content
-        assert "lowball at $20M" not in msg.content
+        content_str = str(msg.content)
+        assert "Hostile Alliance" not in content_str
+        assert "asset-strip Gamma" not in content_str
+        assert "lowball at $20M" not in content_str
 
     # 2. Assert that the Hostile Acquirer (Alpha) is completely blind to Beta/Gamma's secret deals and sealed bids!
     alpha_perspective = main_room._build_perspective(alpha)
     for msg in alpha_perspective:
+        content_str = str(msg.content)
         # Alpha must never see the whistleblowing backchannel
-        assert "White Knight Backchannel" not in msg.content
-        assert "Beta Proposal Submission" not in msg.content
-        assert "Alpha is planning to asset-strip" not in msg.content
+        assert "White Knight Backchannel" not in content_str
+        assert "Beta Proposal Submission" not in content_str
+        assert "Alpha is planning to asset-strip" not in content_str
         # Alpha must never see Beta's friendly rescue proposal
-        assert "Rescue & Retain Jobs" not in msg.content
-        assert "friendly $80M rescue" not in msg.content
+        assert "Rescue & Retain Jobs" not in content_str
+        assert "friendly $80M rescue" not in content_str
 
     # 3. Project from Beta's (White Knight's) perspective, and verify she CAN see
     # both private channels since she was an active participant in both!
     beta_perspective = main_room._build_perspective(beta)
-    assert any("private: Hostile Alliance" in m.content for m in beta_perspective)
+    assert any("private: Hostile Alliance" in str(m.content) for m in beta_perspective)
     assert any(
-        "private: White Knight Backchannel" in m.content for m in beta_perspective
+        "private: White Knight Backchannel" in str(m.content) for m in beta_perspective
     )
 
 
@@ -621,8 +625,8 @@ def test_corporate_takeover_chatroom():
 
 def test_private_channel_sees_parent_history():
     """Verify that players inside a private child room can see parent public history (memory delegation)."""
-    alice = MockedChat(name="Alice")
-    bob = MockedChat(name="Bob")
+    alice = MockedChat.from_contents([], name="Alice")
+    bob = MockedChat.from_contents([], name="Bob")
 
     room = ChatRoom(participants=[alice, bob], name="Main Hall")
     with room:

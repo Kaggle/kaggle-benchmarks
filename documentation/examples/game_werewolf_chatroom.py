@@ -161,11 +161,30 @@ def run_werewolf(
                 wolf_votes = {}
                 for wolf in active_wolves:
                     vote_text = wolf.talk()
-                    # Extract target name from response
+                    # Extract target name from response robustly
+                    vote_target = None
+                    vote_text_lower = vote_text.lower()
                     for player in active_villagers:
-                        if player.name in vote_text:
-                            wolf_votes[wolf.name] = player.name
+                        name_lower = player.name.lower()
+                        if any(
+                            pattern in vote_text_lower
+                            for pattern in [
+                                f"vote to eliminate {name_lower}",
+                                f"vote for {name_lower}",
+                                f"vote {name_lower}",
+                                f"eliminate {name_lower}",
+                                f"kill {name_lower}",
+                            ]
+                        ):
+                            vote_target = player.name
                             break
+                    if not vote_target:
+                        for player in active_villagers:
+                            if player.name.lower() in vote_text_lower:
+                                vote_target = player.name
+                                break
+                    if vote_target:
+                        wolf_votes[wolf.name] = vote_target
 
                 victim_name = count_votes(wolf_votes)
                 if victim_name:
@@ -211,10 +230,35 @@ def run_werewolf(
             day_votes = {}
             for player in survivors:
                 vote_text = player.talk()
+                # Extract target name from response robustly
+                vote_target = None
+                vote_text_lower = vote_text.lower()
                 for target in survivors:
-                    if target is not player and target.name in vote_text:
-                        day_votes[player.name] = target.name
+                    if target is player:
+                        continue
+                    name_lower = target.name.lower()
+                    if any(
+                        pattern in vote_text_lower
+                        for pattern in [
+                            f"vote to hang {name_lower}",
+                            f"vote for {name_lower}",
+                            f"vote {name_lower}",
+                            f"hang {name_lower}",
+                            f"eliminate {name_lower}",
+                        ]
+                    ):
+                        vote_target = target.name
                         break
+                if not vote_target:
+                    for target in survivors:
+                        if (
+                            target is not player
+                            and target.name.lower() in vote_text_lower
+                        ):
+                            vote_target = target.name
+                            break
+                if vote_target:
+                    day_votes[player.name] = vote_target
 
             hanged_name = count_votes(day_votes)
             if hanged_name:
