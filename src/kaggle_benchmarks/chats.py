@@ -169,3 +169,170 @@ def fork(name: str = "Fork", orphan: bool = False):
     with new(name, orphan=orphan) as chat:
         chat.history.extend(messages)
         yield chat
+
+
+class ChatRoom(Chat):
+    """A multi-agent conversation room with perspective-aware history.
+
+    ChatRoom extends Chat to support multiple participants (LLMs and code-driven
+    Actors) conversing in a shared space. Each participant sees a projected view
+    of the conversation history where their own messages appear as "assistant"
+    and peers' messages appear as "user" with name prefixes.
+
+    Usage:
+        room = ChatRoom(participants=[alice, bob], system_prompt="Debate AI.")
+        with room:
+            room.post("Topic: AI safety")
+            alice.talk()
+            bob.talk()
+    """
+
+    def __init__(
+        self,
+        participants: list["actors.Actor"],
+        system_prompt: str = "",
+        name: str = "Room",
+    ):
+        super().__init__(name=name)
+        self.participants = list(participants)
+        self.system_prompt = system_prompt
+        self._ctx_manager = None
+
+    def __enter__(self):
+        from kaggle_benchmarks import chats, contexts
+
+        # Integrate this room into the active parent chat history.
+        # This registers the ChatRoom container itself as a nested collapsible Chat step
+        # inside the parent history, keeping the UI beautifully grouped.
+        try:
+            parent_chat = chats.get_current_chat()
+            if parent_chat and self not in parent_chat.history:
+                parent_chat.append(self)
+        except Exception:
+            pass
+
+        self._ctx_manager = contexts.enter(chat=self)
+        self._ctx_manager.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        result = self._ctx_manager.__exit__(*exc)
+        self._ctx_manager = None
+        return result
+
+    def post(self, message: str, visible_to=None) -> Message:
+        """Post an anonymous system/narrator message to the room.
+
+        Args:
+            message: The message text.
+            visible_to: Optional list of Actors who can see this message.
+                If None, all participants can see it.
+        """
+        msg = Message(sender=actors.system, content=message)
+        if visible_to is not None:
+            msg._meta["visible_to"] = visible_to
+        self.append(msg)
+        return msg
+
+    def _build_roster(self, viewer: "actors.Actor") -> str:
+        """Build the participant roster description for the viewer."""
+        peers = [p for p in self.participants if p is not viewer]
+        lines = [f"You are {viewer.name}."]
+        if peers:
+            lines.append("Other participants in this conversation:")
+            for p in peers:
+                desc = getattr(p, "system_prompt", None) or ""
+                lines.append(f"- {p.name}" + (f": {desc}" if desc else ""))
+        lines.append("")
+        lines.append(
+            "Messages from other participants are prefixed with their name,"
+            " e.g., [Bob]: ..."
+        )
+        lines.append("Your messages appear without a prefix.")
+        lines.append("")
+        lines.append(
+            f'Note on "{self.name}": Messages from "{self.name}" are'
+            " system/narrator instructions, not from another player."
+        )
+        return "\n".join(lines)
+
+    def _build_system_prompt(self, viewer: "actors.Actor") -> str:
+        """Build the full system prompt for a viewer.
+
+        Concatenates: roster + --- + room prompt + --- + personal prompt.
+        """
+        parts = [self._build_roster(viewer)]
+        if self.system_prompt:
+            parts.append(self.system_prompt)
+        personal = getattr(viewer, "system_prompt", None)
+        if personal:
+            parts.append(personal)
+        return "\n---\n".join(parts)
+
+    def _build_perspective(
+        self, viewer: "actors.Actor", _recursive: bool = False
+    ) -> list[Message]:
+        """Project the ground-truth history into a viewer's perspective.
+
+        Recursively resolves nested ChatRoom subchannels to interleave private
+        discussions for members, while keeping non-members blind.
+        - Viewer's own messages → sender with role="assistant"
+        - Everyone else's messages → sender with role="user", name-prefixed
+        - Messages with visible_to that exclude the viewer are filtered out.
+        - Messages from private channels are tagged with context (e.g. "[Bob (private: Night Chat)]: ...")
+        """
+        # If this is a child private room and we are called at the top-level,
+        # delegate perspective building to the topmost parent room so that
+        # public history and other authorized channels are chronologically interleaved!
+        parent = getattr(self, "_parent_room", None)
+        if parent and not _recursive:
+            return parent._build_perspective(viewer)
+
+        projected = []
+        for item in self.history:
+            if isinstance(item, ChatRoom):
+                # Recursively project and interleave nested rooms
+                if viewer in item.participants:
+                    projected.extend(item._build_perspective(viewer, _recursive=True))
+            elif isinstance(item, Message):
+                # Visibility filtering on individual messages.
+                visible = item._meta.get("visible_to")
+                if visible is not None and viewer not in visible:
+                    continue
+
+                if item.sender is viewer:
+                    projected.append(
+                        Message(
+                            sender=actors.Actor(name=viewer.name, role="assistant"),
+                            content=item.content,
+                        )
+                    )
+                else:
+                    name = item.sender.name
+                    # If this message is inside a private child room, tag it
+                    is_child_room = hasattr(self, "_parent_room")
+                    if is_child_room:
+                        content = f"[{name} (private: {self.name})]: {item.content}"
+                    else:
+                        content = f"[{name}]: {item.content}"
+
+                    projected.append(
+                        Message(
+                            sender=actors.Actor(name=name, role="user"),
+                            content=content,
+                        )
+                    )
+        return projected
+
+    def private_channel(
+        self, participants: list["actors.Actor"], name: str = "Private Channel"
+    ) -> "ChatRoom":
+        """Create a child ChatRoom visible only to the specified participants.
+
+        Any messages posted inside the child channel are interleaved into the
+        parent room's ground-truth log with restricted visibility.
+        """
+        # Spawns a nested room with restricted participants
+        channel = ChatRoom(participants=participants, name=name)
+        channel._parent_room = self
+        return channel

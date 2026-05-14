@@ -152,6 +152,7 @@ class LLMChat(actors.Actor):
     def __init__(
         self,
         *,
+        system_prompt: str | None = None,
         support_structured_outputs: bool = False,
         support_temperature: bool = False,
         **kwargs,
@@ -159,9 +160,46 @@ class LLMChat(actors.Actor):
         kwargs.setdefault("role", "assistant")
         kwargs.setdefault("avatar", "🤖")
         super().__init__(**kwargs)
+        self.system_prompt = system_prompt
         self.support_structured_outputs = support_structured_outputs
         self.support_temperature = support_temperature
         self.stream_responses = config.interactive_mode
+
+    def talk(self, schema: type[T] = str, **kwargs) -> T:
+        """Speak in the active ChatRoom.
+
+        Builds a perspective-projected history for this participant and calls
+        the underlying LLM. The response is appended to the room's ground-truth
+        log with this actor as the sender.
+
+        Raises RuntimeError if called outside of an active ChatRoom context.
+        """
+        room = chats.get_current_chat()
+        if not isinstance(room, chats.ChatRoom):
+            raise RuntimeError(
+                "LLMChat.talk() must be called within an active ChatRoom context."
+            )
+
+        system = room._build_system_prompt(self)
+        perspective = room._build_perspective(self)
+
+        # Enter a temporary orphan chat with the projected history.
+        # respond() reads from this temp chat, not the room's ground truth.
+        with chats.new(name=f"_perspective_{self.name}", orphan=True) as temp:
+            temp.history.extend(perspective)
+            response = self.respond(system=system, schema=schema, **kwargs)
+
+        # Re-attribute the response to this actor and append to ground truth.
+        # The response was already appended to temp by @emits_message /
+        # respond() internals, so we create a clean copy for the room log.
+        room_msg = messages.Message(sender=self, content=response.content)
+        room_msg._meta = response._meta.copy()
+        # Fix: respond() stores the temp chat in _meta["chat"]. Override to
+        # point at the room's ground-truth log instead.
+        room_msg._meta["chat"] = room
+        room.append(room_msg)
+
+        return response.content
 
     def invoke(
         self,
@@ -392,7 +430,9 @@ class OpenAI(LLMChat):
             # inner one arrives at Model Proxy as a top-level field where it
             # reads google.thinking_config.  Without include_thoughts, the
             # frontend drops thinking traces from the response.
-            if kwargs["reasoning_effort"] != "none" and self.model.startswith("google/"):
+            if kwargs["reasoning_effort"] != "none" and self.model.startswith(
+                "google/"
+            ):
                 kwargs.setdefault("extra_body", {})
                 kwargs["extra_body"].setdefault("extra_body", {})
                 kwargs["extra_body"]["extra_body"].setdefault("google", {})

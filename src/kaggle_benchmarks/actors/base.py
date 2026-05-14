@@ -69,6 +69,23 @@ class Actor:
     def __str__(self) -> str:
         return f"{self.avatar} {self.name}"
 
+    def talk(self, message: str) -> "Message":
+        """Speak in the active ChatRoom.
+
+        Raises RuntimeError if called outside of an active ChatRoom context.
+        """
+        from kaggle_benchmarks import chats
+
+        chat = chats.get_current_chat()
+        if not isinstance(chat, chats.ChatRoom):
+            raise RuntimeError(
+                "Actor.talk() must be called within an active ChatRoom context."
+            )
+
+        msg = Message(sender=self, content=message)
+        chat.append(msg)
+        return msg
+
 
 class Tool(Actor):
     def __init__(self, name: str = "tool"):

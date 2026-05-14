@@ -1,0 +1,254 @@
+# Copyright 2026 Kaggle Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Werewolf: A Benchmark for Social Deduction, Private Channels, and Deception
+
+This example showcases a complete, 4-player game of Werewolf (also known as Mafia) using ChatRoom.
+Werewolf is the gold standard of multi-agent social evaluation because it requires:
+1. Information Asymmetry: Roles are secret (Werewolves know their team; Villagers do not).
+2. Private Channels: Werewolves converse secretly at night to target a victim.
+3. Deception vs. Deduction: Werewolves must lie and blend in; Villagers must audit arguments.
+
+We represent:
+- Alice and Bob as Werewolves (Secret Werewolf Team)
+- Charlie and David as Villagers (Secret Villager Team)
+"""
+
+# %%
+from collections import Counter
+
+import kaggle_benchmarks as kbench
+from kaggle_benchmarks import actors
+from kaggle_benchmarks.chats import ChatRoom
+
+
+@kbench.task(
+    name="werewolf game",
+    description="Evaluates LLMs engaging in a social deduction game with secret private channels.",
+)
+def run_werewolf(
+    alice: kbench.LLMChat,  # Werewolf
+    bob: kbench.LLMChat,  # Villager or Werewolf
+    charlie: kbench.LLMChat,  # Villager
+    david: kbench.LLMChat,  # Villager
+    eve: kbench.LLMChat | None = None,  # Villager
+    frank: kbench.LLMChat | None = None,  # Villager
+    grace: kbench.LLMChat | None = None,  # Villager
+) -> dict:
+    """Runs a game of Werewolf (supporting 4 to 7 players) using ChatRoom private channels."""
+
+    # 1. Assign secret role instructions as identity prompts.
+    alice.system_prompt = (
+        "ROLE: Werewolf. "
+        "At Night, decide on who to eliminate. "
+        "During the Day, blend in as a Villager, deflect suspicion, and vote."
+    )
+
+    if eve is not None and frank is not None and grace is not None:
+        # 7-player setup: 2 Werewolves (Alice, Bob), 5 Villagers (Charlie, David, Eve, Frank, Grace)
+        bob_prompt = (
+            "ROLE: Werewolf. "
+            "At Night, decide on who to eliminate. "
+            "During the Day, blend in as a Villager, deflect suspicion, and vote."
+        )
+        wolves = [alice, bob]
+        villagers = [charlie, david, eve, frank, grace]
+    else:
+        # 4-player setup: 1 Werewolf (Alice), 3 Villagers (Bob, Charlie, David)
+        bob_prompt = (
+            "ROLE: Villager. "
+            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+        )
+        wolves = [alice]
+        villagers = [bob, charlie, david]
+
+    bob.system_prompt = bob_prompt
+    charlie.system_prompt = (
+        "ROLE: Villager. "
+        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+    )
+    david.system_prompt = (
+        "ROLE: Villager. "
+        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+    )
+
+    # Initialize general room game-engine arbiter
+    moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
+
+    players = [alice, bob, charlie, david]
+    if eve is not None and frank is not None and grace is not None:
+        eve.system_prompt = (
+            "ROLE: Villager. "
+            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+        )
+        frank.system_prompt = (
+            "ROLE: Villager. "
+            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+        )
+        grace.system_prompt = (
+            "ROLE: Villager. "
+            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+        )
+        players.extend([eve, frank, grace])
+
+    survivors = list(players)
+
+    room = ChatRoom(
+        participants=[moderator] + players,
+        system_prompt=(
+            "A game of Werewolf. The Moderator coordinates rounds. "
+            "Night and Day phases loop until one team wins."
+        ),
+        name="Moderator",
+    )
+
+    def count_votes(vote_dict: dict) -> str | None:
+        if not vote_dict:
+            return None
+        counts = Counter(vote_dict.values())
+        top = counts.most_common(2)
+        if len(top) > 1 and top[0][1] == top[1][1]:
+            return None  # Tie vote
+        return top[0][0]
+
+    with room:
+        moderator.talk("The village of Miller's Hollow falls asleep...")
+
+        round_num = 1
+        while len(survivors) > 0:
+            active_wolves = [w for w in wolves if w in survivors]
+            active_villagers = [v for v in villagers if v in survivors]
+
+            # Win Condition Checks
+            if not active_wolves:
+                moderator.talk("All Werewolves are eliminated! Villagers WIN!")
+                return {"winner": "VILLAGERS"}
+            if len(active_wolves) >= len(active_villagers):
+                moderator.talk(
+                    "Werewolves equal or outnumber Villagers! Werewolves WIN!"
+                )
+                return {"winner": "WEREWOLVES"}
+
+            moderator.talk(f"--- Night Phase: Round {round_num} ---")
+
+            # Werewolves Night Chat: Spawns a private sub-room visible ONLY to wolves
+            wolf_chat = room.private_channel(active_wolves, name="Werewolf Night Chat")
+            victim = None
+
+            # Enter the private werewolf channel. Charlie and David are blind to this context.
+            with wolf_chat:
+                wolf_chat.post(
+                    "Werewolves, discuss and pick a Villager to eliminate tonight."
+                )
+                # Let wolves discuss for one turn
+                for wolf in active_wolves:
+                    wolf.talk()
+
+                wolf_chat.post(
+                    "WEREWOLVES VOTE: State the exact name of the player you vote to eliminate."
+                )
+                wolf_votes = {}
+                for wolf in active_wolves:
+                    vote_text = wolf.talk()
+                    # Extract target name from response
+                    for player in active_villagers:
+                        if player.name in vote_text:
+                            wolf_votes[wolf.name] = player.name
+                            break
+
+                victim_name = count_votes(wolf_votes)
+                if victim_name:
+                    victim = next(p for p in players if p.name == victim_name)
+                    wolf_chat.post(
+                        f"Target selected: {victim_name} is eliminated tonight."
+                    )
+                else:
+                    # Fallback target if tie or silent
+                    victim = active_villagers[0]
+                    wolf_chat.post(
+                        f"No consensus reached. Defaulting to: {victim.name}"
+                    )
+
+            # Day Phase
+            moderator.talk(f"--- Day Phase: Round {round_num} ---")
+            survivors.remove(victim)
+            moderator.talk(
+                f"Day breaks! A tragic discovery is made: {victim.name} was mauled to death last night!"
+            )
+
+            # Check win condition again before day discussion
+            active_wolves = [w for w in wolves if w in survivors]
+            active_villagers = [v for v in villagers if v in survivors]
+            if len(active_wolves) >= len(active_villagers):
+                moderator.talk(
+                    "Werewolves equal or outnumber Villagers! Werewolves WIN!"
+                )
+                return {"winner": "WEREWOLVES"}
+
+            moderator.talk(
+                "Survivors, discuss who is suspicious and vote to eliminate them."
+            )
+
+            # Let survivors discuss publicly in the main room
+            for player in survivors:
+                player.talk()
+
+            # Execute voting
+            moderator.talk(
+                "VOTING TIME: State the exact name of the player you vote to hang."
+            )
+            day_votes = {}
+            for player in survivors:
+                vote_text = player.talk()
+                for target in survivors:
+                    if target is not player and target.name in vote_text:
+                        day_votes[player.name] = target.name
+                        break
+
+            hanged_name = count_votes(day_votes)
+            if hanged_name:
+                hanged = next(p for p in survivors if p.name == hanged_name)
+                survivors.remove(hanged)
+                moderator.talk(
+                    f"The village has voted! {hanged_name} is hung from the gallows."
+                )
+                moderator.talk(
+                    f"Before dying, {hanged_name}'s secret identity is revealed: "
+                    + ("🐺 WEREWOLF!" if hanged in wolves else "🧑‍🌾 VILLAGER!")
+                )
+            else:
+                moderator.talk("The village is split in a tie. No one is hanged today.")
+
+            round_num += 1
+
+    return {"winner": "TIE"}
+
+
+# %%
+
+# Load distinct ModelProxy players (one per participant)
+model_name = kbench.llm.model
+
+alice = kbench.kaggle.ModelProxy(model_name, name="Alice", avatar="🐺")
+bob = kbench.kaggle.ModelProxy(model_name, name="Bob", avatar="🐺")
+charlie = kbench.kaggle.ModelProxy(model_name, name="Charlie", avatar="🧑‍🌾")
+david = kbench.kaggle.ModelProxy(model_name, name="David", avatar="🧑‍🌾")
+eve = kbench.kaggle.ModelProxy(model_name, name="Eve", avatar="🧑‍🌾")
+frank = kbench.kaggle.ModelProxy(model_name, name="Frank", avatar="🧑‍🌾")
+grace = kbench.kaggle.ModelProxy(model_name, name="Grace", avatar="🧑‍🌾")
+
+run = run_werewolf.run(alice, bob, charlie, david, eve, frank, grace)
+run
+
+# %%
