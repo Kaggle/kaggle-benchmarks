@@ -466,61 +466,97 @@ def test_werewolf_chatroom():
     # Charlie and David (Villagers) are sleeping.
     alice = MockedChat.from_contents(
         [
-            "Let's eliminate Charlie tonight.",  # Night Discussion
+            "Let's eliminate Charlie tonight.",  # Night 1 Discussion
             json.dumps(
-                {"voted_player": "Charlie", "reason": "Charlie is a major threat."}
-            ),  # Night Vote
-            "I suspect Charlie is a werewolf! (lie)",  # Day Discussion
+                {"voted_player": "Charlie", "reason": "Charlie is a threat."}
+            ),  # Night 1 Vote
+            "I am innocent!",  # Day 1 Discussion
             json.dumps(
-                {"voted_player": "Charlie", "reason": "Charlie behaves suspiciously."}
-            ),  # Day Vote
+                {"voted_player": "David", "reason": "He accused me."}
+            ),  # Day 1 Vote
         ],
         name="Alice",
     )
     bob = MockedChat.from_contents(
         [
-            "Agree, Charlie is a threats.",  # Night Discussion
+            "Let's go for Charlie.",  # Night 1 Discussion
             json.dumps(
-                {
-                    "voted_player": "Charlie",
-                    "reason": "To eliminate the leading threat.",
-                }
-            ),  # Night Vote
-            "Charlie behaves very suspiciously.",  # Day Discussion
+                {"voted_player": "Charlie", "reason": "Agreed."}
+            ),  # Night 1 Vote
+            "I agree we should find the wolf.",  # Day 1 Discussion
             json.dumps(
-                {
-                    "voted_player": "Charlie",
-                    "reason": "Charlie has been overly suspicious.",
-                }
-            ),  # Day Vote
+                {"voted_player": "David", "reason": "He is suspicious."}
+            ),  # Day 1 Vote
+            "I will eliminate David.",  # Night 2 Discussion
+            json.dumps(
+                {"voted_player": "David", "reason": "Strongest villager."}
+            ),  # Night 2 Vote
+            "I'm not the wolf!",  # Day 2 Discussion
+            json.dumps(
+                {"voted_player": "Eve", "reason": "She framed me."}
+            ),  # Day 2 Vote
         ],
         name="Bob",
     )
     charlie = MockedChat.from_contents(
-        [
-            "I'm a Villager. Alice is acting weird.",  # Day Discussion
-            json.dumps(
-                {"voted_player": "Alice", "reason": "Alice is acting very defensively."}
-            ),  # Day Vote
-        ],
+        [],  # Dies Night 1, no actions
         name="Charlie",
     )
     david = MockedChat.from_contents(
         [
-            "Alice deflects too much.",  # Day Discussion
+            "Alice and Bob timing was coordinated.",  # Day 1 Discussion
             json.dumps(
-                {"voted_player": "Alice", "reason": "Alice deflects all questions."}
-            ),  # Day Vote
+                {"voted_player": "Alice", "reason": "She is a wolf."}
+            ),  # Day 1 Vote
         ],
         name="David",
+    )
+    eve = MockedChat.from_contents(
+        [
+            "I suspect Alice.",  # Day 1 Discussion
+            json.dumps(
+                {"voted_player": "Alice", "reason": "Suspicious timing."}
+            ),  # Day 1 Vote
+            "We found Alice, now we hang Bob.",  # Day 2 Discussion
+            json.dumps(
+                {"voted_player": "Bob", "reason": "He is the second wolf."}
+            ),  # Day 2 Vote
+        ],
+        name="Eve",
+    )
+    frank = MockedChat.from_contents(
+        [
+            "Alice behaves weirdly.",  # Day 1 Discussion
+            json.dumps(
+                {"voted_player": "Alice", "reason": "Acting defensively."}
+            ),  # Day 1 Vote
+            "Bob is Alice's partner.",  # Day 2 Discussion
+            json.dumps(
+                {"voted_player": "Bob", "reason": "Lockstep vote."}
+            ),  # Day 2 Vote
+        ],
+        name="Frank",
+    )
+    grace = MockedChat.from_contents(
+        [
+            "I vote to hang Alice.",  # Day 1 Discussion
+            json.dumps(
+                {"voted_player": "Alice", "reason": "Wolf partner."}
+            ),  # Day 1 Vote
+            "Bob must hang today.",  # Day 2 Discussion
+            json.dumps(
+                {"voted_player": "Bob", "reason": "Unanimous choice."}
+            ),  # Day 2 Vote
+        ],
+        name="Grace",
     )
 
     from documentation.examples.game_werewolf_chatroom import run_werewolf
 
     # Run the full Werewolf task (spawns active Run)
-    run = run_werewolf.run(alice, bob, charlie, david)
+    run = run_werewolf.run(alice, bob, charlie, david, eve, frank, grace)
 
-    # Verify result: Villagers win since they successfully deduce and hang the werewolf (Alice) on Day 1!
+    # Verify result: Villagers win since they successfully hang both wolves!
     assert run.result == {"winner": "VILLAGERS"}
 
     # 1. Verify history isolation:

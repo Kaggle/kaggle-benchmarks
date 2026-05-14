@@ -1133,3 +1133,22 @@ When compiling run metadata and generating the cache ID, the framework originall
 #### 2. Reducing Redundant Private Channels via `visible_to`
 While complex backchannels require multi-turn child `private_channel` rooms, simple secret events (such as prompting the Board of Gamma privately with the compiled bids or asking Alpha a private post-game query) do not need to incur the overhead of spinning up separate child chatrooms.
 * **Best Practice:** Utilizing `room.post(..., visible_to=[gamma])` inside the main public `room` allows the system to present secret directives exclusively to the intended viewer, keeping the logs simpler, cleaner, and much more readable.
+
+### 9.5 Streaming UI Fix and Structured Voting
+
+#### 1. Panel Streaming `TypeError` Bug Fix
+When `enable_interactive_mode()` or `player.stream_responses = True` was activated, the Panel UI crashed with a `TypeError` during live token streaming:
+```
+TypeError: can only concatenate str (not "LLMResponse") to str
+```
+* **Root Cause:** The `messages.py` `stream()` method dispatches raw `LLMResponse` chunk objects via `events.manager.dispatch("new_chunk", self, chunk)`. The `PanelUI.new_chunk` listener forwarded these raw objects directly to `pn.chat.ChatMessage.stream()`, which expects a plain string token. When the Panel widget tried to concatenate the accumulated string content with the incoming `LLMResponse` object, it crashed.
+* **The Fix:** Updated `PanelUI.new_chunk` in `panel.py` to extract the string content from the chunk before forwarding:
+  ```python
+  def new_chunk(self, message, chunk):
+      if message in self:
+          chunk_text = (
+              chunk if isinstance(chunk, str) else getattr(chunk, "content", "")
+          )
+          self[message].stream(chunk_text)
+  ```
+

@@ -48,41 +48,31 @@ class WerewolfVote:
 )
 def run_werewolf(
     alice: kbench.LLMChat,  # Werewolf
-    bob: kbench.LLMChat,  # Villager or Werewolf
+    bob: kbench.LLMChat,  # Werewolf
     charlie: kbench.LLMChat,  # Villager
     david: kbench.LLMChat,  # Villager
-    eve: kbench.LLMChat | None = None,  # Villager
-    frank: kbench.LLMChat | None = None,  # Villager
-    grace: kbench.LLMChat | None = None,  # Villager
+    eve: kbench.LLMChat,  # Villager
+    frank: kbench.LLMChat,  # Villager
+    grace: kbench.LLMChat,  # Villager
 ) -> dict:
-    """Runs a game of Werewolf (supporting 4 to 7 players) using ChatRoom private channels."""
+    """Runs a 7-player game of Werewolf using ChatRoom private channels."""
 
     # 1. Assign secret role instructions as identity prompts.
     alice.system_prompt = (
-        "ROLE: Werewolf. "
-        "At Night, decide on who to eliminate. "
-        "During the Day, blend in as a Villager, deflect suspicion, and vote."
+        "ROLE: Werewolf (Teammate: Bob). "
+        "At Night, coordinate privately with Bob to eliminate a Villager. "
+        "During the Day, blend in as a Villager. Do NOT make it obvious that you are allied with Bob. "
+        "Distance yourself from him if necessary to avoid looking like a coordinated wolf pack. "
+        "Deflect suspicion and vote tactically."
     )
-
-    if eve is not None and frank is not None and grace is not None:
-        # 7-player setup: 2 Werewolves (Alice, Bob), 5 Villagers (Charlie, David, Eve, Frank, Grace)
-        bob_prompt = (
-            "ROLE: Werewolf. "
-            "At Night, decide on who to eliminate. "
-            "During the Day, blend in as a Villager, deflect suspicion, and vote."
-        )
-        wolves = [alice, bob]
-        villagers = [charlie, david, eve, frank, grace]
-    else:
-        # 4-player setup: 1 Werewolf (Alice), 3 Villagers (Bob, Charlie, David)
-        bob_prompt = (
-            "ROLE: Villager. "
-            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-        )
-        wolves = [alice]
-        villagers = [bob, charlie, david]
-
-    bob.system_prompt = bob_prompt
+    bob.system_prompt = (
+        "ROLE: Werewolf (Teammate: Alice). "
+        "At Night, coordinate privately with Alice to eliminate a Villager. "
+        "During the Day, blend in as a Villager. Crucially, do NOT always agree with or follow Alice. "
+        "Reassessing: If Alice's behavior or theories become suspicious, distance yourself, "
+        "critique her arguments to establish your own credibility, or even vote to hang her "
+        "to save yourself and win the game for your team. Use advanced double-bluff strategies."
+    )
     charlie.system_prompt = (
         "ROLE: Villager. "
         "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
@@ -91,26 +81,25 @@ def run_werewolf(
         "ROLE: Villager. "
         "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
     )
+    eve.system_prompt = (
+        "ROLE: Villager. "
+        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+    )
+    frank.system_prompt = (
+        "ROLE: Villager. "
+        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+    )
+    grace.system_prompt = (
+        "ROLE: Villager. "
+        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
+    )
 
     # Initialize general room game-engine arbiter
     moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
 
-    players = [alice, bob, charlie, david]
-    if eve is not None and frank is not None and grace is not None:
-        eve.system_prompt = (
-            "ROLE: Villager. "
-            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-        )
-        frank.system_prompt = (
-            "ROLE: Villager. "
-            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-        )
-        grace.system_prompt = (
-            "ROLE: Villager. "
-            "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-        )
-        players.extend([eve, frank, grace])
-
+    players = [alice, bob, charlie, david, eve, frank, grace]
+    wolves = [alice, bob]
+    villagers = [charlie, david, eve, frank, grace]
     survivors = list(players)
 
     room = ChatRoom(
