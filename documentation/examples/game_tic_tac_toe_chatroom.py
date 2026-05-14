@@ -171,16 +171,16 @@ def run_tic_tac_toe(
 
 # %%
 
+if __name__ == "__main__":
+    # To run a multi-agent game, we must instantiate DISTINCT ModelProxy instances
+    # (one per participant) to maintain correct identity checks and prevent
+    # perspective role-collapsing during history projection.
+    model_name = kbench.llm.model  # e.g., "google/gemini-2.5-flash"
 
-# To run a multi-agent game, we must instantiate DISTINCT ModelProxy instances
-# (one per participant) to maintain correct identity checks and prevent
-# perspective role-collapsing during history projection.
-model_name = kbench.llm.model  # e.g., "google/gemini-2.5-flash"
+    player_x = kbench.kaggle.ModelProxy(model_name, name="PlayerX", avatar="❌")
+    player_o = kbench.kaggle.ModelProxy(model_name, name="PlayerO", avatar="⭕")
 
-player_x = kbench.kaggle.ModelProxy(model_name, name="PlayerX", avatar="❌")
-player_o = kbench.kaggle.ModelProxy(model_name, name="PlayerO", avatar="⭕")
-
-run_tic_tac_toe.run(player_x, player_o)
+    run_tic_tac_toe.run(player_x, player_o)
 
 
 # %%
