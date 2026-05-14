@@ -1112,9 +1112,9 @@ To verify feasibility and ergonomic improvements, two full multi-agent benchmark
 
 ---
 
-### 9.4 Multi-Agent Cache Isolation, Model Identity, and Robust Voting Parsing
+### 9.4 Multi-Agent Cache Isolation, Model Identity, and Private Channel Optimization
 
-As the `ChatRoom` system was scaled to support complex social deduction (7-player Werewolf) and competitive negotiations (Corporate Takeover), several critical multi-agent integration findings were discovered and resolved:
+As the `ChatRoom` system was scaled to support complex multi-agent simulations (such as Werewolf and Corporate Takeover), several critical framework integration findings and optimizations were discovered and resolved:
 
 #### 1. Preventing Model Identity and Cache Collisions
 In typical single-agent runs, the benchmark subject is represented by an `LLMChat` instance whose `name` property is set to the model slug (e.g. `google/gemini-2.5-flash`). However, in multi-agent environments, players must be instantiated with customized, context-rich participant names (e.g., `name="Alice"`, `name="Bob"`):
@@ -1125,11 +1125,6 @@ When compiling run metadata and generating the cache ID, the framework originall
 * **The Bug:** This serialized `"Alice"` as the model version slug on leaderboards, and appended `_Alice` as the run's `cache_id` suffix. If the benchmark was subsequently run with a different model (e.g. Claude instead of Gemini) while keeping the participant name `"Alice"`, they would yield the exact same cache file and overwrite each other, completely breaking cache isolation.
 * **The Fix:** Updated both `runs.py` (`cache_id` calculation) and `serialization.py` (`_extract_model_version_data` serialization) to extract the actual underlying model version via `getattr(param, "model", None) or param.name`, ensuring robust model identity and cache-file isolation across different model evaluations.
 
-#### 2. Robust Vote Extraction in Social Deduction
-In games like Werewolf, players frequently engage in complex social conversations where multiple players are mentioned by name.
-* **The Bug:** The original vote-parsing loops verified simple name containment (e.g., `target.name in vote_text`). Because Alice was at index `0` of the survivors list, whenever a player mentioned Alice (e.g., *"Alice is defending Bob, so I vote to hang **Bob**"*), the loop matched `"Alice"` first, incorrectly registering their vote for Alice.
-* **The Fix:** Refactored vote-parsing loops to prioritize explicit voting and action patterns (e.g., `"vote to hang [Name]"`, `"vote for [Name]"`, `"eliminate [Name]"`). It only falls back to standard name-containment as a safe fallback if no explicit patterns are matched.
-
-#### 3. Reducing Redundant Private Channels via `visible_to`
+#### 2. Reducing Redundant Private Channels via `visible_to`
 While complex backchannels require multi-turn child `private_channel` rooms, simple secret events (such as prompting the Board of Gamma privately with the compiled bids or asking Alpha a private post-game query) do not need to incur the overhead of spinning up separate child chatrooms.
 * **Best Practice:** Utilizing `room.post(..., visible_to=[gamma])` inside the main public `room` allows the system to present secret directives exclusively to the intended viewer, keeping the logs simpler, cleaner, and much more readable.
