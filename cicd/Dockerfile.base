@@ -9,6 +9,7 @@ WORKDIR /benchmarks
 
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
+ENV UV_PYTHON_PREFERENCE=only-system
 
 # Manually install Playwright's system dependencies for Debian Trixie.
 # This step is necessary because the base image was recently updated to Debian
