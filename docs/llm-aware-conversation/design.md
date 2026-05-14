@@ -342,9 +342,14 @@ def tic_tac_toe(player_x_llm, player_o_llm):
 
 ### Werewolf (Private Channels)
 
-A full example showcasing `visible_to`, `private_channel`, and `room.run`:
+A full example showcasing `visible_to`, `private_channel`, and structured voting outputs:
 
 ```python
+@dataclasses.dataclass(frozen=True)
+class WerewolfVote:
+    voted_player: str
+    reason: str
+
 @kbench.task("Werewolf")
 def werewolf(player_llms: list, moderator_llm, max_rounds=5):
     mod = kbench.LLMChat(moderator_llm, name="Moderator",
@@ -377,12 +382,12 @@ def werewolf(player_llms: list, moderator_llm, max_rounds=5):
             room.post(f"Day {round+1}. A villager was eliminated. Discuss.")
             room.run(rounds=len(players), order="round_robin")
 
-            # Vote
+            # Vote using structured outputs
             room.post("Vote to eliminate someone.")
             votes = {}
             for player in alive_players:
-                vote = player.talk(schema=str)
-                votes[player.name] = vote
+                vote_result = player.talk(schema=WerewolfVote)
+                votes[player.name] = vote_result.voted_player
 ```
 
 ### Simple Debate (Automated Turns)

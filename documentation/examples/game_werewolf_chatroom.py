@@ -39,6 +39,7 @@ class WerewolfVote:
     """A structured vote submitted during the Werewolf game."""
 
     voted_player: str  # The exact name of the player you vote for (e.g. 'Bob', 'Alice')
+    reason: str  # The detailed strategic reasoning behind your vote decision
 
 
 @kbench.task(
@@ -244,7 +245,7 @@ def run_werewolf(
 
 # %%
 
-kbench.config.enable_interactive_mode()
+# kbench.config.enable_interactive_mode()
 
 # Load distinct ModelProxy players (one per participant)
 model_name = kbench.llm.model

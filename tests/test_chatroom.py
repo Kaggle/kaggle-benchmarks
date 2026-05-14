@@ -467,32 +467,50 @@ def test_werewolf_chatroom():
     alice = MockedChat.from_contents(
         [
             "Let's eliminate Charlie tonight.",  # Night Discussion
-            json.dumps({"voted_player": "Charlie"}),  # Night Vote
+            json.dumps(
+                {"voted_player": "Charlie", "reason": "Charlie is a major threat."}
+            ),  # Night Vote
             "I suspect Charlie is a werewolf! (lie)",  # Day Discussion
-            json.dumps({"voted_player": "Charlie"}),  # Day Vote
+            json.dumps(
+                {"voted_player": "Charlie", "reason": "Charlie behaves suspiciously."}
+            ),  # Day Vote
         ],
         name="Alice",
     )
     bob = MockedChat.from_contents(
         [
             "Agree, Charlie is a threats.",  # Night Discussion
-            json.dumps({"voted_player": "Charlie"}),  # Night Vote
+            json.dumps(
+                {
+                    "voted_player": "Charlie",
+                    "reason": "To eliminate the leading threat.",
+                }
+            ),  # Night Vote
             "Charlie behaves very suspiciously.",  # Day Discussion
-            json.dumps({"voted_player": "Charlie"}),  # Day Vote
+            json.dumps(
+                {
+                    "voted_player": "Charlie",
+                    "reason": "Charlie has been overly suspicious.",
+                }
+            ),  # Day Vote
         ],
         name="Bob",
     )
     charlie = MockedChat.from_contents(
         [
             "I'm a Villager. Alice is acting weird.",  # Day Discussion
-            json.dumps({"voted_player": "Alice"}),  # Day Vote
+            json.dumps(
+                {"voted_player": "Alice", "reason": "Alice is acting very defensively."}
+            ),  # Day Vote
         ],
         name="Charlie",
     )
     david = MockedChat.from_contents(
         [
             "Alice deflects too much.",  # Day Discussion
-            json.dumps({"voted_player": "Alice"}),  # Day Vote
+            json.dumps(
+                {"voted_player": "Alice", "reason": "Alice deflects all questions."}
+            ),  # Day Vote
         ],
         name="David",
     )
