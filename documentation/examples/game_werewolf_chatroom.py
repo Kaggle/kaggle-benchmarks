@@ -153,13 +153,14 @@ def run_werewolf(
                 for wolf in active_wolves:
                     wolf.talk()
 
+                eligible_names = ", ".join(v.name for v in active_villagers)
                 wolf_chat.post(
-                    "WEREWOLVES VOTE: State the exact name of the player you vote to eliminate."
+                    f"WEREWOLVES VOTE: Pick one of [{eligible_names}]. "
+                    "Use their EXACT full name in voted_player."
                 )
                 wolf_votes = {}
                 for wolf in active_wolves:
                     vote_result = wolf.talk(schema=WerewolfVote)
-                    # Verify that the voted player is an active villager
                     if any(
                         v.name == vote_result.voted_player for v in active_villagers
                     ):
@@ -203,13 +204,14 @@ def run_werewolf(
                 player.talk()
 
             # Execute voting
+            eligible_names = ", ".join(s.name for s in survivors)
             moderator.talk(
-                "VOTING TIME: State the exact name of the player you vote to hang."
+                f"VOTING TIME: Pick one of [{eligible_names}] to hang. "
+                "Use their EXACT full name in voted_player."
             )
             day_votes = {}
             for player in survivors:
                 vote_result = player.talk(schema=WerewolfVote)
-                # Verify that the voted player is a living survivor
                 if any(s.name == vote_result.voted_player for s in survivors):
                     day_votes[player.name] = vote_result.voted_player
 
@@ -239,13 +241,13 @@ def run_werewolf(
 # Load distinct ModelProxy players (one per participant)
 model_name = kbench.llm.model
 
-alice = kbench.kaggle.ModelProxy(model_name, name="Alice", avatar="🐺")
-bob = kbench.kaggle.ModelProxy(model_name, name="Bob", avatar="🐺")
-charlie = kbench.kaggle.ModelProxy(model_name, name="Charlie", avatar="🧑‍🌾")
-david = kbench.kaggle.ModelProxy(model_name, name="David", avatar="🧑‍🌾")
-eve = kbench.kaggle.ModelProxy(model_name, name="Eve", avatar="🧑‍🌾")
-frank = kbench.kaggle.ModelProxy(model_name, name="Frank", avatar="🧑‍🌾")
-grace = kbench.kaggle.ModelProxy(model_name, name="Grace", avatar="🧑‍🌾")
+alice = kbench.kaggle.ModelProxy(model_name, name="Alice", avatar="👩")
+bob = kbench.kaggle.ModelProxy(model_name, name="Bob", avatar="👨")
+charlie = kbench.kaggle.ModelProxy(model_name, name="Charlie", avatar="🧑")
+david = kbench.kaggle.ModelProxy(model_name, name="David", avatar="👦")
+eve = kbench.kaggle.ModelProxy(model_name, name="Eve", avatar="👧")
+frank = kbench.kaggle.ModelProxy(model_name, name="Frank", avatar="👴")
+grace = kbench.kaggle.ModelProxy(model_name, name="Grace", avatar="👵")
 
 # Enable live token-by-token streaming in the console
 for player in [alice, bob, charlie, david, eve, frank, grace]:
