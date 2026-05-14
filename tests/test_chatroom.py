@@ -467,32 +467,32 @@ def test_werewolf_chatroom():
     alice = MockedChat.from_contents(
         [
             "Let's eliminate Charlie tonight.",  # Night Discussion
-            "I vote for Charlie.",  # Night Vote
+            json.dumps({"voted_player": "Charlie"}),  # Night Vote
             "I suspect Charlie is a werewolf! (lie)",  # Day Discussion
-            "I vote to hang Charlie.",  # Day Vote
+            json.dumps({"voted_player": "Charlie"}),  # Day Vote
         ],
         name="Alice",
     )
     bob = MockedChat.from_contents(
         [
             "Agree, Charlie is a threats.",  # Night Discussion
-            "I vote for Charlie.",  # Night Vote
+            json.dumps({"voted_player": "Charlie"}),  # Night Vote
             "Charlie behaves very suspiciously.",  # Day Discussion
-            "I vote to hang Charlie.",  # Day Vote
+            json.dumps({"voted_player": "Charlie"}),  # Day Vote
         ],
         name="Bob",
     )
     charlie = MockedChat.from_contents(
         [
             "I'm a Villager. Alice is acting weird.",  # Day Discussion
-            "I vote to hang Alice.",  # Day Vote
+            json.dumps({"voted_player": "Alice"}),  # Day Vote
         ],
         name="Charlie",
     )
     david = MockedChat.from_contents(
         [
             "Alice deflects too much.",  # Day Discussion
-            "I vote to hang Alice.",  # Day Vote
+            json.dumps({"voted_player": "Alice"}),  # Day Vote
         ],
         name="David",
     )

@@ -26,11 +26,19 @@ We represent:
 """
 
 # %%
+import dataclasses
 from collections import Counter
 
 import kaggle_benchmarks as kbench
 from kaggle_benchmarks import actors
 from kaggle_benchmarks.chats import ChatRoom
+
+
+@dataclasses.dataclass(frozen=True)
+class WerewolfVote:
+    """A structured vote submitted during the Werewolf game."""
+
+    voted_player: str  # The exact name of the player you vote for (e.g. 'Bob', 'Alice')
 
 
 @kbench.task(
@@ -160,31 +168,12 @@ def run_werewolf(
                 )
                 wolf_votes = {}
                 for wolf in active_wolves:
-                    vote_text = wolf.talk()
-                    # Extract target name from response robustly
-                    vote_target = None
-                    vote_text_lower = vote_text.lower()
-                    for player in active_villagers:
-                        name_lower = player.name.lower()
-                        if any(
-                            pattern in vote_text_lower
-                            for pattern in [
-                                f"vote to eliminate {name_lower}",
-                                f"vote for {name_lower}",
-                                f"vote {name_lower}",
-                                f"eliminate {name_lower}",
-                                f"kill {name_lower}",
-                            ]
-                        ):
-                            vote_target = player.name
-                            break
-                    if not vote_target:
-                        for player in active_villagers:
-                            if player.name.lower() in vote_text_lower:
-                                vote_target = player.name
-                                break
-                    if vote_target:
-                        wolf_votes[wolf.name] = vote_target
+                    vote_result = wolf.talk(schema=WerewolfVote)
+                    # Verify that the voted player is an active villager
+                    if any(
+                        v.name == vote_result.voted_player for v in active_villagers
+                    ):
+                        wolf_votes[wolf.name] = vote_result.voted_player
 
                 victim_name = count_votes(wolf_votes)
                 if victim_name:
@@ -229,36 +218,10 @@ def run_werewolf(
             )
             day_votes = {}
             for player in survivors:
-                vote_text = player.talk()
-                # Extract target name from response robustly
-                vote_target = None
-                vote_text_lower = vote_text.lower()
-                for target in survivors:
-                    if target is player:
-                        continue
-                    name_lower = target.name.lower()
-                    if any(
-                        pattern in vote_text_lower
-                        for pattern in [
-                            f"vote to hang {name_lower}",
-                            f"vote for {name_lower}",
-                            f"vote {name_lower}",
-                            f"hang {name_lower}",
-                            f"eliminate {name_lower}",
-                        ]
-                    ):
-                        vote_target = target.name
-                        break
-                if not vote_target:
-                    for target in survivors:
-                        if (
-                            target is not player
-                            and target.name.lower() in vote_text_lower
-                        ):
-                            vote_target = target.name
-                            break
-                if vote_target:
-                    day_votes[player.name] = vote_target
+                vote_result = player.talk(schema=WerewolfVote)
+                # Verify that the voted player is a living survivor
+                if any(s.name == vote_result.voted_player for s in survivors):
+                    day_votes[player.name] = vote_result.voted_player
 
             hanged_name = count_votes(day_votes)
             if hanged_name:
@@ -281,6 +244,8 @@ def run_werewolf(
 
 # %%
 
+kbench.config.enable_interactive_mode()
+
 # Load distinct ModelProxy players (one per participant)
 model_name = kbench.llm.model
 
@@ -291,6 +256,10 @@ david = kbench.kaggle.ModelProxy(model_name, name="David", avatar="🧑‍🌾")
 eve = kbench.kaggle.ModelProxy(model_name, name="Eve", avatar="🧑‍🌾")
 frank = kbench.kaggle.ModelProxy(model_name, name="Frank", avatar="🧑‍🌾")
 grace = kbench.kaggle.ModelProxy(model_name, name="Grace", avatar="🧑‍🌾")
+
+# Enable live token-by-token streaming in the console
+for player in [alice, bob, charlie, david, eve, frank, grace]:
+    player.stream_responses = True
 
 run = run_werewolf.run(alice, bob, charlie, david, eve, frank, grace)
 run
