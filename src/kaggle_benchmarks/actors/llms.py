@@ -92,7 +92,7 @@ import json
 import re
 import typing
 import uuid
-from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, TypeVar
 
 import openai
 from google import genai
@@ -103,11 +103,7 @@ from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
-from kaggle_benchmarks.tools.functions import (
-    function_to_genai_tool,
-    function_to_openai_tool,
-)
-from kaggle_benchmarks.tools.native import native_tool_agent
+from kaggle_benchmarks.tools import functions, native
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -174,7 +170,7 @@ class LLMChat(actors.Actor):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
-        tools: list[Any] | None = None,
+        tools: list[Callable] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
@@ -186,7 +182,7 @@ class LLMChat(actors.Actor):
         schema: type[T] = str,
         seed: int = 0,
         temperature: float = 0,
-        tools: list[Any] | None = None,
+        tools: list[Callable] | None = None,
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
@@ -243,7 +239,9 @@ class LLMChat(actors.Actor):
         }
 
         if tools:
-            response = native_tool_agent(self, tools, schema=schema, **kwargs, **extra)
+            response = native.native_tool_agent(
+                self, tools, schema=schema, **kwargs, **extra
+            )
         else:
             response = self.respond(schema=schema, **kwargs, **extra)
 
@@ -380,7 +378,7 @@ class OpenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
-        tools: list[Any] | None = None,
+        tools: list[Callable] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
@@ -392,7 +390,7 @@ class OpenAI(LLMChat):
 
         # Convert callables to OpenAI tool schemas.
         if tools:
-            kwargs["tools"] = [function_to_openai_tool(t) for t in tools]
+            kwargs["tools"] = [functions.function_to_openai_tool(t) for t in tools]
 
         if self._should_remove_seed():
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
@@ -579,7 +577,7 @@ class GoogleGenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
-        tools: list[Any] | None = None,
+        tools: list[Callable] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
@@ -592,7 +590,9 @@ class GoogleGenAI(LLMChat):
         if tools:
             config_params["tools"] = [
                 types.Tool(
-                    function_declarations=[function_to_genai_tool(t) for t in tools]
+                    function_declarations=[
+                        functions.function_to_genai_tool(t) for t in tools
+                    ]
                 )
             ]
 

@@ -17,8 +17,8 @@ genai://anthropic/claude-opus-4-7@default:
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
     test_tool_with_schema_output: passed
 genai://anthropic/claude-sonnet-4-6@default:
   config:
@@ -39,8 +39,8 @@ genai://anthropic/claude-sonnet-4-6@default:
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
     test_tool_with_schema_output: passed
 genai://deepseek-ai/deepseek-r1-0528:
   config:
@@ -66,7 +66,7 @@ genai://deepseek-ai/deepseek-v3.2:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_multi_step_tool_chain: failed
+    test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
@@ -306,8 +306,8 @@ openai://anthropic/claude-opus-4-7@default:
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
     test_tool_with_schema_output: passed
 openai://anthropic/claude-sonnet-4-6@default:
   config:
@@ -328,8 +328,8 @@ openai://anthropic/claude-sonnet-4-6@default:
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
     test_tool_with_schema_output: passed
 openai://deepseek-ai/deepseek-r1-0528:
   config:

@@ -263,14 +263,13 @@ traces = kbench.last_reasoning_traces()  # model's internal reasoning
 ### `llm.prompt()` with Tool Calling
 
 You can allow the LLM to use Python functions as tools by passing them
-in a list to the `tools` parameter.
-
-**Note: Automatic tool calling currently requires loading the model with
-`api="genai"`.**
+in a list to the `tools` parameter. The library handles multi-turn tool
+calling automatically: it sends the tools to the model, executes any
+requested tool calls, feeds the results back, and repeats until the
+model produces a final answer.
 
 ``` python
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks.kaggle import models
 
 
 def weird_multiply(a: int, b: int) -> int:
@@ -278,18 +277,43 @@ def weird_multiply(a: int, b: int) -> int:
     return 42
 
 
-# NOTE: Automatic tool calling requires the `genai` API.
-# For `openai` API, tools must be called manually:
-# e.g., see example `use_calculator_tool.py`
-llm_with_genai_api = models.load_model(
-    model_name=kbench.llm.name,
-    api="genai",
-)
-
-response = llm_with_genai_api.prompt(
+response = kbench.llm.prompt(
     "Answer user questions by only using the provided tool: what is 2 times 3?",
     tools=[weird_multiply],
 )
+```
+
+Tools can be combined with `schema` to get structured output after the
+tool-calling phase completes:
+
+``` python
+from dataclasses import dataclass
+
+
+@dataclass
+class CityInfo:
+    name: str
+    population: int
+
+
+def get_city_data(city_name: str) -> dict:
+    """Returns data about a city."""
+    return {"name": city_name, "population": 3_700_000}
+
+
+result = kbench.llm.prompt(
+    "Look up Berlin and return it as a CityInfo.",
+    tools=[get_city_data],
+    schema=CityInfo,
+)
+# result is a CityInfo instance
+```
+
+You can verify that a tool was actually called using the built-in
+`assert_tool_was_invoked` assertion:
+
+``` python
+kbench.assertions.assert_tool_was_invoked(get_city_data)
 ```
 
 ### `kbench.user.send()` and Multi-Turn Chats
@@ -447,6 +471,9 @@ some of the ones you’ll use most often:
   or list) is empty.
 - `assert_not_empty(container, ...)`: Checks if a container is not
   empty.
+- `assert_tool_was_invoked(tool, ...)`: Checks if a specific tool
+  function was invoked during the current task. Accepts either a
+  callable or a tool name string.
 - `assert_fail(expectation)`: Signals a test failure unconditionally,
   with an optional message.
 

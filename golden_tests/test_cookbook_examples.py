@@ -26,6 +26,8 @@ Usage:
         `uv run pytest golden_tests/test_cookbook_examples.py::test_extract_int`
     - Run tests for a specific API (e.g., genai/openai):
         `uv run pytest golden_tests/test_cookbook_examples.py -k "genai"`
+    - Run tests for a specific feature (e.g., tool/audio/image):
+        `uv run pytest golden_tests/test_cookbook_examples.py -k "tool"`
     - Run tests and update the report:
         `uv run pytest golden_tests/test_cookbook_examples.py --generate-report`
 """
@@ -844,7 +846,6 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-# Known failures: claude — does not invoke parameterless tools.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
@@ -931,7 +932,6 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-# Known failures: claude — does not invoke parameterless tools.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
@@ -985,7 +985,7 @@ def test_multi_step_tool_chain(llm):
 
     kbench.assertions.assert_tool_was_invoked(lookup_city_population)
     kbench.assertions.assert_contains_regex(
-        r"14.000.000",
+        r"14,000,000",
         response,
         expectation="Response should contain the formatted population of Tokyo.",
     )
