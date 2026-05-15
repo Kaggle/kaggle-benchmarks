@@ -12,6 +12,7 @@
   - [Using Multiple LLMs](#using-multiple-llms)
   - [Using Tools: The Python Script
     Runner](#using-tools-the-python-script-runner)
+  - [Using Custom Tools](#using-custom-tools)
 - [6. Creative and Robust Assertions](#6-creative-and-robust-assertions)
   - [Using External Libraries](#using-external-libraries)
 - [7. Evaluating on a Dataset](#7-evaluating-on-a-dataset)
@@ -310,6 +311,37 @@ def solve_with_python(llm):
 
 
 solve_with_python.run(llm=kbench.llm)
+```
+
+### Using Custom Tools
+
+You can give models access to your own Python functions as tools. The
+library handles the multi-turn tool calling loop automatically —
+converting functions to tool schemas, executing calls, and feeding
+results back until the model produces a final answer.
+
+``` python
+def lookup_city_population(city: str) -> int:
+    """Looks up the population of a city."""
+    populations = {"Tokyo": 14_000_000, "Paris": 2_100_000}
+    return populations.get(city, 0)
+
+
+@kbench.task(name="city_population")
+def city_population(llm):
+    response = llm.prompt(
+        "What is the population of Tokyo?",
+        tools=[lookup_city_population],
+    )
+
+    # Verify the tool was actually called
+    kbench.assertions.assert_tool_was_invoked(lookup_city_population)
+    kbench.assertions.assert_contains_regex(
+        r"14,000,000", response, expectation="Should contain Tokyo's population."
+    )
+
+
+city_population.run(llm=kbench.llm)
 ```
 
 ## 6. Creative and Robust Assertions

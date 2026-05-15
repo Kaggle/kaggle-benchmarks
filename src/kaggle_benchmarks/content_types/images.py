@@ -152,7 +152,10 @@ def from_base64(
         base64 = base64.decode("utf-8")
 
     return ImageBase64(
-        base64, mime_type=f"image/{format}", caption=caption, extra_api_params=extra_api_params
+        base64,
+        mime_type=f"image/{format}",
+        caption=caption,
+        extra_api_params=extra_api_params,
     )
 
 

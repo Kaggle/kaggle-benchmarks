@@ -51,10 +51,14 @@ def test_invoke_tool_success():
 def test_invoke_tool_not_found():
     call = ToolInvocation(name="non_existent_tool", arguments={})
     result = invoke_tool(call, [simple_tool])
-    assert "Error: Tool 'non_existent_tool' not found." in result.output
+    assert result.error is not None
+    assert "Error: Tool 'non_existent_tool' not found." in result.error
+    assert result.output is None
 
 
 def test_invoke_tool_exception():
     call = ToolInvocation(name="tool_that_raises", arguments={})
     result = invoke_tool(call, [tool_that_raises])
-    assert "Error invoking tool 'tool_that_raises': This tool failed." in result.output
+    assert result.error is not None
+    assert "Error invoking tool 'tool_that_raises': This tool failed." in result.error
+    assert result.output is None

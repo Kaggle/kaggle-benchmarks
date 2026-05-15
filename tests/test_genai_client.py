@@ -275,7 +275,11 @@ def test_invoke_with_tools():
 
     assert llm.config.tools is not None
     assert len(llm.config.tools) == 1
-    assert llm.config.tools[0] == multiply
+    # Tools are now converted to types.Tool with FunctionDeclarations
+    tool_wrapper = llm.config.tools[0]
+    assert isinstance(tool_wrapper, types.Tool)
+    assert len(tool_wrapper.function_declarations) == 1
+    assert tool_wrapper.function_declarations[0].name == "multiply"
 
 
 def test_invoke_with_structured_output():

@@ -107,7 +107,9 @@ def test_from_image_url(mocker):
 
 
 def test_extra_api_params_stored():
-    img = images.from_base64(B64_STRING, format="png", extra_api_params={"detail": "low"})
+    img = images.from_base64(
+        B64_STRING, format="png", extra_api_params={"detail": "low"}
+    )
     assert img.extra_api_params == {"detail": "low"}
 
     img_url = images.from_url(

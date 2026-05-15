@@ -51,8 +51,36 @@ class OpenAICompletionSerializer(BaseSerializer):
 
     def dump_llm_message(self, message: llm_messages.LLMMessage):
         """Extracts tool calls and results, injecting them into the sequence before standard text output."""
-        for call in message.tool_calls or []:
-            yield from self._dump_invocation(call)
+        if message.tool_calls:
+            tool_calls_payload = []
+            tool_results = []
+            for call in message.tool_calls:
+                tool_calls_payload.append(
+                    {
+                        "id": str(call.call_id),
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": json.dumps(call.arguments)
+                            if not isinstance(call.arguments, str)
+                            else call.arguments,
+                        },
+                    }
+                )
+                if isinstance(call, tool_utils.ToolInvocationResult):
+                    tool_results.append(
+                        {
+                            "role": "tool",
+                            "content": call.text,
+                            "tool_call_id": str(call.call_id),
+                        }
+                    )
+            yield {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": tool_calls_payload,
+            }
+            yield from tool_results
 
         if message.content is not None and message.content != "":
             yield from self.dump_message(
@@ -61,15 +89,32 @@ class OpenAICompletionSerializer(BaseSerializer):
 
     def dump_text_message(self, message: messages.Message):
         """Serializes a standard textual payload."""
-        yield {
+        msg = {
             "role": self.get_role(message.sender),
-            "content": message.content,
+            "content": message.content or None,
         }
+
+        # TODO: Remove once respond() returns LLMMessage for assistant
+        # messages. Today, assistant messages with tool calls arrive here as
+        # plain Message (not LLMMessage), so we must attach tool_calls
+        # manually. After the migration, they'll route to dump_llm_message
+        # instead and these lines become unnecessary.
+        tool_calls = message.tool_calls
+        if tool_calls and self.get_role(message.sender) == "assistant":
+            msg["tool_calls"] = tool_calls
+
+        yield msg
 
     def dump_tool_invocation(
         self, message: messages.Message[tool_utils.ToolInvocationResult]
     ):
-        yield from self._dump_invocation(message.content)
+        """Serializes a tool result as a Chat Completions tool message."""
+        result = message.content
+        yield {
+            "role": "tool",
+            "content": result.text,
+            "tool_call_id": str(result.call_id) if result.call_id else "",
+        }
 
     _SUPPORTED_AUDIO_FORMATS = {"mp3", "wav"}
 
@@ -96,24 +141,6 @@ class OpenAICompletionSerializer(BaseSerializer):
             "role": self.get_role(message.sender),
             "content": caption + [{"type": "input_audio", "input_audio": input_audio}],
         }
-
-    def _dump_invocation(
-        self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
-    ):
-        yield {
-            "call_id": call.call_id,
-            "arguments": json.dumps(call.arguments)
-            if not isinstance(call.arguments, str)
-            else call.arguments,
-            "name": call.name,
-            "type": "function_call",
-        }
-        if isinstance(call, tool_utils.ToolInvocationResult):
-            yield {
-                "type": "function_call_output",
-                "output": str(call.output),
-                "call_id": str(call.call_id),
-            }
 
 
 class ModelProxyOpenAISerializer(OpenAICompletionSerializer):
