@@ -684,3 +684,9 @@ kbench.config.enable_console_mode(quiet=False, color=None)
 
 The corresponding environment variables are `BENCHMARK_CONSOLE_UI`,
 `BENCHMARK_CONSOLE_QUIET`, and `BENCHMARK_CONSOLE_COLOR`.
+
+## What's Next?
+
+For more practical examples and best practices — including recipes for
+caching, retries, multimodal inputs, custom tools, and more — check out
+the [Cookbook](cookbook.md).
