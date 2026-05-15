@@ -19,7 +19,7 @@ import pytest
 from kaggle_benchmarks.envs import docker, local
 
 envs = [
-    pytest.param(local.LocalEnvironment, {}, id="local"),
+    pytest.param(local.InternalUnsafeLocalEnvironment, {}, id="local"),
     pytest.param(
         docker.DockerEnvironment,
         dict(image="python:3.11", working_dir="/tmp"),

@@ -49,20 +49,31 @@ def function_to_openai_tool(func: Callable) -> dict:
     """Converts a Python function into an OpenAI-compatible tool definition."""
     schema = get_function_schema(func)
 
-    parameters = {
-        "type": "object",
-        "properties": schema.get("properties", {}),
-        "required": schema.get("required", []),
-    }
-    if "$defs" in schema:
-        parameters["$defs"] = schema["$defs"]
+    # Omit 'parameters' entirely for parameterless functions.
+    # GPT-5.5 rejects empty properties objects (`{"properties": {}}`)
+    # with 400: "object schema missing properties".
+    properties = schema.get("properties", {})
+    if properties:
+        parameters: dict = {
+            "type": "object",
+            "properties": properties,
+            "required": schema.get("required", []),
+        }
+        if "$defs" in schema:
+            parameters["$defs"] = schema["$defs"]
+    else:
+        parameters = None
 
-    return {
+    tool_def = {
         "type": "function",
-        "name": func.__name__,
-        "description": (func.__doc__ or "").strip(),
-        "parameters": parameters,
+        "function": {
+            "name": func.__name__,
+            "description": (func.__doc__ or "").strip(),
+        },
     }
+    if parameters:
+        tool_def["function"]["parameters"] = parameters
+    return tool_def
 
 
 def function_to_genai_tool(

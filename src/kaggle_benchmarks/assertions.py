@@ -25,6 +25,7 @@ from typing import Any, Callable, Iterable, Type
 import pydantic
 
 from kaggle_benchmarks import chats
+from kaggle_benchmarks import tools as tool_utils
 
 
 @dataclasses.dataclass
@@ -513,3 +514,37 @@ def assess_response_with_judge(
         assess_report = None
 
     return assess_report
+
+
+@assertion_handler()
+def assert_tool_was_invoked(
+    tool: str | Callable, expectation: str | None = None
+) -> AssertionResult:
+    """Asserts that a specific tool was invoked during the current task.
+
+    Scans the current chat history (including nested forked chats) for a
+    ``ToolInvocationResult`` whose name matches the given tool.
+
+    Args:
+        tool: The tool function or its name as a string.
+        expectation: An optional message summarizing the assertion.
+    """
+    tool_name = tool if isinstance(tool, str) else tool.__name__
+    chat = chats.get_current_chat()
+
+    def _find_in_chat(c: chats.Chat) -> bool:
+        for item in c.history:
+            if isinstance(item, chats.Chat):
+                if _find_in_chat(item):
+                    return True
+            elif (
+                isinstance(item.content, tool_utils.ToolInvocationResult)
+                and item.content.name == tool_name
+            ):
+                return True
+        return False
+
+    return AssertionResult(
+        passed=_find_in_chat(chat),
+        expectation=expectation or f"Expected tool `{tool_name}` to be invoked",
+    )

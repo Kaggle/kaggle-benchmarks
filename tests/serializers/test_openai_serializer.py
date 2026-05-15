@@ -71,10 +71,18 @@ MESSAGE_FORMATS = [
         ),
         [
             {
-                "call_id": "123",
-                "arguments": "{}",
-                "name": "test_tool",
-                "type": "function_call",
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "123",
+                        "type": "function",
+                        "function": {
+                            "name": "test_tool",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
             },
         ],
         id="llm_message_with_tool_calls",
@@ -91,15 +99,23 @@ MESSAGE_FORMATS = [
         ),
         [
             {
-                "call_id": "123",
-                "arguments": "{}",
-                "name": "test_tool",
-                "type": "function_call",
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "123",
+                        "type": "function",
+                        "function": {
+                            "name": "test_tool",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
             },
             {
-                "call_id": "123",
-                "output": "result",
-                "type": "function_call_output",
+                "role": "tool",
+                "content": "result",
+                "tool_call_id": "123",
             },
         ],
         id="llm_message_with_tool_invocation_result",
@@ -139,15 +155,9 @@ MESSAGE_FORMATS = [
         ),
         [
             {
-                "call_id": "123",
-                "arguments": "{}",
-                "name": "test_tool",
-                "type": "function_call",
-            },
-            {
-                "call_id": "123",
-                "output": "result",
-                "type": "function_call_output",
+                "role": "tool",
+                "content": "result",
+                "tool_call_id": "123",
             },
         ],
         id="message_with_tool_invocation_result",
@@ -335,7 +345,9 @@ def test_dump_audio_message_with_extra_api_params_model_proxy():
     serializer = openai_serializer.ModelProxyOpenAISerializer(roles_mapping={})
     message = messages.Message(
         content=audios.AudioContent(
-            b64_string="abc123", mime_type="audio/wav", extra_api_params={"language": "en"}
+            b64_string="abc123",
+            mime_type="audio/wav",
+            extra_api_params={"language": "en"},
         ),
         sender=actors.user,
     )

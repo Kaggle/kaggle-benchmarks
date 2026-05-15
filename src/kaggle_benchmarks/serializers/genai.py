@@ -61,9 +61,37 @@ class GenAISerializer(BaseSerializer):
 
     def dump_text_message(self, message: messages.Message[str]):
         """Serializes a standard textual payload into a Part object."""
-        yield types.Content(
-            role=self.get_role(message.sender), parts=[types.Part(text=message.content)]
-        )
+        parts = []
+        if message.content:
+            parts.append(types.Part(text=message.content))
+
+        # When an assistant message carried tool calls, include them as
+        # function_call Parts so the GenAI API sees the model's tool call
+        # decisions in the conversation history.
+        tool_calls = message.tool_calls
+        if tool_calls and self.get_role(message.sender) == "model":
+            for tc in tool_calls:
+                func = tc.get("function", {})
+                part = types.Part.from_function_call(
+                    name=func.get("name", ""),
+                    args=func.get("arguments", {}),
+                )
+                part.function_call.id = tc.get("id")
+                # Round-trip thought_signature/thought back onto the Part.
+                # Gemini 3.x requires these on function_call Parts in
+                # multi-turn conversations; without them the API rejects
+                # the follow-up request.
+                if "_thought_signature" in tc:
+                    part.thought_signature = tc["_thought_signature"]
+                if "_thought" in tc:
+                    part.thought = tc["_thought"]
+                parts.append(part)
+
+        # Ensure at least one part is present to avoid empty Content objects.
+        if not parts:
+            parts.append(types.Part(text=""))
+
+        yield types.Content(role=self.get_role(message.sender), parts=parts)
 
     def dump_image(self, message: messages.Message[images.ImageContent]):
         """Serializes images natively as inline data Blobs for the GenAI client."""
@@ -157,10 +185,14 @@ class GenAISerializer(BaseSerializer):
         self, call: tool_utils.ToolInvocationResult | tool_utils.ToolInvocation
     ):
         if isinstance(call, tool_utils.ToolInvocationResult):
-            yield types.Part.from_function_response(
-                name=call.name, response={"result": call.output}
+            part = types.Part.from_function_response(
+                name=call.name, response={"result": call.text}
             )
+            part.function_response.id = call.call_id
+            yield part
 
         else:
             args = call.arguments
-            yield types.Part.from_function_call(name=call.name, args=args)
+            part = types.Part.from_function_call(name=call.name, args=args)
+            part.function_call.id = call.call_id
+            yield part

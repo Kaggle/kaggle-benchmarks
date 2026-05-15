@@ -26,6 +26,8 @@ Usage:
         `uv run pytest golden_tests/test_cookbook_examples.py::test_extract_int`
     - Run tests for a specific API (e.g., genai/openai):
         `uv run pytest golden_tests/test_cookbook_examples.py -k "genai"`
+    - Run tests for a specific feature (e.g., tool/audio/image):
+        `uv run pytest golden_tests/test_cookbook_examples.py -k "tool"`
     - Run tests and update the report:
         `uv run pytest golden_tests/test_cookbook_examples.py --generate-report`
 """
@@ -52,15 +54,15 @@ TEST_LLM_NAMES = {
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
-    "google/gemma-3-12b",
+    "google/gemma-4-31b",
     "qwen/qwen3-235b-a22b-instruct-2507",
     "qwen/qwen3-next-80b-a3b-instruct",
-    "anthropic/claude-haiku-4-5@20251001",
-    "anthropic/claude-opus-4-5@20251101",
-    "anthropic/claude-sonnet-4-5@20250929",
+    "anthropic/claude-sonnet-4-6@default",
+    "anthropic/claude-opus-4-7@default",
+    "openai/gpt-5.5-2026-04-23",
     "deepseek-ai/deepseek-r1-0528",
     "deepseek-ai/deepseek-v3.2",
-    "zai/glm-5",
+    # xai/grok-4.20 excluded: genai→xAI tool/reasoning routing is broken in MP.
     "google/gemini-3.1-flash-lite-preview",
 }
 
@@ -184,11 +186,9 @@ def test_assess_with_judge(llm_name, judge_llm_name):
 # --- Test Case: Structured Output (Integer Extraction) ---
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-    }
-)
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (openai): deepseek-r1 — nondeterministic on structured int extraction.
+@benchmark_test()
 @kbench.task()
 def test_extract_int(llm):
     text = "The Apollo 11 mission landed on the Moon in 1969."
@@ -203,11 +203,8 @@ def test_extract_int(llm):
 # --- Test Case: Structured Output (Bool Extraction) ---
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-    }
-)
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_bool(llm):
     text = "I absolutely loved this movie! It was fantastic."
@@ -222,11 +219,8 @@ def test_extract_bool(llm):
 # --- Test Case: Structured Output (Dict Extraction) ---
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-    }
-)
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_dict(llm):
     text = "Contact info: John Doe, age 42, works as a Software Engineer."
@@ -258,11 +252,8 @@ class RPGCharacter:
     inventory: str
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-    }
-)
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_dataclass(llm):
     character = llm.prompt(
@@ -292,11 +283,8 @@ class Planet(BaseModel):
     moons: list[str] = Field(default_factory=list, description="List of major moons")
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-    }
-)
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_pydantic(llm):
     planet = llm.prompt("Provide information about the planet Jupiter.", schema=Planet)
@@ -326,11 +314,8 @@ class Casting(BaseModel):
     actors: list[Actor]
 
 
-@benchmark_test(
-    exclude={
-        "google/gemma-3-12b",
-    }
-)
+# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+@benchmark_test()
 @kbench.task()
 def test_extract_composite_pydantic(llm):
     casting = llm.prompt("List the 6 main characters of Friends.", schema=Casting)
@@ -378,7 +363,10 @@ def assert_multi_qa_result(run):
     assert run.result[1] == pytest.approx(0.0)
 
 
-@benchmark_test(df=df, verify_fn=assert_multi_qa_result)
+@benchmark_test(
+    df=df,
+    verify_fn=assert_multi_qa_result,
+)
 @kbench.task()
 def test_dataset_eval(llm, df) -> tuple[float, float]:
     with kbench.client.enable_cache():
@@ -401,13 +389,13 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
 # --- Test Case: Image inputs (URL) ---
 
 
+# Excluded: text-only models that don't support image inputs via Model Proxy.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -431,14 +419,14 @@ def test_image_url(llm):
 # --- Test Case: Image inputs (Base64) ---
 
 
+# Excluded: text-only models that don't support image inputs via Model Proxy.
+# Known failures: gpt-5.5 — model reports "no image attached" for 1x1 pixel.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "anthropic/claude-sonnet-4-5@20250929",
-        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -465,13 +453,13 @@ def test_image_base64(llm):
 # --- Test Case: Image inputs (local file) ---
 
 
+# Excluded: text-only models that don't support image inputs via Model Proxy.
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
         "deepseek-ai/deepseek-v3.2",
         "qwen/qwen3-235b-a22b-instruct-2507",
         "qwen/qwen3-next-80b-a3b-instruct",
-        "zai/glm-5",
     }
 )
 @kbench.task()
@@ -494,6 +482,7 @@ def test_image_local_file(llm):
 # --- Test Case: Video inputs (URL) ---
 
 
+# Only Gemini models support video input via Model Proxy.
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
@@ -600,12 +589,8 @@ def test_audio_url(llm):
 # support it (not all models return traces).
 
 
-@benchmark_test(
-    exclude={
-        "google/gemini-2.0-flash",
-        "google/gemma-3-12b",
-    },
-)
+# Known failures: gemini-2.0-flash, gemma-4-31b — do not support reasoning.
+@benchmark_test()
 @kbench.task()
 def test_reasoning_param(llm):
     """Tests that the unified reasoning parameter works across providers."""
@@ -627,11 +612,14 @@ def test_reasoning_param(llm):
 # when reasoning is enabled, accessible via message.reasoning_traces.
 
 
+# Only Gemini models expose reasoning traces via the API.
+# Known failures: gemini-3-flash-preview — intermittently returns empty traces
+# (flaky, currently passing).
 @benchmark_test(
     include={
         "google/gemini-2.5-flash",
         "google/gemini-2.5-pro",
-        "anthropic/claude-sonnet-4-5@20250929",
+        "google/gemini-3-flash-preview",
     },
 )
 @kbench.task()
@@ -817,9 +805,6 @@ def test_image_with_media_resolution(llm, api):
 
 # %%
 # --- Test Case: Tool Use ---
-# This doesn't work with "genai" API for now
-# So test it with `-k "openai"` only.
-# TODO: Rewrite this test after tool refactoring.
 
 
 def run_simple_calculator(a: float, b: float, operator: str) -> float:
@@ -835,7 +820,11 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
     raise ValueError(f"Unknown operator: {operator}")
 
 
-@benchmark_test()
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_simple_tool_use(llm):
     problem = "What is 50 plus 25?"
@@ -857,7 +846,11 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-@benchmark_test()
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_stateful_tool_double_execution(llm):
     increment_counter.count = 0  # Reset for each test run
@@ -882,7 +875,13 @@ def multiply_tool(a: float, b: float) -> float:
     return a * b
 
 
-@benchmark_test()
+# Gemini 2.x via OpenAI backend rejects multiple tool declarations.
+# GenAI backend handles multiple tools correctly.
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_multiple_tool_selection(llm):
     add_tool.calls = 0
@@ -909,7 +908,12 @@ def get_user_profile(user_id: str) -> dict:
     return {"name": "Unknown", "role": "User", "skills": []}
 
 
-@benchmark_test()
+# Known failures: gemini-2.0-flash returns incorrect role on both APIs.
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_complex_tool_return(llm):
     response = llm.prompt(
@@ -928,7 +932,11 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-@benchmark_test()
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
 @kbench.task()
 def test_tool_error_handling(llm):
     response = llm.prompt(
@@ -939,4 +947,103 @@ def test_tool_error_handling(llm):
         r"(?i)error|failed|valueerror",
         response,
         expectation="Model should report the tool failure.",
+    )
+
+
+# %%
+# --- Test Case: Multi-Step Tool Chain ---
+
+
+def lookup_city_population(city: str) -> int:
+    """Looks up the population of a city. Returns the population as an integer."""
+    populations = {"Tokyo": 14_000_000, "Paris": 2_100_000, "London": 9_000_000}
+    return populations.get(city, 0)
+
+
+def format_population(population: int) -> str:
+    """Formats a population number with thousands separators."""
+    return f"{population:,}"
+
+
+# Known failures (openai): Gemini 2.x rejects multiple tool declarations.
+# Known failures (genai): deepseek-v3.2 — flaky 500 errors on multi-step chains.
+@pytest.mark.slow
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+    }
+)
+@kbench.task()
+def test_multi_step_tool_chain(llm):
+    """Tests that the LLM can chain tool calls: look up a value then format it."""
+    response = llm.prompt(
+        "What is the population of Tokyo? "
+        "First look it up with lookup_city_population, "
+        "then format the result with format_population.",
+        tools=[lookup_city_population, format_population],
+    )
+
+    kbench.assertions.assert_tool_was_invoked(lookup_city_population)
+    kbench.assertions.assert_contains_regex(
+        r"14,000,000",
+        response,
+        expectation="Response should contain the formatted population of Tokyo.",
+    )
+
+
+# %%
+# --- Test Case: Tools with Structured Output ---
+
+
+class CityInfo(BaseModel):
+    """Structured info about a city."""
+
+    name: str = Field(description="The city name.")
+    population: int = Field(description="The city's population.")
+
+
+def get_city_data(city_name: str) -> dict:
+    """Returns data about a city including its population."""
+    data = {
+        "Berlin": {"name": "Berlin", "population": 3_700_000},
+        "Sydney": {"name": "Sydney", "population": 5_300_000},
+    }
+    return data.get(city_name, {"name": city_name, "population": 0})
+
+
+# Known failures:
+# - Gemini 2.0-flash / 2.5-pro (flaky): the model sometimes refuses to call
+#   the tool when the user prompt references a schema type (e.g. "CityInfo")
+#   that isn't explained during the tool-calling phase. The two-phase loop
+#   withholds schema= from tool rounds, so the model doesn't know what
+#   "CityInfo" means and asks for clarification instead of calling the tool.
+#   This does not affect Gemini 3.x or other model families.
+@benchmark_test(
+    exclude={
+        "deepseek-ai/deepseek-r1-0528",
+        "deepseek-ai/deepseek-v3.2",
+    }
+)
+@kbench.task()
+def test_tool_with_schema_output(llm):
+    """Tests that tools and schema= work together: tool provides data,
+    LLM returns structured output."""
+    result = llm.prompt(
+        "Look up the city data for Berlin and return it as a CityInfo.",
+        tools=[get_city_data],
+        schema=CityInfo,
+    )
+
+    kbench.assertions.assert_tool_was_invoked(get_city_data)
+    kbench.assertions.assert_true(
+        isinstance(result, CityInfo),
+        f"Expected CityInfo, got {type(result).__name__}",
+    )
+    kbench.assertions.assert_equal(
+        "Berlin", result.name, expectation="City name should be Berlin."
+    )
+    kbench.assertions.assert_equal(
+        3_700_000,
+        result.population,
+        expectation="Population should be 3,700,000.",
     )

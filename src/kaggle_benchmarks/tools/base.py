@@ -14,11 +14,16 @@
 
 import dataclasses
 import inspect
-from typing import Any, Callable, Generic, TypeVar
+import json
+from typing import Any, Callable, Generic, Self, TypeVar
 
 import pydantic
 
 T = TypeVar("T")
+
+
+class ToolInvocationLimitExhausted(Exception):
+    """Raised when the tool invocation loop exceeds the maximum number of rounds."""
 
 
 @dataclasses.dataclass
@@ -29,6 +34,33 @@ class ToolInvocation:
     arguments: dict[str, Any]
     call_id: str | None = None
 
+    @classmethod
+    def from_api_dict(cls, call_data: dict) -> Self:
+        """Creates a ToolInvocation from a normalized tool call dict.
+
+        Both backends normalize their tool call responses to the same
+        dict schema::
+
+            {"id": ..., "function": {"name": ..., "arguments": ...}}
+
+        The OpenAI backend produces this natively from the Chat
+        Completions response, while the GenAI backend converts
+        ``function_call`` Parts to this format in ``GoogleGenAI._call_api``.
+
+        Handles edge cases from various backends:
+        - ``arguments`` may be a JSON string (OpenAI) or a dict (GenAI).
+        - ``arguments`` may be ``None`` for parameterless tools.
+        """
+        func = call_data["function"]
+        arguments = func.get("arguments") or {}
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+        return cls(
+            name=func["name"],
+            arguments=arguments,
+            call_id=call_data.get("id"),
+        )
+
 
 @dataclasses.dataclass
 class ToolInvocationResult:
@@ -38,8 +70,18 @@ class ToolInvocationResult:
     arguments: dict[str, Any]
     call_id: str | None = None
     output: Any = None
+    error: str | None = None
+
+    @property
+    def text(self) -> str:
+        """Returns a string representation of the result or error."""
+        if self.error:
+            return self.error
+        return str(self.output)
 
     def describe(self):
+        if self.error:
+            return f"{self.name}({self.arguments}): Error: {self.error}"
         return f"{self.name}({self.arguments}) -> {self.output}"
 
 
@@ -103,11 +145,24 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            output=error_message,
+            error=error_message,
             call_id=call.call_id,
         )
     try:
-        output = tool(**call.arguments)
+        # Strip known infrastructure fields injected by intermediaries.
+        # Model Proxy injects a 'signature' field (opaque base64 blob) into
+        # tool call arguments for Google models (gemini-2.5-*, gemini-3-*)
+        # routed through the OpenAI-compatible endpoint. This field is not
+        # part of the function schema and would cause a TypeError if passed
+        # through. GenAI backend and non-Google models are not affected.
+        _INFRASTRUCTURE_FIELDS = {"signature"}
+        args = {
+            k: v
+            for k, v in (call.arguments or {}).items()
+            if k not in _INFRASTRUCTURE_FIELDS
+        }
+
+        output = tool(**args)
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
@@ -121,6 +176,6 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
         return ToolInvocationResult(
             name=call.name,
             arguments=call.arguments,
-            output=error_message,
+            error=error_message,
             call_id=call.call_id,
         )

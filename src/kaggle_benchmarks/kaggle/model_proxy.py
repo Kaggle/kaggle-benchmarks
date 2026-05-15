@@ -77,7 +77,10 @@ class ModelProxy:
         # Qwen and DeepSeek models support response_format, but the schema must be under 64 characters.
         kwargs.setdefault(
             "support_structured_outputs",
-            "meta" not in model and "qwen" not in model and "deepseek" not in model,
+            "meta" not in model
+            and "qwen" not in model
+            and "deepseek" not in model
+            and "gemma" not in model,
         )
 
         if api == "genai":

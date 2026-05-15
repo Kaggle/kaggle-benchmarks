@@ -838,11 +838,14 @@ def error_handling_task(llm):
     kbench.assertions.assert_contains_regex(r"(?i)error|failed", response)
 ```
 
-> **Note:** Automatic tool calling is currently only supported via the `genai` API.
-> For `openai` API, tools must be called manually (see `use_calculator_tool.py`).
+> **Tool calling behavior:** When you pass `tools=` to `prompt()`, the library
+> automatically handles the tool invocation loop: it sends the tool schemas to the LLM,
+> executes any requested tool calls, feeds results back, and repeats until the LLM
+> returns a final text answer (up to `max_tool_rounds=10` rounds by default).
+> This works on both `genai` and `openai` API backends.
 >
-> **Note:** `kbench.assertions.assert_tool_was_invoked(fn)` appears in golden tests
-> but may not be available in all versions of the library. Check before using.
+> **Verifying tool usage:** Use `kbench.assertions.assert_tool_was_invoked(fn)`
+> to assert that a specific tool was called during the task.
 
 ---
 

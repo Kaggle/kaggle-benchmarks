@@ -667,9 +667,12 @@ def python_task(llm):
 
 ### Recipe: Equipping Models with Custom Tools
 
-You can also pass your own Python functions as tools. The model can then
-call these functions to retrieve information or perform actions. Please
-note this is currently an experimental feature.
+You can pass your own Python functions as tools. The model can then
+call these functions to retrieve information or perform actions. The
+library handles the multi-turn tool calling loop automatically:
+converting your functions to tool schemas, executing requested calls,
+feeding results back, and repeating until the model produces a final
+answer.
 
 ``` python
 def get_weather(city: str) -> str:
@@ -679,15 +682,40 @@ def get_weather(city: str) -> str:
 @kbench.task()
 def weather_task(llm):
     # Pass the function directly to the 'tools' argument
-    # Note: Works best with 'genai' API models
-    llm.prompt("Weather in Tokyo?", tools=[get_weather])
+    response = llm.prompt("Weather in Tokyo?", tools=[get_weather])
 
-llm= models.load_model(
-    model_name=kbench.llm.name,
-    api="genai",
-)
+    # Verify that the tool was actually called
+    kbench.assertions.assert_tool_was_invoked(get_weather)
 
-weather_task.run(llm)
+weather_task.run(kbench.llm)
+```
+
+You can combine tools with `schema` to get structured output after the
+tool-calling phase:
+
+``` python
+from dataclasses import dataclass
+
+def lookup_population(city: str) -> int:
+    """Looks up the population of a city."""
+    return 14_000_000
+
+@dataclass
+class CityReport:
+    city: str
+    population: int
+
+@kbench.task()
+def city_report_task(llm):
+    report = llm.prompt(
+        "Look up Tokyo's population and return a CityReport.",
+        tools=[lookup_population],
+        schema=CityReport,
+    )
+    kbench.assertions.assert_tool_was_invoked(lookup_population)
+    kbench.assertions.assert_equal("Tokyo", report.city)
+
+city_report_task.run(kbench.llm)
 ```
 
 [See Example: Using Tools

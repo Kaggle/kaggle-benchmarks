@@ -91,7 +91,8 @@ import inspect
 import json
 import re
 import typing
-from typing import TYPE_CHECKING, Any, Iterator, Literal, TypeVar
+import uuid
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, TypeVar
 
 import openai
 from google import genai
@@ -102,6 +103,7 @@ from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
+from kaggle_benchmarks.tools import functions, native
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -206,6 +208,7 @@ class LLMChat(actors.Actor):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        tools: list[Callable] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
@@ -217,7 +220,7 @@ class LLMChat(actors.Actor):
         schema: type[T] = str,
         seed: int = 0,
         temperature: float = 0,
-        tools: list[Any] | None = None,
+        tools: list[Callable] | None = None,
         image: images.ImageContent | None = None,
         video: videos.VideoContent | None = None,
         audio: audios.AudioContent | None = None,
@@ -270,11 +273,17 @@ class LLMChat(actors.Actor):
         kwargs = {
             "seed": seed,
             "temperature": temperature if self.support_temperature else None,
-            "tools": tools if tools is not None else [],
             "reasoning": reasoning,
         }
 
-        return self.respond(schema=schema, **kwargs, **extra).content
+        if tools:
+            response = native.native_tool_agent(
+                self, tools, schema=schema, **kwargs, **extra
+            )
+        else:
+            response = self.respond(schema=schema, **kwargs, **extra)
+
+        return response.content
 
     @chats.emits_message
     def respond(
@@ -407,6 +416,7 @@ class OpenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        tools: list[Callable] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         if system:
@@ -415,6 +425,10 @@ class OpenAI(LLMChat):
             messages = [Message(sender=actors.system, content=system)] + messages
 
         raw_messages = list(self.serializer.dump_messages(messages))
+
+        # Convert callables to OpenAI tool schemas.
+        if tools:
+            kwargs["tools"] = [functions.function_to_openai_tool(t) for t in tools]
 
         if self._should_remove_seed():
             # TODO(b/430112500): Remove once model proxy supports it for AIS backends.
@@ -500,6 +514,14 @@ class OpenAI(LLMChat):
         if isinstance(response, openai.Stream):
             return self._get_stream_response(response)
         else:
+            # Handle cases where the API returns no choices (e.g.
+            # Anthropic models proxied through the OpenAI endpoint can
+            # return choices=None on multi-turn tool conversations).
+            if not response.choices:
+                return LLMResponse(
+                    content="",
+                    meta=self._get_usage_meta(response.usage),
+                )
             message = response.choices[0].message
             tool_calls = message.tool_calls
             content = message.content or ""
@@ -593,6 +615,7 @@ class GoogleGenAI(LLMChat):
         messages: list[messages.Message],
         system: str | None,
         reasoning: ReasoningLevel | None = None,
+        tools: list[Callable] | None = None,
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
@@ -600,6 +623,16 @@ class GoogleGenAI(LLMChat):
         config_params = {}
         if system:
             config_params["system_instruction"] = system
+
+        # Convert callables to GenAI FunctionDeclarations.
+        if tools:
+            config_params["tools"] = [
+                types.Tool(
+                    function_declarations=[
+                        functions.function_to_genai_tool(t) for t in tools
+                    ]
+                )
+            ]
 
         if reasoning is not None and "thinking_config" not in kwargs:
             # Only set thinking_config if not already overwritten by the caller.
@@ -652,8 +685,37 @@ class GoogleGenAI(LLMChat):
                 )
 
             content, thinking = self._split_response(response)
+
+            # Extract function calls from response parts and normalize to
+            # OpenAI-style dicts so native_tool_agent() can use
+            # ToolInvocation.from_api_dict() uniformly for both backends.
+            parts = response.candidates[0].content.parts or []
+            fn_parts = [p for p in parts if p.function_call]
+            tool_calls = None
+            if fn_parts:
+                tool_calls = []
+                for part in fn_parts:
+                    fc = part.function_call
+                    tc: dict[str, Any] = {
+                        "id": fc.id or f"call_{uuid.uuid4().hex[:8]}",
+                        "type": "function",
+                        "function": {
+                            "name": fc.name,
+                            "arguments": dict(fc.args) if fc.args else {},
+                        },
+                    }
+                    # TODO(genai-sdk): thought_signature is SDK-internal,
+                    # required for Gemini 3.x round-tripping. Revisit once
+                    # the GenAI SDK stabilizes the thought API.
+                    if getattr(part, "thought_signature", None):
+                        tc["_thought_signature"] = part.thought_signature
+                    if getattr(part, "thought", None):
+                        tc["_thought"] = part.thought
+                    tool_calls.append(tc)
+
             return LLMResponse(
                 content=content,
                 reasoning_traces=thinking,
+                tool_calls=tool_calls,
                 meta=self._get_usage_meta(response.usage_metadata),
             )

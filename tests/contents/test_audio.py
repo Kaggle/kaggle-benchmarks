@@ -120,7 +120,9 @@ def test_from_base64_invalid():
 
 
 def test_extra_api_params_stored():
-    a = audios.from_base64(B64_STRING, format="mp3", extra_api_params={"some_param": "value"})
+    a = audios.from_base64(
+        B64_STRING, format="mp3", extra_api_params={"some_param": "value"}
+    )
     assert a.extra_api_params == {"some_param": "value"}
 
 
