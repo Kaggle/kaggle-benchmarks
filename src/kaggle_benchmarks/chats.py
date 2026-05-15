@@ -179,6 +179,11 @@ class ChatRoom(Chat):
     of the conversation history where their own messages appear as "assistant"
     and peers' messages appear as "user" with name prefixes.
 
+    IMPORTANT: Perspective projection uses object identity (Python ``is``)
+    to determine message ownership. All participants must be distinct
+    object instances — even if backed by the same LLM model. Use separate
+    ``ModelProxy()`` calls to create per-participant instances.
+
     Usage:
         room = ChatRoom(participants=[alice, bob], system_prompt="Debate AI.")
         with room:
@@ -192,57 +197,81 @@ class ChatRoom(Chat):
         participants: list["actors.Actor"],
         system_prompt: str = "",
         name: str = "Room",
+        _parent_room: "ChatRoom | None" = None,
     ):
         super().__init__(name=name)
         self.participants = list(participants)
         self.system_prompt = system_prompt
-        self._ctx_manager = None
+        self._parent_room = _parent_room
+        self._registered_with_parent = False
+        self._cm_stack: list[contextlib.AbstractContextManager] = []
+
+        # Narrator actor for room.post() messages — uses the room's name
+        # so the LLM sees consistent "[Moderator]: ..." messages matching
+        # the roster's "Note on ..." instruction.
+        self._narrator = actors.Actor(name=name, role="user", avatar="📢")
+
+    @contextlib.contextmanager
+    def enter(self):
+        """Enter this room as the active chat context.
+
+        Returns a fresh context manager each time — safe to call in loops.
+        This is the primitive; ``__enter__``/``__exit__`` delegate here.
+        """
+        from kaggle_benchmarks import contexts
+
+        # First-time parent registration
+        if not self._registered_with_parent:
+            try:
+                parent_chat = get_current_chat()
+                if parent_chat and self not in parent_chat.history:
+                    parent_chat.append(self)
+                self._registered_with_parent = True
+            except (LookupError, AttributeError):
+                pass
+
+        with contexts.enter(chat=self):
+            yield self
 
     def __enter__(self):
-        from kaggle_benchmarks import chats, contexts
-
-        # Integrate this room into the active parent chat history.
-        # This registers the ChatRoom container itself as a nested collapsible Chat step
-        # inside the parent history, keeping the UI beautifully grouped.
-        try:
-            parent_chat = chats.get_current_chat()
-            if parent_chat and self not in parent_chat.history:
-                parent_chat.append(self)
-        except Exception:
-            pass
-
-        self._ctx_manager = contexts.enter(chat=self)
-        self._ctx_manager.__enter__()
-        return self
-
-    def __exit__(self, *exc):
-        result = self._ctx_manager.__exit__(*exc)
-        self._ctx_manager = None
+        cm = self.enter()
+        result = cm.__enter__()
+        self._cm_stack.append(cm)
         return result
 
+    def __exit__(self, *exc):
+        cm = self._cm_stack.pop()
+        return cm.__exit__(*exc)
+
     def post(self, message: str, visible_to=None) -> Message:
-        """Post an anonymous system/narrator message to the room.
+        """Post a narrator message to the room.
+
+        Uses the room's ``_narrator`` actor (whose name matches the room name)
+        so the LLM sees consistent sender identity.
 
         Args:
             message: The message text.
             visible_to: Optional list of Actors who can see this message.
                 If None, all participants can see it.
         """
-        msg = Message(sender=actors.system, content=message)
+        msg = Message(sender=self._narrator, content=message)
         if visible_to is not None:
             msg._meta["visible_to"] = visible_to
         self.append(msg)
         return msg
 
     def _build_roster(self, viewer: "actors.Actor") -> str:
-        """Build the participant roster description for the viewer."""
+        """Build the participant roster description for the viewer.
+
+        Lists peer names only — ``system_prompt`` is never exposed to
+        prevent secret role leakage in games like Werewolf.
+        """
         peers = [p for p in self.participants if p is not viewer]
         lines = [f"You are {viewer.name}."]
         if peers:
             lines.append("Other participants in this conversation:")
             for p in peers:
-                desc = getattr(p, "system_prompt", None) or ""
-                lines.append(f"- {p.name}" + (f": {desc}" if desc else ""))
+                lines.append(f"- {p.name}")
         lines.append("")
         lines.append(
             "Messages from other participants are prefixed with their name,"
@@ -269,6 +298,13 @@ class ChatRoom(Chat):
             parts.append(personal)
         return "\n---\n".join(parts)
 
+    def _get_root_room(self) -> "ChatRoom":
+        """Walk the _parent_room chain to find the topmost room."""
+        room = self
+        while room._parent_room is not None:
+            room = room._parent_room
+        return room
+
     def _build_perspective(
         self, viewer: "actors.Actor", _recursive: bool = False
     ) -> list[Message]:
@@ -282,11 +318,11 @@ class ChatRoom(Chat):
         - Messages from private channels are tagged with context (e.g. "[Bob (private: Night Chat)]: ...")
         """
         # If this is a child private room and we are called at the top-level,
-        # delegate perspective building to the topmost parent room so that
-        # public history and other authorized channels are chronologically interleaved!
-        parent = getattr(self, "_parent_room", None)
-        if parent and not _recursive:
-            return parent._build_perspective(viewer)
+        # delegate perspective building to the topmost root room so that
+        # public history and other authorized channels are chronologically
+        # interleaved.
+        if self._parent_room is not None and not _recursive:
+            return self._get_root_room()._build_perspective(viewer)
 
         projected = []
         for item in self.history:
@@ -295,6 +331,10 @@ class ChatRoom(Chat):
                 if viewer in item.participants:
                     projected.extend(item._build_perspective(viewer, _recursive=True))
             elif isinstance(item, Message):
+                # Standard framework visibility check
+                if not item.is_visible_to_llm:
+                    continue
+
                 # Visibility filtering on individual messages.
                 visible = item._meta.get("visible_to")
                 if visible is not None and viewer not in visible:
@@ -303,22 +343,29 @@ class ChatRoom(Chat):
                 if item.sender is viewer:
                     projected.append(
                         Message(
-                            sender=actors.Actor(name=viewer.name, role="assistant"),
+                            sender=actors.Actor(
+                                name=viewer.name,
+                                role="assistant",
+                                avatar=viewer.avatar,
+                            ),
                             content=item.content,
                         )
                     )
                 else:
                     name = item.sender.name
+                    avatar = item.sender.avatar
+
                     # If this message is inside a private child room, tag it
-                    is_child_room = hasattr(self, "_parent_room")
-                    if is_child_room:
+                    is_child_room = self._parent_room is not None
+                    # Don't redundantly tag the room's own narrator messages
+                    if is_child_room and item.sender is not self._narrator:
                         content = f"[{name} (private: {self.name})]: {item.content}"
                     else:
                         content = f"[{name}]: {item.content}"
 
                     projected.append(
                         Message(
-                            sender=actors.Actor(name=name, role="user"),
+                            sender=actors.Actor(name=name, role="user", avatar=avatar),
                             content=content,
                         )
                     )
@@ -331,8 +378,20 @@ class ChatRoom(Chat):
 
         Any messages posted inside the child channel are interleaved into the
         parent room's ground-truth log with restricted visibility.
+
+        Raises ValueError if any participant is not a member of this room.
         """
-        # Spawns a nested room with restricted participants
-        channel = ChatRoom(participants=participants, name=name)
-        channel._parent_room = self
-        return channel
+        unknown = [p for p in participants if p not in self.participants]
+        if unknown:
+            names = ", ".join(p.name for p in unknown)
+            raise ValueError(
+                f"Private channel participants must be members of the parent "
+                f"room. Unknown: {names}"
+            )
+        return ChatRoom(participants=participants, name=name, _parent_room=self)
+
+    def run(self, rounds=1, order="round_robin", stop_when=None):
+        """Automated turn loop (Phase 3 — not yet implemented)."""
+        raise NotImplementedError(
+            "room.run() is planned for Phase 3. Use explicit talk() loops for now."
+        )

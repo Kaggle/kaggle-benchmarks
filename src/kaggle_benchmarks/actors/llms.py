@@ -167,15 +167,27 @@ class LLMChat(actors.Actor):
         self.support_temperature = support_temperature
         self.stream_responses = config.interactive_mode
 
-    def talk(self, schema: type[T] = str, **kwargs) -> T:
+    def talk(self, schema: type[T] = str, tools=None, **kwargs) -> T:
         """Speak in the active ChatRoom.
 
         Builds a perspective-projected history for this participant and calls
         the underlying LLM. The response is appended to the room's ground-truth
         log with this actor as the sender.
 
+        Args:
+            schema: Output schema type for structured output.
+            tools: Reserved for future tool support inside rooms.
+            **kwargs: Additional keyword arguments forwarded to respond().
+
         Raises RuntimeError if called outside of an active ChatRoom context.
         """
+        if tools:
+            raise NotImplementedError(
+                "Tool support inside ChatRoom.talk() is planned for a future "
+                "release. As a workaround, use an orphan chats.new() "
+                "side-chat for tool calls."
+            )
+
         room = chats.get_current_chat()
         if not isinstance(room, chats.ChatRoom):
             raise RuntimeError(
@@ -191,9 +203,15 @@ class LLMChat(actors.Actor):
             temp.history.extend(perspective)
             response = self.respond(system=system, schema=schema, **kwargs)
 
+        # SUBTLE: respond() mutates response.content from raw str → parsed T
+        # via the StopIteration handler in prompting.process_schema(). Therefore
+        # room_msg.content holds the parsed schema type, not the raw string.
+        # The raw string is preserved in _meta["raw_content"].
+
         # Re-attribute the response to this actor and append to ground truth.
-        # The response was already appended to temp by @emits_message /
+        # FRAGILE: The response was already appended to temp by @emits_message /
         # respond() internals, so we create a clean copy for the room log.
+        # If emits_message's double-append guard changes, this may break.
         room_msg = messages.Message(sender=self, content=response.content)
         room_msg._meta = response._meta.copy()
         # Fix: respond() stores the temp chat in _meta["chat"]. Override to
@@ -235,6 +253,15 @@ class LLMChat(actors.Actor):
                 parameters already on prompt() or respond() signatures
                 (seed, temperature, schema, system, etc.).
         """
+        # Guard: prompt() bypasses perspective projection — it must not
+        # be called when a ChatRoom is the active context.
+        current = chats.get_current_chat()
+        if isinstance(current, chats.ChatRoom):
+            raise RuntimeError(
+                f"LLMChat.prompt() cannot be called inside an active ChatRoom "
+                f"('{current.name}'). Use talk() for room interactions, or "
+                f"exit the room context first."
+            )
         if image is not None:
             match image:
                 case images.ImageURL():

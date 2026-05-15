@@ -47,9 +47,9 @@ def test_system_prompt_includes_roster():
     prompt = room._build_system_prompt(alice)
     assert "You are Alice" in prompt
     assert "Bob" in prompt
-    assert "argues AGAINST" in prompt
+    assert "argues AGAINST" not in prompt  # system_prompt NOT leaked to peers
     assert "A debate." in prompt
-    assert "argues FOR" in prompt  # alice's personal prompt
+    assert "argues FOR" in prompt  # alice's personal system_prompt
 
 
 def test_system_prompt_room_identity():
@@ -166,6 +166,9 @@ def test_mini_debate_two_rounds():
     assert messages_sent[1].sender.role == "assistant"  # Pro's own message
     assert messages_sent[2].sender.role == "user"  # Con's message
     assert "[Con]:" in messages_sent[2].content
+    assert "Topic: AI" in messages_sent[0].content
+    assert messages_sent[1].content == "AI is great!"
+    assert "AI is risky!" in messages_sent[2].content
 
 
 # --- Visibility Filtering (Phase 2 MVP) ---
@@ -428,7 +431,7 @@ def test_private_channel_sees_parent_history():
                 (m for m in alice_perspective if "Deal is $84" in m.content), None
             )
             assert announcement_msg is not None
-            assert announcement_msg.sender.name == "System"
+            assert announcement_msg.sender.name == "Main Hall"
 
 
 def test_sealed_bid_isolation():
@@ -457,3 +460,372 @@ def test_sealed_bid_isolation():
             # Assert Beta CANNOT see Alpha's bid! (Sealed bid isolation active)
             for msg in beta_perspective:
                 assert "Alpha Bid: $90" not in msg.content
+
+
+# --- Phase D: New Tests ---
+
+
+def test_reentrant_chatroom_loop():
+    """Same ChatRoom private channel entered multiple times in a loop."""
+    alice = MockedChat.from_contents(["r1", "r2", "r3"], name="Alice", cycle=True)
+    room = ChatRoom(participants=[alice])
+    channel = room.private_channel([alice], name="Night")
+
+    with room:
+        for i in range(3):
+            with channel:
+                channel.post(f"Night {i}")
+                alice.talk()
+
+    night_posts = [m for m in channel.messages if "Night" in m.content]
+    assert len(night_posts) == 3
+    alice_msgs = [m for m in channel.messages if m.sender is alice]
+    assert len(alice_msgs) == 3
+
+
+def test_prompt_inside_chatroom_raises():
+    """prompt() must not be called inside an active ChatRoom."""
+    alice = MockedChat.from_contents(["x"], name="Alice", cycle=True)
+    room = ChatRoom(participants=[alice])
+
+    with room:
+        with pytest.raises(RuntimeError, match="cannot be called inside"):
+            alice.prompt("hello")
+
+
+def test_roster_does_not_leak_system_prompt():
+    """Secret system_prompt must not leak to peers in roster."""
+    alice = MockedChat.from_contents(["x"], name="Alice")
+    alice.system_prompt = "SECRET: You are a werewolf"
+
+    bob = MockedChat.from_contents(["x"], name="Bob")
+    room = ChatRoom(participants=[alice, bob])
+
+    roster = room._build_roster(bob)
+    assert "Alice" in roster
+    assert "werewolf" not in roster.lower()
+    assert "SECRET" not in roster
+
+
+def test_post_sender_matches_room_name():
+    """room.post() sender name matches the room's name, not 'System'."""
+    alice = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom(participants=[alice], name="Moderator")
+
+    with room:
+        msg = room.post("Hello")
+
+    assert msg.sender.name == "Moderator"
+
+
+def test_nested_channels_three_levels():
+    """Channel-in-channel: root -> team -> leader, with correct visibility."""
+    alice = MockedChat.from_contents(["cmd"], name="Alice", cycle=True)
+    bob = MockedChat.from_contents(["ack"], name="Bob", cycle=True)
+    charlie = MockedChat.from_contents(["x"], name="Charlie")
+
+    room = ChatRoom(participants=[alice, bob, charlie])
+    team = room.private_channel([alice, bob], name="Team")
+    leader = team.private_channel([alice], name="Leader")
+
+    with room:
+        room.post("Public")
+        with team:
+            team.post("Team only")
+            with leader:
+                leader.post("Leader only")
+                p = leader._build_perspective(alice)
+                contents = [m.content for m in p]
+                assert any("Public" in c for c in contents)
+                assert any("Team only" in c for c in contents)
+                assert any("Leader only" in c for c in contents)
+
+    charlie_p = room._build_perspective(charlie)
+    charlie_contents = [m.content for m in charlie_p]
+    assert any("Public" in c for c in charlie_contents)
+    assert not any("Team only" in c for c in charlie_contents)
+    assert not any("Leader only" in c for c in charlie_contents)
+
+
+def test_actor_talk_without_message_raises_typeerror():
+    """Actor.talk() requires a message argument."""
+    game = actors.Actor(name="Game")
+    room = ChatRoom(participants=[game])
+    with room:
+        with pytest.raises(TypeError):
+            game.talk()
+
+
+def test_private_channel_validates_participants():
+    """private_channel() rejects participants not in the parent room."""
+    alice = MockedChat.from_contents(["x"], name="Alice")
+    bob = MockedChat.from_contents(["x"], name="Bob")
+    outsider = MockedChat.from_contents(["x"], name="Outsider")
+    room = ChatRoom(participants=[alice, bob])
+
+    with pytest.raises(ValueError, match="Unknown: Outsider"):
+        room.private_channel([alice, outsider], name="Bad Channel")
+
+
+def test_room_run_not_implemented():
+    """room.run() is a Phase 3 stub."""
+    alice = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom(participants=[alice])
+    with pytest.raises(NotImplementedError, match="Phase 3"):
+        room.run()
+
+
+def test_perspective_filters_invisible_messages():
+    """Messages with is_visible_to_llm=False are not shown in perspective."""
+    alice = MockedChat.from_contents(["x"], name="Alice")
+    bob = MockedChat.from_contents(["x"], name="Bob")
+    room = ChatRoom(participants=[alice, bob])
+
+    visible_msg = Message(sender=alice, content="I can be seen")
+    invisible_msg = Message(
+        sender=alice, content="I am hidden", is_visible_to_llm=False
+    )
+    room.history = [visible_msg, invisible_msg]
+
+    perspective = room._build_perspective(bob)
+    contents = [m.content for m in perspective]
+    assert any("I can be seen" in c for c in contents)
+    assert not any("I am hidden" in c for c in contents)
+
+
+def test_perspective_preserves_avatars():
+    """Synthetic actors in perspective should retain original avatars."""
+    alice = MockedChat.from_contents(["x"], name="Alice")
+    alice.avatar = "🐺"
+    bob = MockedChat.from_contents(["x"], name="Bob")
+    bob.avatar = "🧙"
+    room = ChatRoom(participants=[alice, bob])
+
+    room.history = [
+        Message(sender=alice, content="hello"),
+        Message(sender=bob, content="world"),
+    ]
+
+    perspective = room._build_perspective(alice)
+    assert perspective[0].sender.avatar == "🐺"
+    assert perspective[1].sender.avatar == "🧙"
+
+
+# --- LLM-Side Verification: What Each LLM Actually Receives ---
+
+
+def test_llm_sees_correct_system_prompt_with_roster():
+    """Verify the system prompt sent to the LLM contains the roster,
+    room instructions, and personal prompt — but NOT peers' system_prompts."""
+    alice = MockedChat.from_contents(["hello"], name="Alice")
+    alice.system_prompt = "SECRET: You are a werewolf"
+    bob = MockedChat.from_contents(["hi"], name="Bob")
+    bob.system_prompt = "SECRET: You are a villager"
+
+    room = ChatRoom(
+        participants=[alice, bob],
+        system_prompt="A game of Werewolf.",
+        name="Moderator",
+    )
+
+    with room:
+        alice.talk()
+
+    # Inspect the system prompt sent to Alice's LLM
+    _, kwargs = alice.invocations[0]
+    system = kwargs["system"]
+
+    # Alice should see her own roster identity
+    assert "You are Alice" in system
+    # Alice should see Bob listed as a peer (name only)
+    assert "Bob" in system
+    # Alice should see the room instructions
+    assert "A game of Werewolf" in system
+    # Alice should see her OWN secret system_prompt
+    assert "SECRET: You are a werewolf" in system
+    # Alice must NOT see Bob's secret system_prompt
+    assert "SECRET: You are a villager" not in system
+    # The narrator note should reference the room name
+    assert 'Note on "Moderator"' in system
+
+
+def test_llm_sees_correct_message_roles_and_prefixes():
+    """Verify the message history sent to the LLM has correct roles
+    and name prefixes: own messages as assistant, peers as user with [Name]:."""
+    alice = MockedChat.from_contents(["I agree!", "Me too!"], name="Alice")
+    bob = MockedChat.from_contents(["I disagree!"], name="Bob")
+    room = ChatRoom(
+        participants=[alice, bob],
+        system_prompt="Debate.",
+        name="Moderator",
+    )
+
+    with room:
+        room.post("Topic: AI")
+        alice.talk()
+        bob.talk()
+        alice.talk()  # second turn — Alice sees full history
+
+    # Alice's 2nd invocation should see: post + alice_r1 + bob_r1
+    msgs, _ = alice.invocations[1]
+    assert len(msgs) == 3
+
+    # 1. Room post → user role, prefixed with narrator name
+    assert msgs[0].sender.role == "user"
+    assert "[Moderator]:" in msgs[0].content
+    assert "Topic: AI" in msgs[0].content
+
+    # 2. Alice's own first message → assistant role, NO prefix
+    assert msgs[1].sender.role == "assistant"
+    assert msgs[1].content == "I agree!"  # raw content, no [Alice]: prefix
+
+    # 3. Bob's message → user role, [Bob]: prefix
+    assert msgs[2].sender.role == "user"
+    assert "[Bob]:" in msgs[2].content
+    assert "I disagree!" in msgs[2].content
+
+
+def test_llm_private_channel_isolation():
+    """Verify that a villager LLM never receives any messages from the
+    werewolf private channel — complete information isolation."""
+    alice = MockedChat.from_contents(["wolf strategy", "I'm innocent!"], name="Alice")
+    bob = MockedChat.from_contents(["confirmed", "trust me"], name="Bob")
+    charlie = MockedChat.from_contents(["suspicious"], name="Charlie")
+
+    moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
+
+    room = ChatRoom(
+        participants=[moderator, alice, bob, charlie],
+        system_prompt="Werewolf game.",
+        name="Moderator",
+    )
+
+    with room:
+        # Night: wolves coordinate secretly
+        wolf_chat = room.private_channel([alice, bob], name="Wolf Night Chat")
+        with wolf_chat:
+            wolf_chat.post("Wolves, pick a victim.")
+            alice.talk()  # "wolf strategy"
+            bob.talk()  # "confirmed"
+
+        # Day: everyone discusses publicly
+        moderator.talk("Day breaks!")
+        alice.talk()  # "I'm innocent!"
+        charlie.talk()  # "suspicious"
+
+    # Charlie's invocation: should see ONLY day messages
+    charlie_msgs, charlie_kwargs = charlie.invocations[0]
+    charlie_all_content = " ".join(m.content for m in charlie_msgs)
+
+    # Charlie must NOT see any wolf chat content
+    assert "wolf strategy" not in charlie_all_content
+    assert "confirmed" not in charlie_all_content
+    assert "Wolves, pick a victim" not in charlie_all_content
+    assert "Wolf Night Chat" not in charlie_all_content
+
+    # Charlie SHOULD see the day messages
+    assert "Day breaks!" in charlie_all_content
+
+    # Charlie's system prompt should NOT contain wolf-related info
+    charlie_system = charlie_kwargs["system"]
+    assert "Wolf Night Chat" not in charlie_system
+
+
+def test_llm_knows_private_channel_context():
+    """Verify that when an LLM talks inside a private channel, the
+    projected messages are tagged with the channel name so the LLM
+    knows it's in a private context."""
+    alice = MockedChat.from_contents(["public hello", "secret plan"], name="Alice")
+    bob = MockedChat.from_contents(["ack"], name="Bob")
+
+    room = ChatRoom(
+        participants=[alice, bob],
+        system_prompt="A negotiation.",
+        name="Boardroom",
+    )
+
+    with room:
+        room.post("Welcome everyone.")
+        alice.talk()  # "public hello"
+
+        # Private channel
+        whisper = room.private_channel([alice, bob], name="Side Deal")
+        with whisper:
+            whisper.post("This is private.")
+            alice.talk()  # "secret plan" — posted inside the private channel
+            bob.talk()  # "ack" — Bob sees both public and private
+
+    # Bob's invocation inside the private channel
+    bob_msgs, _ = bob.invocations[0]
+    bob_all_content = " ".join(m.content for m in bob_msgs)
+
+    # Bob should see public messages (from the root room)
+    assert "Welcome everyone" in bob_all_content
+
+    # Bob should see Alice's public message
+    assert "public hello" in bob_all_content
+
+    # Alice's message INSIDE the private channel should be tagged
+    # with "(private: Side Deal)" so the LLM knows the context.
+    # (Narrator messages are NOT tagged — only peer messages.)
+    private_msgs = [m.content for m in bob_msgs if "private: Side Deal" in m.content]
+    assert len(private_msgs) > 0
+    assert any("secret plan" in m for m in private_msgs)
+
+
+def test_llm_nested_channel_correct_visibility():
+    """End-to-end: 3 LLMs, 3 levels of nesting. Verify each LLM
+    receives exactly the messages they're authorized to see."""
+    handler = MockedChat.from_contents(["mission briefing"], name="Handler")
+    spy_a = MockedChat.from_contents(["intel gathered", "report"], name="SpyA")
+    spy_b = MockedChat.from_contents(["cover story"], name="SpyB")
+
+    room = ChatRoom(
+        participants=[handler, spy_a, spy_b],
+        system_prompt="Espionage operation.",
+        name="HQ",
+    )
+
+    with room:
+        room.post("All agents, report in.")
+        spy_b.talk()  # "cover story" — public
+
+        # Level 2: field team (handler + spy_a)
+        field_chat = room.private_channel([handler, spy_a], name="Field Team")
+        with field_chat:
+            field_chat.post("Field team, coordinate.")
+            spy_a.talk()  # "intel gathered"
+
+            # Level 3: handler-only briefing
+            briefing = field_chat.private_channel([handler], name="Eyes Only")
+            with briefing:
+                briefing.post("Top secret.")
+                handler.talk()  # "mission briefing"
+
+    # Handler should see ALL 3 levels
+    handler_msgs, _ = handler.invocations[0]
+    handler_content = " ".join(m.content for m in handler_msgs)
+    assert "All agents, report in" in handler_content
+    assert "cover story" in handler_content
+    assert "Field team, coordinate" in handler_content
+    assert "intel gathered" in handler_content
+    assert "Top secret" in handler_content
+
+    # SpyA should see levels 1 + 2, but NOT level 3
+    spy_a_msgs, _ = spy_a.invocations[0]
+    spy_a_content = " ".join(m.content for m in spy_a_msgs)
+    assert "All agents, report in" in spy_a_content
+    assert "cover story" in spy_a_content
+    # SpyA should NOT see the Eyes Only briefing
+    assert "Top secret" not in spy_a_content
+    assert "mission briefing" not in spy_a_content
+
+    # SpyB should see ONLY level 1 (public)
+    spy_b_msgs, _ = spy_b.invocations[0]
+    spy_b_content = " ".join(m.content for m in spy_b_msgs)
+    assert "All agents, report in" in spy_b_content
+    # SpyB should NOT see any private channel content
+    assert "Field team, coordinate" not in spy_b_content
+    assert "intel gathered" not in spy_b_content
+    assert "Top secret" not in spy_b_content
+    assert "mission briefing" not in spy_b_content

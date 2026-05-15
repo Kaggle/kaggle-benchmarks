@@ -69,8 +69,8 @@ class Actor:
     def __str__(self) -> str:
         return f"{self.avatar} {self.name}"
 
-    def talk(self, message: str) -> "Message":
-        """Speak in the active ChatRoom.
+    def talk(self, message: str) -> str:
+        """Speak in the active ChatRoom. Returns the message content.
 
         Raises RuntimeError if called outside of an active ChatRoom context.
         """
@@ -84,7 +84,7 @@ class Actor:
 
         msg = Message(sender=self, content=message)
         chat.append(msg)
-        return msg
+        return message
 
 
 class Tool(Actor):

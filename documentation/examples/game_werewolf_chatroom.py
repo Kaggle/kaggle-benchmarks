@@ -27,6 +27,7 @@ We represent:
 
 # %%
 import dataclasses
+import random
 from collections import Counter
 
 import kaggle_benchmarks as kbench
@@ -58,41 +59,27 @@ def run_werewolf(
     """Runs a 7-player game of Werewolf using ChatRoom private channels."""
 
     # 1. Assign secret role instructions as identity prompts.
-    alice.system_prompt = (
-        "ROLE: Werewolf (Teammate: Bob). "
-        "At Night, coordinate privately with Bob to eliminate a Villager. "
-        "During the Day, blend in as a Villager. Do NOT make it obvious that you are allied with Bob. "
-        "Distance yourself from him if necessary to avoid looking like a coordinated wolf pack. "
-        "Deflect suspicion and vote tactically."
+    werewolf_prompt = (
+        "ROLE: Werewolf.\n"
+        "OBJECTIVE: You and any fellow Werewolves win together if Werewolves equal or outnumber Villagers. "
+        "Therefore, your priority is to keep all Werewolves alive.\n"
+        "STRATEGY:\n"
+        "- At Night: Coordinate secretly in the private channel with your fellow Werewolf teammate(s) to select a Villager to eliminate.\n"
+        "- Day Icebreaking: Avoid telling others how they 'should' discuss or setting meta-rules (like 'be careful of narrative pushers' or 'looking for people who talk too fast'). These are major tells. Just act like a standard analytical villager.\n"
+        "- Scapegoat Framing: Be proactive. Frame an actual Villager early on by pointing out a minor logical contradiction, them being too quiet, or being too agreeable. Direct the town's attention toward a specific Villager.\n"
+        "- Bussing (The Betrayal Rule): If a fellow Werewolf teammate is accused by 2 or more other players, they are indefensible. You MUST immediately join the pile-on, criticize them, and vote to hang them. This is the only way to gain the town's trust and win the long game.\n"
+        "- Avoid Voting Blocs: Never vote for the same target as your teammate on Day 1 unless there is already a strong, public village-wide consensus. If your teammate votes for X, you should ideally vote for Y or X's accuser to avoid looking like a coordinated voting bloc."
     )
-    bob.system_prompt = (
-        "ROLE: Werewolf (Teammate: Alice). "
-        "At Night, coordinate privately with Alice to eliminate a Villager. "
-        "During the Day, blend in as a Villager. Crucially, do NOT always agree with or follow Alice. "
-        "Reassessing: If Alice's behavior or theories become suspicious, distance yourself, "
-        "critique her arguments to establish your own credibility, or even vote to hang her "
-        "to save yourself and win the game for your team. Use advanced double-bluff strategies."
-    )
-    charlie.system_prompt = (
-        "ROLE: Villager. "
-        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-    )
-    david.system_prompt = (
-        "ROLE: Villager. "
-        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-    )
-    eve.system_prompt = (
-        "ROLE: Villager. "
-        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-    )
-    frank.system_prompt = (
-        "ROLE: Villager. "
-        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-    )
-    grace.system_prompt = (
-        "ROLE: Villager. "
-        "During the Day, analyze previous messages to spot contradictions or suspicious defensive behavior, and vote."
-    )
+
+    for wolf in [alice, bob]:
+        wolf.system_prompt = werewolf_prompt
+
+    for villager in [charlie, david, eve, frank, grace]:
+        villager.system_prompt = (
+            "ROLE: Villager.\n"
+            "During the Day, analyze previous messages to spot contradictions or "
+            "suspicious defensive behavior, and vote."
+        )
 
     # Initialize general room game-engine arbiter
     moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
@@ -199,8 +186,11 @@ def run_werewolf(
                 "Survivors, discuss who is suspicious and vote to eliminate them."
             )
 
-            # Let survivors discuss publicly in the main room
-            for player in survivors:
+            # Let survivors discuss publicly in a randomized order each day
+            discussion_order = list(survivors)
+            # Use a deterministic seed if we want reproducible runs, or standard random
+            random.shuffle(discussion_order)
+            for player in discussion_order:
                 player.talk()
 
             # Execute voting
