@@ -22,7 +22,7 @@ from kaggle_benchmarks import utils
 from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
 
 
-def validate_model_proxy_config(
+def raise_for_missing_model_proxy_config(
     url: str | None = None,
     api_key: str | None = None,
 ) -> None:
@@ -59,7 +59,9 @@ class ModelProxy:
         resolved_api_key = api_key or os.getenv("MODEL_PROXY_API_KEY")
         resolved_base_url = base_url or os.getenv("MODEL_PROXY_URL")
 
-        validate_model_proxy_config(url=resolved_base_url, api_key=resolved_api_key)
+        raise_for_missing_model_proxy_config(
+            url=resolved_base_url, api_key=resolved_api_key
+        )
 
         # Normalize base URL
         for suffix in ("/openapi", "/genai"):
