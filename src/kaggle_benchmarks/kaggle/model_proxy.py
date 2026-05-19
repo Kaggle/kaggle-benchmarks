@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import os
-import warnings
 
 import openai
 from google import genai
@@ -26,9 +25,8 @@ from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
 def validate_model_proxy_config(
     url: str | None = None,
     api_key: str | None = None,
-    raise_on_error: bool = False,
 ) -> None:
-    """Warn (or raise) if required auth env vars are missing."""
+    """Raise if required auth env vars are missing."""
     missing = []
     if not url:
         missing.append("MODEL_PROXY_URL")
@@ -46,9 +44,7 @@ def validate_model_proxy_config(
         f"Authenticate by running:\n{separator}\n{install_command}\n{auth_command}\n{separator}\n"
     )
 
-    if raise_on_error:
-        raise ValueError(msg)
-    warnings.warn(msg, stacklevel=2)
+    raise ValueError(msg)
 
 
 class ModelProxy:
@@ -63,9 +59,7 @@ class ModelProxy:
         resolved_api_key = api_key or os.getenv("MODEL_PROXY_API_KEY")
         resolved_base_url = base_url or os.getenv("MODEL_PROXY_URL")
 
-        validate_model_proxy_config(
-            url=resolved_base_url, api_key=resolved_api_key, raise_on_error=True
-        )
+        validate_model_proxy_config(url=resolved_base_url, api_key=resolved_api_key)
 
         # Normalize base URL
         for suffix in ("/openapi", "/genai"):

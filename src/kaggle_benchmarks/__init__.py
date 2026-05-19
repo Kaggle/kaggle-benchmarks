@@ -48,7 +48,7 @@ class _NotConfiguredLLM(LLMChat):
         super().__init__(name=name)
 
     def invoke(self, *args, **kwargs):
-        validate_model_proxy_config(raise_on_error=True)
+        validate_model_proxy_config()
 
 
 if kaggle.is_configured():
