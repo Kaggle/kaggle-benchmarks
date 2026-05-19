@@ -30,17 +30,35 @@ from kaggle_benchmarks import (
 from kaggle_benchmarks._config import ExecutionMode, config
 from kaggle_benchmarks.actors import Actor, LLMChat, system, user
 from kaggle_benchmarks.chats import last_reasoning_traces
-from kaggle_benchmarks.kaggle.model_proxy import validate_model_proxy_config
+from kaggle_benchmarks.kaggle.model_proxy import raise_for_missing_model_proxy_config
 from kaggle_benchmarks.runs import Run, Runs
 from kaggle_benchmarks.tasks import benchmark, task
 from kaggle_benchmarks.usage import Usage
+
+
+class _NotConfiguredLLM(LLMChat):
+    """Stand-in for an LLMChat when no model provider is configured.
+
+    Allows ``import kaggle_benchmarks`` to succeed without credentials,
+    but raises a clear error with setup instructions when the model is
+    actually used (via ``prompt()``, ``respond()``, etc.).
+    """
+
+    def __init__(self, name: str = "not-configured"):
+        super().__init__(name=name)
+
+    def invoke(self, *args, **kwargs):
+        raise_for_missing_model_proxy_config()
+
 
 if kaggle.is_configured():
     llm = kaggle.load_default_model()
     judge_llm = kaggle.load_judge_model()
     llms = kaggle.load_available_models()
 else:
-    validate_model_proxy_config()
+    llm = _NotConfiguredLLM("llm")
+    judge_llm = _NotConfiguredLLM("judge_llm")
+    llms = {}
 
 
 client: clients.Client = clients.resolve_client()
