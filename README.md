@@ -14,7 +14,7 @@ This is especially useful for:
 - [Features](#features)
 - [Getting Started](#getting-started)
   - [On Kaggle](#on-kaggle)
-  - [Local Development](#local-development)
+  - [Local Development](https://github.com/Kaggle/kaggle-benchmarks/blob/ci/local_development.md)
 - [Usage](#usage)
 - [Supported Models](#supported-models)
 - [Contributing](#contributing)
