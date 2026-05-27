@@ -150,6 +150,10 @@ message Conversation {
   // channels are children of the main room conversation).
   // Empty for top-level conversations.
   optional string parent_conversation_id = 5;
+  // The ID of the request in the parent conversation immediately preceding
+  // the start of this conversation. Used to chronologically interleave
+  // nested sub-chats/private channels within the parent conversation.
+  optional string previous_request_id = 6;
 }
 
 message ModelRequest {

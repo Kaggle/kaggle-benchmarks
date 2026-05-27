@@ -314,11 +314,13 @@ def test_parent_conversation_id_serialization():
     outer_chat_data = result["conversations"][0]
     subchat_data = result["conversations"][1]
 
-    # Top-level conversation should have no parent
+    # Top-level conversation should have no parent or previous request
     assert "parentConversationId" not in outer_chat_data
+    assert "previousRequestId" not in outer_chat_data
 
-    # Sub-chat should reference the outer chat as its parent
+    # Sub-chat should reference the outer chat as its parent, and the first request as previous
     assert subchat_data["parentConversationId"] == outer_chat_data["id"]
+    assert subchat_data["previousRequestId"] == f"{outer_chat_data['id']}-req-1"
 
 
 def test_passing_scoring_task_serialization():

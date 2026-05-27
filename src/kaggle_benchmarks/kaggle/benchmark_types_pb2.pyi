@@ -647,6 +647,7 @@ class Conversation(google.protobuf.message.Message):
     METRICS_FIELD_NUMBER: builtins.int
     MODEL_VERSION_SLUG_FIELD_NUMBER: builtins.int
     PARENT_CONVERSATION_ID_FIELD_NUMBER: builtins.int
+    PREVIOUS_REQUEST_ID_FIELD_NUMBER: builtins.int
     id: builtins.str
     """Conversation ID generated in Python"""
     model_version_slug: builtins.str
@@ -655,6 +656,11 @@ class Conversation(google.protobuf.message.Message):
     Used to reconstruct the chat tree hierarchy (e.g., ChatRoom private
     channels are children of the main room conversation).
     Empty for top-level conversations.
+    """
+    previous_request_id: builtins.str
+    """The ID of the request in the parent conversation immediately preceding
+    the start of this conversation. Used to chronologically interleave
+    nested sub-chats/private channels within the parent conversation.
     """
     @property
     def requests(
@@ -678,16 +684,21 @@ class Conversation(google.protobuf.message.Message):
         metrics: Global___ModelUsageMetrics | None = ...,
         model_version_slug: builtins.str = ...,
         parent_conversation_id: builtins.str | None = ...,
+        previous_request_id: builtins.str | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "_parent_conversation_id",
             b"_parent_conversation_id",
+            "_previous_request_id",
+            b"_previous_request_id",
             "metrics",
             b"metrics",
             "parent_conversation_id",
             b"parent_conversation_id",
+            "previous_request_id",
+            b"previous_request_id",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -695,6 +706,8 @@ class Conversation(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_parent_conversation_id",
             b"_parent_conversation_id",
+            "_previous_request_id",
+            b"_previous_request_id",
             "id",
             b"id",
             "metrics",
@@ -703,16 +716,24 @@ class Conversation(google.protobuf.message.Message):
             b"model_version_slug",
             "parent_conversation_id",
             b"parent_conversation_id",
+            "previous_request_id",
+            b"previous_request_id",
             "requests",
             b"requests",
         ],
     ) -> None: ...
+    @typing.overload
     def WhichOneof(
         self,
         oneof_group: typing.Literal[
             "_parent_conversation_id", b"_parent_conversation_id"
         ],
     ) -> typing.Literal["parent_conversation_id"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing.Literal["_previous_request_id", b"_previous_request_id"],
+    ) -> typing.Literal["previous_request_id"] | None: ...
 
 Global___Conversation: typing_extensions.TypeAlias = Conversation
 
