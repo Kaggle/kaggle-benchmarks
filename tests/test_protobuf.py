@@ -305,6 +305,22 @@ def test_subchat_serialization():
     assert outer_convo_ref["requestId"] == outer_chat_data["requests"][1]["id"]
 
 
+def test_parent_conversation_id_serialization():
+    """Tests that parent_conversation_id links sub-chats to their parent."""
+    run = task_with_subchat.run()
+    message = serialization.dump_run(run)
+    result = json_format.MessageToDict(message)
+
+    outer_chat_data = result["conversations"][0]
+    subchat_data = result["conversations"][1]
+
+    # Top-level conversation should have no parent
+    assert "parentConversationId" not in outer_chat_data
+
+    # Sub-chat should reference the outer chat as its parent
+    assert subchat_data["parentConversationId"] == outer_chat_data["id"]
+
+
 def test_passing_scoring_task_serialization():
     run = scoring_task.run(score_to_return=5)
     message = serialization.dump_run(run)

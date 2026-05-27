@@ -646,9 +646,16 @@ class Conversation(google.protobuf.message.Message):
     REQUESTS_FIELD_NUMBER: builtins.int
     METRICS_FIELD_NUMBER: builtins.int
     MODEL_VERSION_SLUG_FIELD_NUMBER: builtins.int
+    PARENT_CONVERSATION_ID_FIELD_NUMBER: builtins.int
     id: builtins.str
     """Conversation ID generated in Python"""
     model_version_slug: builtins.str
+    parent_conversation_id: builtins.str
+    """The ID of the parent conversation this conversation is nested within.
+    Used to reconstruct the chat tree hierarchy (e.g., ChatRoom private
+    channels are children of the main room conversation).
+    Empty for top-level conversations.
+    """
     @property
     def requests(
         self,
@@ -670,23 +677,42 @@ class Conversation(google.protobuf.message.Message):
         requests: collections.abc.Iterable[Global___ModelRequest] | None = ...,
         metrics: Global___ModelUsageMetrics | None = ...,
         model_version_slug: builtins.str = ...,
+        parent_conversation_id: builtins.str | None = ...,
     ) -> None: ...
     def HasField(
-        self, field_name: typing.Literal["metrics", b"metrics"]
+        self,
+        field_name: typing.Literal[
+            "_parent_conversation_id",
+            b"_parent_conversation_id",
+            "metrics",
+            b"metrics",
+            "parent_conversation_id",
+            b"parent_conversation_id",
+        ],
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
+            "_parent_conversation_id",
+            b"_parent_conversation_id",
             "id",
             b"id",
             "metrics",
             b"metrics",
             "model_version_slug",
             b"model_version_slug",
+            "parent_conversation_id",
+            b"parent_conversation_id",
             "requests",
             b"requests",
         ],
     ) -> None: ...
+    def WhichOneof(
+        self,
+        oneof_group: typing.Literal[
+            "_parent_conversation_id", b"_parent_conversation_id"
+        ],
+    ) -> typing.Literal["parent_conversation_id"] | None: ...
 
 Global___Conversation: typing_extensions.TypeAlias = Conversation
 

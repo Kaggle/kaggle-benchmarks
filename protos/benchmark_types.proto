@@ -145,6 +145,11 @@ message Conversation {
   // requests.*.metrics for the Conversation
   ModelUsageMetrics metrics = 3;
   string model_version_slug = 4 [deprecated = true];
+  // The ID of the parent conversation this conversation is nested within.
+  // Used to reconstruct the chat tree hierarchy (e.g., ChatRoom private
+  // channels are children of the main room conversation).
+  // Empty for top-level conversations.
+  optional string parent_conversation_id = 5;
 }
 
 message ModelRequest {
