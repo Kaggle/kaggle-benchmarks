@@ -213,9 +213,15 @@ class LLMChat(actors.Actor):
         # respond() internals, so we create a clean copy for the room log.
         # If emits_message's double-append guard changes, this may break.
         room_msg = messages.Message(sender=self, content=response.content)
+        # Shallow copy is safe here because _meta values are currently all
+        # immutable (ints, strings, types). The only mutable concern would be
+        # tool_calls (a list), but talk() blocks tools via NotImplementedError.
+        # Deep copy is avoided because _meta["chat"] holds a Chat reference —
+        # cloning it would create a disconnected copy of the entire conversation.
+        # If tool support is added to talk(), switch to:
+        #   meta = response._meta.copy(); meta.pop("chat", None)
+        #   room_msg._meta = copy.deepcopy(meta); room_msg._meta["chat"] = room
         room_msg._meta = response._meta.copy()
-        # Fix: respond() stores the temp chat in _meta["chat"]. Override to
-        # point at the room's ground-truth log instead.
         room_msg._meta["chat"] = room
         room.append(room_msg)
 

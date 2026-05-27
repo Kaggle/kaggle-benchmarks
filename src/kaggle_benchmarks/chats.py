@@ -179,17 +179,35 @@ class ChatRoom(Chat):
     of the conversation history where their own messages appear as "assistant"
     and peers' messages appear as "user" with name prefixes.
 
+    Two primitives drive all interaction:
+
+    - ``room.post(msg)`` — narrator/system announcements (game rules, topics).
+    - ``participant.talk()`` — LLM generates a response; ``Actor.talk(msg)``
+      posts code-driven content. Both are attributed to the participant.
+
+    After exiting the room context, access ``room.messages`` for the full
+    ground-truth transcript to perform evaluation or assertions.
+
     IMPORTANT: Perspective projection uses object identity (Python ``is``)
     to determine message ownership. All participants must be distinct
     object instances — even if backed by the same LLM model. Use separate
     ``ModelProxy()`` calls to create per-participant instances.
 
-    Usage:
+    Tip: ``system_prompt`` can be passed to ``ModelProxy()`` directly::
+
+        alice = ModelProxy(model, name="Alice", system_prompt="I am Alice.")
+
+    Usage::
+
         room = ChatRoom(participants=[alice, bob], system_prompt="Debate AI.")
         with room:
             room.post("Topic: AI safety")
             alice.talk()
             bob.talk()
+
+        # Post-room evaluation on the transcript
+        for msg in room.messages:
+            assert len(msg.content) > 0
     """
 
     def __init__(
@@ -205,6 +223,9 @@ class ChatRoom(Chat):
         self._parent_room = _parent_room
         self._registered_with_parent = False
         self._cm_stack: list[contextlib.AbstractContextManager] = []
+        # Cache for synthetic Actor objects used in perspective projection.
+        # Avoids creating O(n) ephemeral actors per _build_perspective() call.
+        self._synthetic_actors: dict[tuple[str, str, str], "actors.Actor"] = {}
 
         # Narrator actor for room.post() messages — uses the room's name
         # so the LLM sees consistent "[Moderator]: ..." messages matching
@@ -243,7 +264,9 @@ class ChatRoom(Chat):
         cm = self._cm_stack.pop()
         return cm.__exit__(*exc)
 
-    def post(self, message: str, visible_to=None) -> Message:
+    def post(
+        self, message: str, visible_to: list["actors.Actor"] | None = None
+    ) -> Message:
         """Post a narrator message to the room.
 
         Uses the room's ``_narrator`` actor (whose name matches the room name)
@@ -343,10 +366,8 @@ class ChatRoom(Chat):
                 if item.sender is viewer:
                     projected.append(
                         Message(
-                            sender=actors.Actor(
-                                name=viewer.name,
-                                role="assistant",
-                                avatar=viewer.avatar,
+                            sender=self._get_synthetic_actor(
+                                viewer.name, "assistant", viewer.avatar
                             ),
                             content=item.content,
                         )
@@ -365,11 +386,20 @@ class ChatRoom(Chat):
 
                     projected.append(
                         Message(
-                            sender=actors.Actor(name=name, role="user", avatar=avatar),
+                            sender=self._get_synthetic_actor(name, "user", avatar),
                             content=content,
                         )
                     )
         return projected
+
+    def _get_synthetic_actor(self, name: str, role: str, avatar: str) -> "actors.Actor":
+        """Return a cached synthetic Actor for perspective projection."""
+        key = (name, role, avatar)
+        if key not in self._synthetic_actors:
+            self._synthetic_actors[key] = actors.Actor(
+                name=name, role=role, avatar=avatar
+            )
+        return self._synthetic_actors[key]
 
     def private_channel(
         self, participants: list["actors.Actor"], name: str = "Private Channel"
@@ -388,4 +418,13 @@ class ChatRoom(Chat):
                 f"Private channel participants must be members of the parent "
                 f"room. Unknown: {names}"
             )
+        if name == self.name:
+            raise ValueError(
+                f"Private channel name must differ from parent room name "
+                f"'{self.name}' to avoid narrator identity confusion."
+            )
         return ChatRoom(participants=participants, name=name, _parent_room=self)
+
+    def __repr__(self) -> str:
+        names = [p.name for p in self.participants]
+        return f"ChatRoom(name={self.name!r}, participants={names})"
