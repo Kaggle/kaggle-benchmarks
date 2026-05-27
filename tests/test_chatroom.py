@@ -567,14 +567,6 @@ def test_private_channel_validates_participants():
         room.private_channel([alice, outsider], name="Bad Channel")
 
 
-def test_room_run_not_implemented():
-    """room.run() is a Phase 3 stub."""
-    alice = MockedChat.from_contents(["x"], name="Alice")
-    room = ChatRoom(participants=[alice])
-    with pytest.raises(NotImplementedError, match="Phase 3"):
-        room.run()
-
-
 def test_perspective_filters_invisible_messages():
     """Messages with is_visible_to_llm=False are not shown in perspective."""
     alice = MockedChat.from_contents(["x"], name="Alice")

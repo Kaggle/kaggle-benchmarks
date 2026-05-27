@@ -389,9 +389,3 @@ class ChatRoom(Chat):
                 f"room. Unknown: {names}"
             )
         return ChatRoom(participants=participants, name=name, _parent_room=self)
-
-    def run(self, rounds=1, order="round_robin", stop_when=None):
-        """Automated turn loop (Phase 3 — not yet implemented)."""
-        raise NotImplementedError(
-            "room.run() is planned for Phase 3. Use explicit talk() loops for now."
-        )

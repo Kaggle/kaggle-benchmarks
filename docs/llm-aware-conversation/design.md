@@ -89,8 +89,6 @@ three purposes:
 2. **Message routing (pub/sub)** — when any participant speaks (via `talk()`),
    their message is automatically visible to all other participants. No manual
    forwarding needed.
-3. **Turn management** — `room.run(order="round_robin")` cycles through
-   the participants list.
 
 Participants can be `LLMChat` instances (LLM-driven) or `Actor` instances
 (code-driven). See [Code-Driven Participants](#code-driven-participants-actor)
@@ -187,7 +185,8 @@ with wolf_channel:
 # Back in the main room — public discussion
 with room:
     room.post("Day 2. A villager was eliminated. Discuss.")
-    room.run(rounds=len(players), order="round_robin")
+    for player in players:
+        player.talk()
 ```
 
 **How channels and rooms relate:**
@@ -200,28 +199,6 @@ with room:
 - The system prompt in a private channel indicates the context: *"You are in
   the Werewolf Night Chat with [Wolf_1, Wolf_2]. This conversation is private."*
 
-### Automated Turn Loops (`room.run`)
-
-For structured turn-taking, `room.run()` automates the loop:
-
-```python
-# Simple round-robin through the participants list
-room.run(rounds=5, order="round_robin")
-
-# Random speaker each turn
-room.run(rounds=5, order="random")
-
-# Custom speaker selection
-def pick_next(room, history):
-    last = history[-1].sender
-    return room.next_after(last)
-
-room.run(rounds=5, order=pick_next)
-
-# Stop condition
-room.run(rounds=20, order="round_robin",
-    stop_when=lambda history: "AGREED" in history[-1].content)
-```
 
 ### Code-Driven Participants (`Actor`)
 
@@ -380,7 +357,8 @@ def werewolf(player_llms: list, moderator_llm, max_rounds=5):
 
             # Day: public discussion
             room.post(f"Day {round+1}. A villager was eliminated. Discuss.")
-            room.run(rounds=len(players), order="round_robin")
+            for player in alive_players:
+                player.talk()
 
             # Vote using structured outputs
             room.post("Vote to eliminate someone.")
@@ -407,7 +385,9 @@ def debate(pro_llm, con_llm):
 
     with room:
         room.post("Topic: Should we accelerate AI development?")
-        room.run(rounds=5, order="round_robin")
+        for _ in range(5):
+            pro.talk()
+            con.talk()
 
     # Judge the debate (outside room — standard prompt API)
     judge = kbench.LLMChat(kbench.llms["gemini-2.5-pro"], name="Judge")
@@ -972,73 +952,6 @@ def test_private_channel_messages_invisible_to_non_members():
     # (exact mechanism depends on interleaving implementation)
 ```
 
----
-
-### Phase 3: Automated Turn Loops (`room.run`)
-
-> [!IMPORTANT]
-> Phase 3 should only begin after Phase 2 is merged and stable.
-
-#### 3.1 `room.run()`
-
-##### [MODIFY] [chats.py](file:///usr/local/google/home/limagoog/git/kaggle-benchmarks/src/kaggle_benchmarks/chats.py)
-```python
-def run(self, rounds=1, order="round_robin", stop_when=None):
-    """Automated turn loop."""
-    import itertools
-    import random
-    llm_participants = [p for p in self.participants if isinstance(p, LLMChat)]
-
-    if order == "round_robin":
-        speakers = itertools.islice(itertools.cycle(llm_participants), rounds)
-    elif order == "random":
-        speakers = [random.choice(llm_participants) for _ in range(rounds)]
-    elif callable(order):
-        speakers = None  # custom logic below
-    else:
-        raise ValueError(f"Unknown order: {order}")
-
-    for i in range(rounds):
-        if speakers is not None:
-            speaker = next(speakers)
-        else:
-            speaker = order(self, self.messages)
-
-        speaker.talk()
-
-        if stop_when and stop_when(self.messages):
-            break
-```
-
-#### 3.2 Phase 3 Tests
-```python
-def test_run_round_robin():
-    a = MockedChat.from_contents(["a1", "a2", "a3"], name="A")
-    b = MockedChat.from_contents(["b1", "b2", "b3"], name="B")
-    room = ChatRoom(participants=[a, b])
-
-    with room:
-        room.run(rounds=4, order="round_robin")
-
-    senders = [m.sender.name for m in room.messages]
-    assert senders == ["A", "B", "A", "B"]
-
-
-def test_run_stop_when():
-    a = MockedChat.from_contents(["keep going", "AGREED"], name="A")
-    b = MockedChat.from_contents(["keep going", "ok"], name="B")
-    room = ChatRoom(participants=[a, b])
-
-    with room:
-        room.run(rounds=10, order="round_robin",
-                 stop_when=lambda msgs: "AGREED" in msgs[-1].content)
-
-    # Should stop after A says "AGREED" (round 3: A, B, A)
-    assert len(room.messages) <= 4
-    assert "AGREED" in room.messages[-1].content
-```
-
----
 
 ## 8. Verification and Quality Checklist
 
