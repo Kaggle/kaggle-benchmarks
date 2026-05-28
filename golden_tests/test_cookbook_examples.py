@@ -34,6 +34,7 @@ Usage:
 
 # %%
 import base64
+import dataclasses as _dc
 import os
 import tempfile
 from contextlib import contextmanager
@@ -46,6 +47,8 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
+from kaggle_benchmarks import actors as _actors
+from kaggle_benchmarks.chats import ChatRoom as _ChatRoom
 from kaggle_benchmarks.content_types import audios, images, videos
 
 # Models to be tested as the primary subject.
@@ -1046,4 +1049,289 @@ def test_tool_with_schema_output(llm):
         3_700_000,
         result.population,
         expectation="Population should be 3,700,000.",
+    )
+
+
+# %%
+# --- Test Case: ChatRoom — add_participant + LLM Cloning ---
+# Verifies that the same LLM object can be added as multiple participants via
+# add_participant(), each receiving a distinct identity (name, system_prompt)
+# and producing correct responses without role collision.
+
+
+CHATROOM_LLM_NAMES = {
+    "google/gemini-2.5-flash",
+    "google/gemini-3-flash-preview",
+    "anthropic/claude-sonnet-4-6@default",
+}
+
+
+@benchmark_test(include=CHATROOM_LLM_NAMES)
+@kbench.task()
+def test_chatroom_add_participant(llm):
+    """Tests that the same LLM added twice yields independent participants."""
+    room = _ChatRoom(
+        system_prompt="A quick Q&A between two experts.",
+        name="Host",
+    )
+
+    alice = room.add_participant(
+        llm,
+        name="Alice",
+        avatar="👩",
+        system_prompt="You are Alice, a Python expert. Always mention Python in your replies.",
+    )
+    bob = room.add_participant(
+        llm,
+        name="Bob",
+        avatar="👨",
+        system_prompt="You are Bob, a Rust expert. Always mention Rust in your replies.",
+    )
+
+    with room:
+        room.post(
+            "Each expert, name your favorite programming language in one sentence."
+        )
+        alice_reply = alice.talk()
+        bob_reply = bob.talk()
+
+    # Clones must be distinct objects
+    kbench.assertions.assert_true(
+        alice is not bob,
+        "add_participant must return distinct objects for the same LLM.",
+    )
+
+    # Identity injection: each participant should follow their own system_prompt
+    kbench.assertions.assert_contains_regex(
+        r"(?i)python",
+        alice_reply,
+        expectation="Alice (Python expert) should mention Python.",
+    )
+    kbench.assertions.assert_contains_regex(
+        r"(?i)rust",
+        bob_reply,
+        expectation="Bob (Rust expert) should mention Rust.",
+    )
+
+    # Transcript must attribute messages to the correct sender
+    kbench.assertions.assert_equal(
+        "Alice",
+        room.messages[1].sender.name,
+        expectation="Second message sender should be Alice.",
+    )
+    kbench.assertions.assert_equal(
+        "Bob",
+        room.messages[2].sender.name,
+        expectation="Third message sender should be Bob.",
+    )
+
+
+# %%
+# --- Test Case: ChatRoom — Structured Output via talk(schema=) ---
+# Verifies that talk(schema=) returns structured output (dataclass) from
+# within a ChatRoom context, combining multi-participant rooms with schema.
+
+
+@_dc.dataclass(frozen=True)
+class _CityFact:
+    """A structured fact about a city."""
+
+    city: str
+    country: str
+    population_millions: float
+
+
+@benchmark_test(include=CHATROOM_LLM_NAMES)
+@kbench.task()
+def test_chatroom_talk_structured_output(llm):
+    """Tests that talk(schema=) works inside a ChatRoom."""
+    room = _ChatRoom(
+        system_prompt="A geography quiz game.",
+        name="QuizMaster",
+    )
+
+    host = _actors.Actor(name="QuizMaster", role="user", avatar="🎯")
+    room.add_participant(host)
+    player = room.add_participant(
+        llm,
+        name="Player",
+        system_prompt="You are a geography expert. Answer questions accurately.",
+    )
+
+    with room:
+        host.talk(
+            "What is the capital of France? Provide city, country, and approximate population in millions."
+        )
+        fact = player.talk(schema=_CityFact)
+
+    kbench.assertions.assert_contains_regex(
+        r"(?i)paris",
+        fact.city,
+        expectation="City should be Paris.",
+    )
+    kbench.assertions.assert_contains_regex(
+        r"(?i)france",
+        fact.country,
+        expectation="Country should be France.",
+    )
+    kbench.assertions.assert_true(
+        0.5 < fact.population_millions < 15.0,
+        f"Population should be reasonable, got {fact.population_millions}M.",
+    )
+
+
+# %%
+# --- Test Case: ChatRoom — Multi-Turn Conversation ---
+# Verifies that room.post() and talk() produce correct multi-turn histories
+# and that room.messages captures the full transcript after exit.
+
+
+@benchmark_test(include=CHATROOM_LLM_NAMES)
+@kbench.task()
+def test_chatroom_multi_turn(llm):
+    """Tests multi-turn conversation: 2 rounds of moderator prompt → LLM reply."""
+    room = _ChatRoom(
+        system_prompt="A two-round trivia game.",
+        name="Trivia",
+    )
+
+    player = room.add_participant(
+        llm,
+        name="Player",
+        system_prompt="You are a trivia contestant. Answer each question in one concise sentence.",
+    )
+
+    with room:
+        # Round 1
+        room.post("Round 1: What is the chemical symbol for gold?")
+        r1 = player.talk()
+
+        # Round 2
+        room.post("Round 2: What is the chemical symbol for silver?")
+        r2 = player.talk()
+
+    # Transcript must contain all messages (2 posts + 2 replies = 4)
+    kbench.assertions.assert_equal(
+        4,
+        len(room.messages),
+        expectation="Room should have 4 messages (2 posts + 2 replies).",
+    )
+
+    # Content verification
+    kbench.assertions.assert_contains_regex(
+        r"(?i)au",
+        r1,
+        expectation="Answer should contain 'Au' for gold.",
+    )
+    kbench.assertions.assert_contains_regex(
+        r"(?i)ag",
+        r2,
+        expectation="Answer should contain 'Ag' for silver.",
+    )
+
+
+# %%
+# --- Test Case: ChatRoom — Private Channel Isolation ---
+# Verifies that private_channel() messages are only visible to members
+# and invisible to non-members. This is the core information-asymmetry
+# primitive used by Werewolf and similar social deduction benchmarks.
+
+
+@benchmark_test(include=CHATROOM_LLM_NAMES)
+@kbench.task()
+def test_chatroom_private_channel(llm):
+    """Tests that private_channel messages are invisible to non-members."""
+    room = _ChatRoom(
+        system_prompt="A team coordination exercise with a secret planning phase.",
+        name="Coordinator",
+    )
+
+    alice = room.add_participant(
+        llm,
+        name="Alice",
+        avatar="👩",
+        system_prompt=(
+            "You are Alice. In the secret channel, always mention the codeword 'BLUEPRINT'. "
+            "In the public channel, never mention the codeword."
+        ),
+    )
+    bob = room.add_participant(
+        llm,
+        name="Bob",
+        avatar="👨",
+        system_prompt="You are Bob. You do not know any secret codewords. Report what you know.",
+    )
+
+    with room:
+        room.post("Public phase: everyone introduces themselves briefly.")
+        alice.talk()
+        bob.talk()
+
+        # Private channel: only Alice is a member
+        secret = room.private_channel([alice], name="Secret Planning")
+        with secret:
+            secret.post("Alice, share your secret plan and mention the codeword.")
+            secret_reply = alice.talk()
+
+        # Back in public: ask Bob to summarize what he knows
+        room.post(
+            "Bob, summarize everything you've heard so far. Mention any codewords if you heard any."
+        )
+        bob_summary = bob.talk()
+
+    # Alice's secret reply should contain the codeword
+    kbench.assertions.assert_contains_regex(
+        r"(?i)blueprint",
+        secret_reply,
+        expectation="Alice's private message should contain the codeword 'BLUEPRINT'.",
+    )
+
+    # Bob's summary should NOT contain the codeword (he never saw it)
+    kbench.assertions.assert_true(
+        "blueprint" not in bob_summary.lower(),
+        f"Bob should NOT know the codeword, but his summary was: '{bob_summary[:200]}'",
+    )
+
+
+# %%
+# --- Test Case: ChatRoom — Actor (Non-LLM Participant) ---
+# Verifies that Actor.talk() posts scripted messages visible to LLM
+# participants, and that LLMs can respond to Actor messages correctly.
+
+
+@benchmark_test(include=CHATROOM_LLM_NAMES)
+@kbench.task()
+def test_chatroom_actor_talk(llm):
+    """Tests that a non-LLM Actor can post messages that LLMs respond to."""
+    game = _actors.Actor(name="GameEngine", role="user", avatar="🎮")
+
+    room = _ChatRoom(
+        system_prompt="A simple number guessing game. The GameEngine posts a number, the Player guesses.",
+        name="GameEngine",
+    )
+
+    room.add_participant(game)
+    player = room.add_participant(
+        llm,
+        name="Player",
+        system_prompt=(
+            "You are a player in a number game. When told a number, "
+            "respond with that number plus one. Reply with ONLY the number."
+        ),
+    )
+
+    with room:
+        game.talk("The number is: 41")
+        reply = player.talk()
+
+    kbench.assertions.assert_contains_regex(
+        r"42",
+        reply,
+        expectation="Player should respond with 42 (41 + 1).",
+    )
+
+    # Actor message is in transcript
+    kbench.assertions.assert_true(
+        room.messages[0].sender.name == "GameEngine",
+        "First message should be from the GameEngine Actor.",
     )

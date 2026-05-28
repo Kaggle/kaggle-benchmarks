@@ -399,6 +399,14 @@ class ChatRoom(Chat):
         lines.append("Your messages appear without a prefix.")
         lines.append("")
         lines.append(
+            "Messages tagged with '(private: Channel Name)' are from a"
+            " private channel visible only to its members. Other participants"
+            " cannot see these messages. When you see a private channel"
+            " prompt, respond to it directly — do not continue the public"
+            " conversation."
+        )
+        lines.append("")
+        lines.append(
             f'Note on "{self.name}": Messages from "{self.name}" are'
             " system/narrator instructions, not from another player."
         )
