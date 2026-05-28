@@ -18,7 +18,7 @@ import contextlib
 import dataclasses
 import functools
 import uuid
-from typing import Any, Iterator, Self
+from typing import Any, Iterator, Literal, Self
 
 from kaggle_benchmarks import actors, events, utils
 from kaggle_benchmarks.messages import Message
@@ -263,23 +263,22 @@ class ChatRoom(Chat):
 
         # Plain Actors: reject same instance (even with a different name override,
         # because mutation would affect both references).
-        if not is_llm:
-            for existing in self.participants:
-                if existing is participant:
-                    raise ValueError(
-                        f"Duplicate participant: '{participant.name}' is the same "
-                        f"Actor instance as an existing participant. Create a "
-                        f"separate Actor for each participant."
-                    )
+        if not is_llm and any(
+            existing is participant for existing in self.participants
+        ):
+            raise ValueError(
+                f"Duplicate participant: '{participant.name}' is the same "
+                f"Actor instance as an existing participant. Create a "
+                f"separate Actor for each participant."
+            )
 
         # All participants: reject duplicate names (would break perspective).
-        for existing in self.participants:
-            if existing.name == effective_name:
-                raise ValueError(
-                    f"Participant name '{effective_name}' is already taken by an "
-                    f"existing participant. Each participant must have a unique "
-                    f"name for correct perspective projection."
-                )
+        if any(existing.name == effective_name for existing in self.participants):
+            raise ValueError(
+                f"Participant name '{effective_name}' is already taken by an "
+                f"existing participant. Each participant must have a unique "
+                f"name for correct perspective projection."
+            )
 
         if isinstance(participant, (OpenAI, GoogleGenAI)):
             # Explicit construction for production LLM classes — creates a
@@ -298,25 +297,16 @@ class ChatRoom(Chat):
                 support_temperature=participant.support_temperature,
             )
             p.stream_responses = participant.stream_responses
-            for k, v in kwargs.items():
-                setattr(p, k, v)
-        elif is_llm:
-            # Fallback for other LLMChat subclasses (e.g. test mocks).
-            import copy
-
-            p = copy.copy(participant)
-            if name is not None:
-                p.name = name
-                p.id = name
-            if avatar is not None:
-                p.avatar = avatar
-            if system_prompt is not None:
-                p.system_prompt = system_prompt
-            for k, v in kwargs.items():
-                setattr(p, k, v)
         else:
-            # Plain Actor — not cloned.
-            p = participant
+            if is_llm:
+                # Fallback for other LLMChat subclasses (e.g. test mocks).
+                import copy
+
+                p = copy.copy(participant)
+            else:
+                # Plain Actor — not cloned.
+                p = participant
+
             if name is not None:
                 p.name = name
                 p.id = name
@@ -324,6 +314,9 @@ class ChatRoom(Chat):
                 p.avatar = avatar
             if system_prompt is not None:
                 p.system_prompt = system_prompt
+
+        for k, v in kwargs.items():
+            setattr(p, k, v)
 
         self.participants.append(p)
         return p
@@ -483,18 +476,12 @@ class ChatRoom(Chat):
                     continue
 
                 if item.sender is viewer:
-                    projected.append(
-                        Message(
-                            sender=self._get_synthetic_actor(
-                                viewer.name, "assistant", viewer.avatar
-                            ),
-                            content=item.content,
-                        )
+                    sender = self._get_synthetic_actor(
+                        viewer.name, "assistant", viewer.avatar
                     )
+                    content = item.content
                 else:
                     name = item.sender.name
-                    avatar = item.sender.avatar
-
                     # If this message is inside a private child room, tag it
                     is_child_room = self._parent_room is not None
                     # Don't redundantly tag the room's own narrator messages
@@ -502,16 +489,17 @@ class ChatRoom(Chat):
                         content = f"[{name} (private: {self.name})]: {item.content}"
                     else:
                         content = f"[{name}]: {item.content}"
+                    sender = self._get_synthetic_actor(name, "user", item.sender.avatar)
 
-                    projected.append(
-                        Message(
-                            sender=self._get_synthetic_actor(name, "user", avatar),
-                            content=content,
-                        )
-                    )
+                projected.append(Message(sender=sender, content=content))
         return projected
 
-    def _get_synthetic_actor(self, name: str, role: str, avatar: str) -> "actors.Actor":
+    def _get_synthetic_actor(
+        self,
+        name: str,
+        role: Literal["system", "user", "assistant", "developer", "tool"],
+        avatar: str,
+    ) -> "actors.Actor":
         """Return a cached synthetic Actor for perspective projection."""
         key = (name, role, avatar)
         if key not in self._synthetic_actors:
@@ -542,14 +530,17 @@ class ChatRoom(Chat):
                 f"Private channel name must differ from parent room name "
                 f"'{self.name}' to avoid narrator identity confusion."
             )
-        child_room = ChatRoom(name=name, _parent_room=self)
+
+        seen = set()
         for p in participants:
-            # Bypass cloning for sub-channels since they reuse parent's clones
-            if p in child_room.participants:
+            if p in seen:
                 raise ValueError(
                     f"Duplicate participant '{p.name}' in private channel."
                 )
-            child_room.participants.append(p)
+            seen.add(p)
+
+        child_room = ChatRoom(name=name, _parent_room=self)
+        child_room.participants = list(participants)
         return child_room
 
     def __repr__(self) -> str:
