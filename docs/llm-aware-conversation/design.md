@@ -60,15 +60,16 @@ It acts as a Python context manager (`with room:`).
 ```python
 import kaggle_benchmarks as kbench
 
-alice = kbench.LLMChat(kbench.llms["gemini-2.5-flash"], name="Alice",
-    system_prompt="You argue FOR renewable energy.")
-bob = kbench.LLMChat(kbench.llms["gemini-2.0-flash"], name="Bob",
-    system_prompt="You argue AGAINST renewable energy.")
+llm = kbench.llm  # A single LLM instance (e.g. ModelProxy)
 
 room = kbench.ChatRoom(
-    participants=[alice, bob],
     system_prompt="A structured debate. Take turns presenting arguments.",
 )
+
+alice = room.add_participant(llm, name="Alice",
+    system_prompt="You argue FOR renewable energy.")
+bob = room.add_participant(llm, name="Bob",
+    system_prompt="You argue AGAINST renewable energy.")
 
 with room:
     room.post("Topic: Should we phase out fossil fuels by 2035?")
@@ -78,10 +79,10 @@ with room:
     bob.talk()
 ```
 
-#### The `participants` Parameter
+#### The `add_participant()` Method
 
-The `participants` list defines the roster of agents in the room. It serves
-three purposes:
+`room.add_participant(actor, *, name=, avatar=, system_prompt=)` registers
+participants with the room. It serves three purposes:
 
 1. **Identity awareness** — the room auto-injects participant names and
    descriptions into each LLM's system prompt, so every agent knows who
@@ -89,6 +90,9 @@ three purposes:
 2. **Message routing (pub/sub)** — when any participant speaks (via `talk()`),
    their message is automatically visible to all other participants. No manual
    forwarding needed.
+3. **Automatic isolation** — for `LLMChat` participants, `add_participant()`
+   automatically creates an independent clone so the same LLM can be reused
+   for multiple participants without identity collisions.
 
 Participants can be `LLMChat` instances (LLM-driven) or `Actor` instances
 (code-driven). See [Code-Driven Participants](#code-driven-participants-actor)
@@ -991,11 +995,16 @@ Following a successful Test-Driven Development (TDD) cycle, the complete Phase 1
 - **Task Return-Type Auto-Inference Restrictions**: The `@kbench.task` decorator uses strict name-matching on string return annotations to infer evaluation result types. 
   - Using typing-wrapped annotations like `Dict[str, str]` fails type-inference and triggers a `TypeError`.
   - Annotating the task signature with the plain builtin `dict` class (or subclassing `benchmarks.results.Result`) resolves type-inference and executes correctly.
-- **Object Reference Identity Collisions**: In multi-agent evaluations, passing the *exact same model object reference* (e.g. reusing `kbench.llm` for all players) collapses the `msg.sender is viewer` check during perspective projection. All messages are remapped as role `assistant` (belonging to the active viewer), generating consecutive `assistant` role blocks which the model provider APIs reject with server-side validation errors (e.g., throwing NoneType choice subscript errors).
-  - *Mitigation*: Multi-agent rooms must instantiate **separate participant references** (one per player, even if sharing the same model configuration) by calling the `ModelProxy` factory independently:
+- **Object Reference Identity Collisions** *(resolved by `add_participant()`)*: In multi-agent evaluations, passing the *exact same model object reference* (e.g. reusing `kbench.llm` for all players) collapses the `msg.sender is viewer` check during perspective projection. All messages are remapped as role `assistant` (belonging to the active viewer), generating consecutive `assistant` role blocks which the model provider APIs reject with server-side validation errors (e.g., throwing NoneType choice subscript errors).
+  - *Original Mitigation*: Multi-agent rooms required instantiating **separate participant references** (one per player, even if sharing the same model configuration) by calling the `ModelProxy` factory independently:
     ```python
     player_x = ModelProxy(model_name, name="PlayerX")
     player_o = ModelProxy(model_name, name="PlayerO")
+    ```
+  - *Current Solution*: The `room.add_participant()` method (see §9.6) now handles this automatically — users pass a single LLM instance and the room creates isolated clones:
+    ```python
+    player_x = room.add_participant(llm, name="PlayerX")
+    player_o = room.add_participant(llm, name="PlayerO")
     ```
 - **Post-Game Assertion Decoupling**: Running evaluation assertions inline during turn loops clutters the final output panel with alert blocks, disrupting reading immersion. Moving assertions to a post-game loop (iterating over `room.messages` *after* the `with room:` context block exits) leaves a clean, continuous story transcript while still fully enforcing evaluation rules.
 
@@ -1065,3 +1074,67 @@ TypeError: can only concatenate str (not "LLMResponse") to str
           self[message].stream(chunk_text)
   ```
 
+
+### 9.6 Automatic Participant Isolation via `add_participant()`
+
+The original `ChatRoom` API required users to pass a pre-constructed `participants` list to the constructor, and critically relied on users manually creating distinct `ModelProxy` instances for each participant — even when all participants shared the same underlying model. This was a significant footgun documented in §9.4.
+
+#### The Problem
+
+```python
+# OLD API — error-prone: user must remember to create separate instances
+model_name = kbench.llm.model
+alice = kbench.kaggle.ModelProxy(model_name, name="Alice", avatar="👩")
+bob = kbench.kaggle.ModelProxy(model_name, name="Bob", avatar="👨")
+charlie = kbench.kaggle.ModelProxy(model_name, name="Charlie", avatar="🧑")
+# ... 4 more for a 7-player Werewolf game
+room = ChatRoom(participants=[alice, bob, charlie, ...], system_prompt="...")
+```
+
+This pattern forced users to understand internal cloning requirements, bloated task function signatures (one `LLMChat` parameter per participant), and exposed `ModelProxy` as a leaky abstraction.
+
+#### The Solution: `room.add_participant()`
+
+```python
+# NEW API — clean: room handles isolation automatically
+room = ChatRoom(system_prompt="...")
+alice = room.add_participant(llm, name="Alice", avatar="👩", system_prompt=werewolf_prompt)
+bob = room.add_participant(llm, name="Bob", avatar="👨", system_prompt=werewolf_prompt)
+```
+
+The `add_participant()` method:
+- Accepts a single LLM instance and creates a fully independent clone
+- Returns the clone so the caller can use it for `talk()` and perspective projection
+- Accepts `name`, `avatar`, and `system_prompt` keyword overrides applied to the clone
+
+#### Three-Tier Cloning Strategy
+
+| Participant type | Cloning method | Rationale |
+|---|---|---|
+| `OpenAI` / `GoogleGenAI` | Explicit constructor `type(p)(p.client, p.model, ...)` | Fully independent instance; shares only the stateless API client |
+| Other `LLMChat` subclasses | `copy.copy()` fallback | For test mocks and custom subclasses |
+| Plain `Actor` | No cloning (pass-through) | Scripted actors have no model state to isolate |
+
+For the production `OpenAI` and `GoogleGenAI` classes (both created by `ModelProxy`), the room calls the class constructor directly with the original's `client` and `model` attributes. This creates a truly independent instance — new serializer, new system_prompt — while reusing the stateless API client (which is safe to share).
+
+#### Safety Guards
+
+1. **Name collision guard**: Rejects participants whose effective name matches an existing participant. Duplicate names would break perspective projection (both would render as `[Alice]:`).
+
+2. **Plain Actor identity check**: Prevents the same `Actor` instance from being registered twice. Since plain Actors are not cloned, adding the same object twice would cause mutations to affect both "participants".
+
+3. **LLM isolation guarantee**: LLMChat participants are always cloned, so the same source LLM can be registered any number of times (with different names).
+
+#### Impact on Task Signatures
+
+Before: task functions required one parameter per participant.
+```python
+def run_werewolf(alice: LLMChat, bob: LLMChat, charlie: LLMChat, ...)  # 7 params!
+```
+
+After: task functions accept a single LLM instance.
+```python
+def run_werewolf(llm: LLMChat)  # 1 param — room clones as needed
+```
+
+This simplifies the benchmarking interface and eliminates the need for callers to understand participant isolation.

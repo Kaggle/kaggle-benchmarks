@@ -94,12 +94,12 @@ def custom_pizza_eval_prompt(criteria: List[str], response_text: str) -> str:
     description="Evaluates an LLM's ability to negotiate a phone order under strict budget, topping, allergy, and delivery constraints.",
 )
 def run_pizza_order(
-    customer_llm: kbench.LLMChat,
+    llm: kbench.LLMChat,
     clerk_llm: kbench.LLMChat,
 ) -> dict:
     """Runs a phone-ordering simulation between a Customer and a Clerk."""
 
-    customer_llm.system_prompt = (
+    customer_prompt = (
         "You are calling 'Luigi's Pizza' to order dinner for a family of 3 (you, your spouse, and your kid).\n"
         "Your objectives and constraints are:\n"
         "1. BUDGET: You have a strict budget of $35.00 CASH on hand. The total cost, including any delivery fees, must not exceed $35.00.\n"
@@ -119,7 +119,7 @@ def run_pizza_order(
         "   - MATH AUDIT: The clerk may make mistakes when totaling your order. Independently calculate the total (Large Pizza $12 + toppings $1.50 each + side + drink + $5 delivery). If the clerk overcharges you, challenge their math, explain what the total should be, and refuse to finalize until it is corrected."
     )
 
-    clerk_llm.system_prompt = (
+    clerk_prompt = (
         "You are the clerk answering the phone at Luigi's Pizza. You are extremely busy, rushed, and slightly impatient.\n"
         "Strictly guide the conversation through the following phases based on the customer's input:\n\n"
         "PHASE 1: Greeting\n"
@@ -154,9 +154,15 @@ def run_pizza_order(
     )
 
     room = ChatRoom(
-        participants=[clerk_llm, customer_llm],
         system_prompt="A phone call between a customer and an impatient pizzeria clerk.",
         name="Phone Call",
+    )
+
+    customer_llm = room.add_participant(
+        llm, name="Customer", avatar="👤", system_prompt=customer_prompt
+    )
+    clerk_llm = room.add_participant(
+        clerk_llm, name="Clerk", avatar="🍕", system_prompt=clerk_prompt
     )
 
     with room:
@@ -242,12 +248,10 @@ def run_pizza_order(
 
 # %%
 
-# Instantiate distinct ModelProxy objects for testing
-model_name = kbench.llm.model
+# Load default model proxy
+model = kbench.llm
 
-customer = kbench.kaggle.ModelProxy(model_name, name="Customer", avatar="👤")
-clerk = kbench.kaggle.ModelProxy(model_name, name="Clerk", avatar="🍕")
-
-run_pizza_order.run(customer_llm=customer, clerk_llm=clerk)
+# Run pizza order game reusing model
+run_pizza_order.run(llm=model, clerk_llm=model)
 
 # %%

@@ -114,8 +114,7 @@ class TicTacToe:
     description="Runs a game of Tic-Tac-Toe inside a ChatRoom and returns the scores.",
 )
 def run_tic_tac_toe(
-    player_x: kbench.LLMChat,
-    player_o: kbench.LLMChat,
+    llm: kbench.LLMChat,
 ) -> dict:
     """Runs Tic-Tac-Toe using ChatRoom.
 
@@ -132,25 +131,30 @@ def run_tic_tac_toe(
     game = TicTacToe()
     game_engine = actors.Actor(name="Game", role="user", avatar="🎮")
 
-    player_x.system_prompt = (
-        "You are player X in Tic-Tac-Toe. "
-        "When it's your turn, respond with your move (row and col, 0-indexed)."
-    )
-    player_o.system_prompt = (
-        "You are player O in Tic-Tac-Toe. "
-        "When it's your turn, respond with your move (row and col, 0-indexed)."
-    )
-
-    players = {"X": player_x, "O": player_o}
-
     room = ChatRoom(
-        participants=[game_engine, player_x, player_o],
         system_prompt=(
             "A game of Tic-Tac-Toe. The Game participant posts the current "
             "board state. Players take turns making moves."
         ),
         name="Game",
     )
+
+    room.add_participant(game_engine)
+
+    player_x = room.add_participant(
+        llm,
+        name="PlayerX",
+        avatar="❌",
+        system_prompt="You are player X in Tic-Tac-Toe. When it's your turn, respond with your move (row and col, 0-indexed).",
+    )
+    player_o = room.add_participant(
+        llm,
+        name="PlayerO",
+        avatar="⭕",
+        system_prompt="You are player O in Tic-Tac-Toe. When it's your turn, respond with your move (row and col, 0-indexed).",
+    )
+
+    players = {"X": player_x, "O": player_o}
 
     with room:
         game_engine.talk(f"Game starts! Initial board:\n{game}")
@@ -171,16 +175,8 @@ def run_tic_tac_toe(
 
 # %%
 
-if __name__ == "__main__":
-    # To run a multi-agent game, we must instantiate DISTINCT ModelProxy instances
-    # (one per participant) to maintain correct identity checks and prevent
-    # perspective role-collapsing during history projection.
-    model_name = kbench.llm.model  # e.g., "google/gemini-2.5-flash"
-
-    player_x = kbench.kaggle.ModelProxy(model_name, name="PlayerX", avatar="❌")
-    player_o = kbench.kaggle.ModelProxy(model_name, name="PlayerO", avatar="⭕")
-
-    run_tic_tac_toe.run(player_x, player_o)
+model = kbench.llm
+run_tic_tac_toe.run(llm=model)
 
 
 # %%

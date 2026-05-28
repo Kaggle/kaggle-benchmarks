@@ -44,7 +44,7 @@ class SyntheticTuringTestEvaluation:
     description="An LLM Judge directly converses with a Subject in a ChatRoom to evaluate if they are a human or an AI.",
 )
 def run_synthetic_turing_test(
-    subject_llm: kbench.LLMChat,
+    llm: kbench.LLMChat,
     judge_llm: kbench.LLMChat,
     topic: str | None = None,
     rounds: int = 5,
@@ -54,7 +54,7 @@ def run_synthetic_turing_test(
     topic_desc = (
         f"on the topic: '{topic}'" if topic else "discussing whatever topics arise"
     )
-    subject_llm.system_prompt = (
+    subject_prompt = (
         f"You are participating in an online chatroom, talking to another user named 'Judge' {topic_desc}.\n"
         "Your goal is to convince the Judge that you are a real human being, not an AI/LLM. "
         "Do not expose that you are an LLM or an AI. Write naturally, casually, and conversationally. "
@@ -70,8 +70,8 @@ def run_synthetic_turing_test(
         if topic
         else "of your choice (or discuss whatever you want to start the conversation)"
     )
-    judge_llm.system_prompt = (
-        f"You are the Synthetic Turing Test Judge. You are in a chatroom with a participant named '{subject_llm.name}'.\n"
+    judge_prompt = (
+        f"You are the Synthetic Turing Test Judge. You are in a chatroom with a participant named 'Alex'.\n"
         f"Your goal is to converse with them {judge_topic_instruction} and determine if they are a real human or an AI/LLM.\n"
         "Use clever tactics: ask tricky logical questions, inquire about personal experiences, check for emotional depth, "
         "or look for typical AI tells (like overly structured replies, robotic helpfulness, or lack of genuine opinions).\n"
@@ -80,9 +80,15 @@ def run_synthetic_turing_test(
     )
 
     room = ChatRoom(
-        participants=[judge_llm, subject_llm],
         system_prompt="An interactive Synthetic Turing Test conversation.",
         name="ChatRoom",
+    )
+
+    subject_llm = room.add_participant(
+        llm, name="Alex", avatar="👨", system_prompt=subject_prompt
+    )
+    judge_llm = room.add_participant(
+        judge_llm, name="Judge", avatar="⚖️", system_prompt=judge_prompt
     )
 
     with room:
@@ -144,21 +150,10 @@ def run_synthetic_turing_test(
 
 # %%
 
-# To run a multi-agent game, we must instantiate DISTINCT ModelProxy instances
-# (one per participant) to maintain correct identity checks and prevent
-# perspective role-collapsing during history projection.
-
-subject = kbench.kaggle.ModelProxy(kbench.llm.model, name="Alex", avatar="👨")
-judge = kbench.kaggle.ModelProxy(kbench.judge_llm.model, name="Judge", avatar="⚖️")
-
-# Enable live token-by-token streaming in the console
-subject.stream_responses = True
-judge.stream_responses = True
-
+# Run turing test reusing default and judge models
 run_synthetic_turing_test.run(
-    subject_llm=subject,
-    judge_llm=judge,
-    # topic="favorite childhood memory",
+    llm=kbench.llm,
+    judge_llm=kbench.judge_llm,
 )
 
 # %%

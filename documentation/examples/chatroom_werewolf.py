@@ -48,13 +48,7 @@ class WerewolfVote:
     description="Evaluates LLMs engaging in a social deduction game with secret private channels.",
 )
 def run_werewolf(
-    alice: kbench.LLMChat,  # Werewolf
-    bob: kbench.LLMChat,  # Werewolf
-    charlie: kbench.LLMChat,  # Villager
-    david: kbench.LLMChat,  # Villager
-    eve: kbench.LLMChat,  # Villager
-    frank: kbench.LLMChat,  # Villager
-    grace: kbench.LLMChat,  # Villager
+    llm: kbench.LLMChat,
 ) -> dict:
     """Runs a 7-player game of Werewolf using ChatRoom private channels."""
 
@@ -71,32 +65,51 @@ def run_werewolf(
         "- Avoid Voting Blocs: Never vote for the same target as your teammate on Day 1 unless there is already a strong, public village-wide consensus. If your teammate votes for X, you should ideally vote for Y or X's accuser to avoid looking like a coordinated voting bloc."
     )
 
-    for wolf in [alice, bob]:
-        wolf.system_prompt = werewolf_prompt
-
-    for villager in [charlie, david, eve, frank, grace]:
-        villager.system_prompt = (
-            "ROLE: Villager.\n"
-            "During the Day, analyze previous messages to spot contradictions or "
-            "suspicious defensive behavior, and vote."
-        )
+    villager_prompt = (
+        "ROLE: Villager.\n"
+        "During the Day, analyze previous messages to spot contradictions or "
+        "suspicious defensive behavior, and vote."
+    )
 
     # Initialize general room game-engine arbiter
     moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
 
-    players = [alice, bob, charlie, david, eve, frank, grace]
-    wolves = [alice, bob]
-    villagers = [charlie, david, eve, frank, grace]
-    survivors = list(players)
-
     room = ChatRoom(
-        participants=[moderator] + players,
         system_prompt=(
             "A game of Werewolf. The Moderator coordinates rounds. "
             "Night and Day phases loop until one team wins."
         ),
         name="Moderator",
     )
+
+    room.add_participant(moderator)
+
+    alice = room.add_participant(
+        llm, name="Alice", avatar="👩", system_prompt=werewolf_prompt
+    )
+    bob = room.add_participant(
+        llm, name="Bob", avatar="👨", system_prompt=werewolf_prompt
+    )
+    charlie = room.add_participant(
+        llm, name="Charlie", avatar="🧑", system_prompt=villager_prompt
+    )
+    david = room.add_participant(
+        llm, name="David", avatar="👦", system_prompt=villager_prompt
+    )
+    eve = room.add_participant(
+        llm, name="Eve", avatar="👧", system_prompt=villager_prompt
+    )
+    frank = room.add_participant(
+        llm, name="Frank", avatar="👴", system_prompt=villager_prompt
+    )
+    grace = room.add_participant(
+        llm, name="Grace", avatar="👵", system_prompt=villager_prompt
+    )
+
+    players = [alice, bob, charlie, david, eve, frank, grace]
+    wolves = [alice, bob]
+    villagers = [charlie, david, eve, frank, grace]
+    survivors = list(players)
 
     def count_votes(vote_dict: dict) -> str | None:
         if not vote_dict:
@@ -228,22 +241,11 @@ def run_werewolf(
 
 # kbench.config.enable_interactive_mode()
 
-# Load distinct ModelProxy players (one per participant)
-model_name = kbench.llm.model
+# Load default model proxy
+model = kbench.llm
 
-alice = kbench.kaggle.ModelProxy(model_name, name="Alice", avatar="👩")
-bob = kbench.kaggle.ModelProxy(model_name, name="Bob", avatar="👨")
-charlie = kbench.kaggle.ModelProxy(model_name, name="Charlie", avatar="🧑")
-david = kbench.kaggle.ModelProxy(model_name, name="David", avatar="👦")
-eve = kbench.kaggle.ModelProxy(model_name, name="Eve", avatar="👧")
-frank = kbench.kaggle.ModelProxy(model_name, name="Frank", avatar="👴")
-grace = kbench.kaggle.ModelProxy(model_name, name="Grace", avatar="👵")
-
-# Enable live token-by-token streaming in the console
-for player in [alice, bob, charlie, david, eve, frank, grace]:
-    player.stream_responses = True
-
-run = run_werewolf.run(alice, bob, charlie, david, eve, frank, grace)
+# Run werewolf game reusing model
+run = run_werewolf.run(llm=model)
 run
 
 # %%

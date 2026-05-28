@@ -191,15 +191,14 @@ class ChatRoom(Chat):
     IMPORTANT: Perspective projection uses object identity (Python ``is``)
     to determine message ownership. All participants must be distinct
     object instances — even if backed by the same LLM model. Use separate
-    ``ModelProxy()`` calls to create per-participant instances.
-
-    Tip: ``system_prompt`` can be passed to ``ModelProxy()`` directly::
-
-        alice = ModelProxy(model, name="Alice", system_prompt="I am Alice.")
+    ``room.add_participant()`` calls to create per-participant instances.
 
     Usage::
 
-        room = ChatRoom(participants=[alice, bob], system_prompt="Debate AI.")
+        room = ChatRoom(system_prompt="Debate AI.")
+        alice = room.add_participant(llm, name="Alice", system_prompt="I am Alice.")
+        bob = room.add_participant(llm, name="Bob", system_prompt="I am Bob.")
+
         with room:
             room.post("Topic: AI safety")
             alice.talk()
@@ -212,13 +211,13 @@ class ChatRoom(Chat):
 
     def __init__(
         self,
-        participants: list["actors.Actor"],
         system_prompt: str = "",
         name: str = "Room",
         _parent_room: "ChatRoom | None" = None,
     ):
         super().__init__(name=name)
-        self.participants = list(participants)
+        self.participants = []
+
         self.system_prompt = system_prompt
         self._parent_room = _parent_room
         self._registered_with_parent = False
@@ -231,6 +230,103 @@ class ChatRoom(Chat):
         # so the LLM sees consistent "[Moderator]: ..." messages matching
         # the roster's "Note on ..." instruction.
         self._narrator = actors.Actor(name=name, role="user", avatar="📢")
+
+    def add_participant(
+        self,
+        participant: "actors.Actor",
+        *,
+        name: str | None = None,
+        avatar: str | None = None,
+        system_prompt: str | None = None,
+        **kwargs,
+    ) -> "actors.Actor":
+        """Registers a participant with the ChatRoom.
+
+        If the participant is an LLMChat (e.g. ModelProxy or kbench.llm), it is
+        automatically duplicated to ensure player/run isolation — the same LLM
+        can be added multiple times with different names and prompts.
+
+        Plain Actors are not cloned; adding the same Actor instance twice raises
+        ``ValueError``.
+
+        Optional keyword arguments ``name``, ``avatar``, and ``system_prompt``
+        override the corresponding attributes on the (cloned) participant.
+
+        Raises:
+            ValueError: If a participant with the same name already exists, or
+                if the same plain Actor instance is registered twice.
+        """
+        from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
+
+        is_llm = isinstance(participant, LLMChat)
+        effective_name = name if name is not None else participant.name
+
+        # Plain Actors: reject same instance (even with a different name override,
+        # because mutation would affect both references).
+        if not is_llm:
+            for existing in self.participants:
+                if existing is participant:
+                    raise ValueError(
+                        f"Duplicate participant: '{participant.name}' is the same "
+                        f"Actor instance as an existing participant. Create a "
+                        f"separate Actor for each participant."
+                    )
+
+        # All participants: reject duplicate names (would break perspective).
+        for existing in self.participants:
+            if existing.name == effective_name:
+                raise ValueError(
+                    f"Participant name '{effective_name}' is already taken by an "
+                    f"existing participant. Each participant must have a unique "
+                    f"name for correct perspective projection."
+                )
+
+        if isinstance(participant, (OpenAI, GoogleGenAI)):
+            # Explicit construction for production LLM classes — creates a
+            # fully independent instance sharing only the (stateless) API client.
+            p = type(participant)(
+                participant.client,
+                participant.model,
+                name=effective_name,
+                avatar=avatar if avatar is not None else participant.avatar,
+                system_prompt=(
+                    system_prompt
+                    if system_prompt is not None
+                    else participant.system_prompt
+                ),
+                support_structured_outputs=participant.support_structured_outputs,
+                support_temperature=participant.support_temperature,
+            )
+            p.stream_responses = participant.stream_responses
+            for k, v in kwargs.items():
+                setattr(p, k, v)
+        elif is_llm:
+            # Fallback for other LLMChat subclasses (e.g. test mocks).
+            import copy
+
+            p = copy.copy(participant)
+            if name is not None:
+                p.name = name
+                p.id = name
+            if avatar is not None:
+                p.avatar = avatar
+            if system_prompt is not None:
+                p.system_prompt = system_prompt
+            for k, v in kwargs.items():
+                setattr(p, k, v)
+        else:
+            # Plain Actor — not cloned.
+            p = participant
+            if name is not None:
+                p.name = name
+                p.id = name
+            if avatar is not None:
+                p.avatar = avatar
+            if system_prompt is not None:
+                p.system_prompt = system_prompt
+
+        self.participants.append(p)
+        return p
 
     @contextlib.contextmanager
     def enter(self):
@@ -423,7 +519,15 @@ class ChatRoom(Chat):
                 f"Private channel name must differ from parent room name "
                 f"'{self.name}' to avoid narrator identity confusion."
             )
-        return ChatRoom(participants=participants, name=name, _parent_room=self)
+        child_room = ChatRoom(name=name, _parent_room=self)
+        for p in participants:
+            # Bypass cloning for sub-channels since they reuse parent's clones
+            if p in child_room.participants:
+                raise ValueError(
+                    f"Duplicate participant '{p.name}' in private channel."
+                )
+            child_room.participants.append(p)
+        return child_room
 
     def __repr__(self) -> str:
         names = [p.name for p in self.participants]

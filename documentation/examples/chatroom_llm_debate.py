@@ -31,13 +31,12 @@ from kaggle_benchmarks.chats import ChatRoom
 
 @kbench.task(
     name="structured debate",
-    description="Evaluates two LLMs engaging in a structured multi-turn debate on a given resolution.",
+    description="Evaluates two LLMs engaging in a structured multi-turn debate on a given topic.",
 )
 def run_debate(
-    resolution: str,
-    pro_llm: kbench.LLMChat,
-    con_llm: kbench.LLMChat,
+    llm: kbench.LLMChat,
     judge_llm: kbench.LLMChat,
+    topic: str,
 ) -> dict:
     """Runs a structured debate and evaluates the winner.
 
@@ -46,22 +45,20 @@ def run_debate(
     - Automatic perspective-aware history (Pro sees Con's arguments as user inputs, etc.).
     - A shared ground-truth transcript that is fed directly to the Judge.
     """
-    # Configure debater identity instructions
-    pro_llm.system_prompt = (
-        f"You are the Pro debater. Your goal is to argue IN FAVOR of the resolution: '{resolution}'.\n"
+    pro_prompt = (
+        f"You are the Pro debater. Your goal is to argue IN FAVOR of the topic: '{topic}'.\n"
         "Keep your responses concise, focused, and persuasive. "
         "Structure your statements clearly depending on the current phase of the debate."
     )
-    con_llm.system_prompt = (
-        f"You are the Con debater. Your goal is to argue AGAINST the resolution: '{resolution}'.\n"
+    con_prompt = (
+        f"You are the Con debater. Your goal is to argue AGAINST the topic: '{topic}'.\n"
         "Keep your responses concise, focused, and persuasive. "
         "Directly address and rebut the points raised by the Pro debater."
     )
 
     room = ChatRoom(
-        participants=[pro_llm, con_llm],
         system_prompt=(
-            f"A structured formal debate on the resolution: '{resolution}'.\n"
+            f"A structured formal debate on the topic: '{topic}'.\n"
             "The debate consists of three structured phases:\n"
             "1. Opening Statements: Present core arguments.\n"
             "2. Rebuttals: Directly counter your opponent's arguments.\n"
@@ -70,11 +67,19 @@ def run_debate(
         name="Moderator",
     )
 
+    pro_llm = room.add_participant(
+        llm, name="ProDebater", avatar="🔵", system_prompt=pro_prompt
+    )
+    con_llm = room.add_participant(
+        llm, name="ConDebater", avatar="🔴", system_prompt=con_prompt
+    )
+    judge_llm = room.add_participant(judge_llm, name="Judge", avatar="⚖️")
+
     with room:
         # Phase 1: Opening Statements
         room.post("--- Phase 1: Opening Statements ---")
         room.post(
-            f"Pro debater, present your opening statement in favor of: '{resolution}'."
+            f"Pro debater, present your opening statement in favor of: '{topic}'."
         )
         pro_opening = pro_llm.talk()
 
@@ -121,7 +126,7 @@ def run_debate(
     transcript = "\n".join(str(m) for m in room.messages)
 
     judge_prompt = (
-        f"You are the independent Debate Judge. Below is the complete transcript of a debate on: '{resolution}'\n\n"
+        f"You are the independent Debate Judge. Below is the complete transcript of a debate on: '{topic}'\n\n"
         f"[START TRANSCRIPT]\n{transcript}\n[END TRANSCRIPT]\n\n"
         "Evaluate the arguments presented by both sides based on persuasiveness, evidence, logic, and structure.\n"
         "Who won this debate, Pro or Con? Provide your decision and detailed reasoning.\n"
@@ -149,21 +154,11 @@ def run_debate(
 
 # %%
 
-# To run a multi-agent game, we must instantiate DISTINCT ModelProxy instances
-# (one per participant) to maintain correct identity checks and prevent
-# perspective role-collapsing during history projection.
-model_name = kbench.llm.model  # e.g., "google/gemini-2.5-flash"
-judge_model_name = kbench.judge_llm.model  # e.g., "google/gemini-3-flash-preview"
-
-pro_llm = kbench.kaggle.ModelProxy(model_name, name="ProDebater", avatar="🔵")
-con_llm = kbench.kaggle.ModelProxy(judge_model_name, name="ConDebater", avatar="🔴")
-judge_llm = kbench.kaggle.ModelProxy(model_name, name="Judge", avatar="⚖️")
-
+# Run debate reusing default and judge models
 run_debate.run(
-    resolution="Artificial Intelligence will do more harm than good to humanity.",
-    pro_llm=pro_llm,
-    con_llm=con_llm,
-    judge_llm=judge_llm,
+    llm=kbench.llm,
+    judge_llm=kbench.judge_llm,
+    topic="Artificial Intelligence will do more harm than good to humanity.",
 )
 
 # %%
