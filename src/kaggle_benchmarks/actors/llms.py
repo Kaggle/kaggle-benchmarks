@@ -167,23 +167,32 @@ class LLMChat(actors.Actor):
         self.support_temperature = support_temperature
         self.stream_responses = config.interactive_mode
 
-    def talk(self, schema: type[T] = str, tools=None, **kwargs) -> T:
-        """Speak in the active ChatRoom.
+    def reply(self, schema: type[T] = str, tools=None, **kwargs) -> T:
+        """Generate an LLM response in the active ChatRoom.
 
-        Builds a perspective-projected history for this participant and calls
-        the underlying LLM. The response is appended to the room's ground-truth
-        log with this actor as the sender.
+        This is a **ChatRoom-only** method for LLM participants. It builds a
+        perspective-projected history for this participant, invokes the
+        underlying LLM, and appends the generated response to the room's
+        ground-truth log.
+
+        Unlike ``Actor.say(message)``, which posts scripted content, this
+        method autonomously generates a response based on the conversation
+        the participant can see.
 
         Args:
             schema: Output schema type for structured output.
             tools: Reserved for future tool support inside rooms.
             **kwargs: Additional keyword arguments forwarded to respond().
 
-        Raises RuntimeError if called outside of an active ChatRoom context.
+        Returns:
+            The LLM-generated response content (parsed to ``schema`` type).
+
+        Raises:
+            RuntimeError: If called outside of an active ChatRoom context.
         """
         if tools:
             raise NotImplementedError(
-                "Tool support inside ChatRoom.talk() is planned for a future "
+                "Tool support inside ChatRoom.reply() is planned for a future "
                 "release. As a workaround, use an orphan chats.new() "
                 "side-chat for tool calls."
             )
@@ -191,7 +200,7 @@ class LLMChat(actors.Actor):
         room = chats.get_current_chat()
         if not isinstance(room, chats.ChatRoom):
             raise RuntimeError(
-                "LLMChat.talk() must be called within an active ChatRoom context."
+                "LLMChat.reply() must be called within an active ChatRoom context."
             )
 
         system = room._build_system_prompt(self)
@@ -215,10 +224,10 @@ class LLMChat(actors.Actor):
         room_msg = messages.Message(sender=self, content=response.content)
         # Shallow copy is safe here because _meta values are currently all
         # immutable (ints, strings, types). The only mutable concern would be
-        # tool_calls (a list), but talk() blocks tools via NotImplementedError.
+        # tool_calls (a list), but reply() blocks tools via NotImplementedError.
         # Deep copy is avoided because _meta["chat"] holds a Chat reference —
         # cloning it would create a disconnected copy of the entire conversation.
-        # If tool support is added to talk(), switch to:
+        # If tool support is added to reply(), switch to:
         #   meta = response._meta.copy(); meta.pop("chat", None)
         #   room_msg._meta = copy.deepcopy(meta); room_msg._meta["chat"] = room
         room_msg._meta = response._meta.copy()
@@ -265,7 +274,7 @@ class LLMChat(actors.Actor):
         if isinstance(current, chats.ChatRoom):
             raise RuntimeError(
                 f"LLMChat.prompt() cannot be called inside an active ChatRoom "
-                f"('{current.name}'). Use talk() for room interactions, or "
+                f"('{current.name}'). Use reply() for room interactions, or "
                 f"exit the room context first."
             )
         if image is not None:

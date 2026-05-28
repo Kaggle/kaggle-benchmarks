@@ -81,28 +81,28 @@ def run_debate(
         room.post(
             f"Pro debater, present your opening statement in favor of: '{topic}'."
         )
-        pro_opening = pro_llm.talk()
+        pro_opening = pro_llm.reply()
 
         room.post("Con debater, present your opening statement against.")
-        con_opening = con_llm.talk()
+        con_opening = con_llm.reply()
 
         # Phase 2: Rebuttals
         room.post("--- Phase 2: Rebuttals ---")
         room.post("Pro debater, present your rebuttal to Con's opening statement.")
-        pro_rebuttal = pro_llm.talk()
+        pro_rebuttal = pro_llm.reply()
 
         room.post(
             "Con debater, present your rebuttal to Pro's rebuttal and opening statement."
         )
-        con_rebuttal = con_llm.talk()
+        con_rebuttal = con_llm.reply()
 
         # Phase 3: Closing Arguments
         room.post("--- Phase 3: Closing Arguments ---")
         room.post("Pro debater, present your closing argument.")
-        pro_closing = pro_llm.talk()
+        pro_closing = pro_llm.reply()
 
         room.post("Con debater, present your closing argument.")
-        con_closing = con_llm.talk()
+        con_closing = con_llm.reply()
 
         room.post(
             "The debate has concluded. The judge will now evaluate the transcript."

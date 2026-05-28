@@ -73,10 +73,10 @@ bob = room.add_participant(llm, name="Bob",
 
 with room:
     room.post("Topic: Should we phase out fossil fuels by 2035?")
-    alice.talk()
-    bob.talk()
-    alice.talk()
-    bob.talk()
+    alice.reply()
+    bob.reply()
+    alice.reply()
+    bob.reply()
 ```
 
 #### The `add_participant()` Method
@@ -105,7 +105,7 @@ All interaction inside a `ChatRoom` uses exactly 2 operations:
 | Primitive | Who decides the content? | LLM Call? |
 |-----------|--------------------------|-----------|
 | `room.post(msg)` | Anonymous system broadcast | No |
-| `participant.talk()` | The participant speaks | Depends on actor type |
+| `llm.reply()` / `actor.say(msg)` | The participant speaks | Depends on actor type |
 
 #### `room.post(msg)` — Anonymous System Broadcast
 
@@ -118,30 +118,30 @@ room.post("The debate topic is AI safety.")           # all see this
 room.post("Your hand: A♠ K♥", visible_to=[player_1])  # only player_1 sees
 ```
 
-#### `participant.talk()` — A Participant Speaks
+#### `llm.reply()` / `actor.say(msg)` — A Participant Speaks
 
 `talk()` is the universal method for a participant to speak in the room. The
 message is attributed to the speaker. The content source depends on the actor
 type:
 
-- **`LLMChat.talk()`** — the LLM reads the room history from its perspective
+- **`LLMChat.reply()`** — the LLM reads the room history from its perspective
   and **generates** a response.
-- **`Actor.talk(msg)`** — code provides the content directly (game engine,
+- **`Actor.say(msg)`** — code provides the content directly (game engine,
   rule system, moderator logic).
 
 ```python
 # LLM-driven: LLM generates the content
-alice.talk()                                # free-form response
-move = player.talk(schema=TicTacToeMove)    # structured output
+alice.reply()                                # free-form response
+move = player.reply(schema=TicTacToeMove)    # structured output
 
 # Code-driven: user code provides the content
-game_engine.talk(f"Board:\n{game.get_board()}")  # game state
-moderator.talk("Round 1 complete. Moving to voting.")  # narration
+game_engine.say(f"Board:\n{game.get_board()}")  # game state
+moderator.say("Round 1 complete. Moving to voting.")  # narration
 ```
 
-> **`room.post()` vs `actor.talk()`:** `room.post()` is anonymous (no sender).
-> `actor.talk(msg)` is attributed to the actor. Use `room.post()` for system
-> directives; use `actor.talk()` when a named participant is speaking.
+> **`room.post()` vs `actor.say(msg)`:** `room.post()` is anonymous (no sender).
+> `actor.say(msg)` is attributed to the actor. Use `room.post()` for system
+> directives; use `actor.say(msg)` when a named participant is speaking.
 
 > **Forward compatibility:** `talk()` should accept the same parameters as the
 > existing `prompt()` API (e.g., `schema`, `tools`, `reasoning`). The initial
@@ -184,13 +184,13 @@ wolf_channel = room.private_channel(werewolves, name="Werewolf Night Chat")
 with wolf_channel:
     wolf_channel.post("Who should we eliminate tonight?")
     for wolf in werewolves:
-        wolf.talk()
+        wolf.reply()
 
 # Back in the main room — public discussion
 with room:
     room.post("Day 2. A villager was eliminated. Discuss.")
     for player in players:
-        player.talk()
+        player.reply()
 ```
 
 **How channels and rooms relate:**
@@ -223,8 +223,8 @@ with room:
     while not game.is_game_over():
         current = players[game.get_current_player()]
         # Game talks as itself — attributed to "Game", not anonymous
-        game_engine.talk(f"Board:\n{game.get_board()}\nYour turn.")
-        move = current.talk(schema=TicTacToeMove)
+        game_engine.say(f"Board:\n{game.get_board()}\nYour turn.")
+        move = current.reply(schema=TicTacToeMove)
         game.make_move(move)
 ```
 
@@ -271,12 +271,12 @@ def play_dungeon_adventure(dm_llm, player1_llm, player2_llm, n_rounds=3):
 
     with room:
         room.post("The adventure begins in a dimly lit tavern.")
-        dm.talk()
+        dm.reply()
 
         for round in range(n_rounds):
-            aragorn.talk()
-            legolas.talk()
-            dm.talk()
+            aragorn.reply()
+            legolas.reply()
+            dm.reply()
 ```
 
 ### Tic-Tac-Toe
@@ -314,8 +314,8 @@ def tic_tac_toe(player_x_llm, player_o_llm):
     with room:
         while not game.is_game_over():
             current = players[game.get_current_player()]
-            game_engine.talk(f"Board:\n{game.get_state_representation()}")
-            move = current.talk(schema=TicTacToeMove)
+            game_engine.say(f"Board:\n{game.get_state_representation()}")
+            move = current.reply(schema=TicTacToeMove)
             game.make_move(move)
 
     return game.get_scores()
@@ -357,18 +357,18 @@ def werewolf(player_llms: list, moderator_llm, max_rounds=5):
             with wolf_channel:
                 wolf_channel.post("Who should we eliminate tonight?")
                 for wolf in werewolves:
-                    wolf.talk()
+                    wolf.reply()
 
             # Day: public discussion
             room.post(f"Day {round+1}. A villager was eliminated. Discuss.")
             for player in alive_players:
-                player.talk()
+                player.reply()
 
             # Vote using structured outputs
             room.post("Vote to eliminate someone.")
             votes = {}
             for player in alive_players:
-                vote_result = player.talk(schema=WerewolfVote)
+                vote_result = player.reply(schema=WerewolfVote)
                 votes[player.name] = vote_result.voted_player
 ```
 
@@ -390,8 +390,8 @@ def debate(pro_llm, con_llm):
     with room:
         room.post("Topic: Should we accelerate AI development?")
         for _ in range(5):
-            pro.talk()
-            con.talk()
+            pro.reply()
+            con.reply()
 
     # Judge the debate (outside room — standard prompt API)
     judge = kbench.LLMChat(kbench.llms["gemini-2.5-pro"], name="Judge")
@@ -637,7 +637,7 @@ class ChatRoom(Chat):
 
 ---
 
-#### 1.3 `LLMChat.talk()` and `Actor.talk()`
+#### 1.3 `LLMChat.reply()` and `Actor.say()`
 
 ##### [MODIFY] [llms.py](file:///usr/local/google/home/limagoog/git/kaggle-benchmarks/src/kaggle_benchmarks/actors/llms.py)
 Add `system_prompt` to `LLMChat.__init__` and implement `talk()`:
@@ -666,7 +666,7 @@ class LLMChat(actors.Actor):
         room = chats.get_current_chat()
         if not isinstance(room, chats.ChatRoom):
             raise RuntimeError(
-                "LLMChat.talk() must be called within an active ChatRoom context."
+                "LLMChat.reply() must be called within an active ChatRoom context."
             )
 
         system = room._build_system_prompt(self)
@@ -702,7 +702,7 @@ class Actor:
         chat = chats.get_current_chat()
         if not isinstance(chat, chats.ChatRoom):
             raise RuntimeError(
-                "Actor.talk() must be called within an active ChatRoom context."
+                "Actor.say() must be called within an active ChatRoom context."
             )
 
         msg = Message(sender=self, content=message)
@@ -806,13 +806,13 @@ def test_perspective_does_not_mutate_originals():
 def test_talk_outside_room_raises():
     alice = MockedChat.from_contents(["x"], name="Alice")
     with pytest.raises(RuntimeError, match="ChatRoom context"):
-        alice.talk()
+        alice.reply()
 
 
 def test_actor_talk_outside_room_raises():
     game = actors.Actor(name="Game")
     with pytest.raises(RuntimeError, match="ChatRoom context"):
-        game.talk("hello")
+        game.say("hello")
 
 
 def test_llmchat_talk_appends_to_room():
@@ -822,7 +822,7 @@ def test_llmchat_talk_appends_to_room():
 
     with room:
         room.post("Topic: AI safety")
-        result = alice.talk()
+        result = alice.reply()
 
     assert result == "I agree!"
     # Ground truth should have: system post + alice's response
@@ -837,7 +837,7 @@ def test_actor_talk_appends_to_room():
     room = ChatRoom(participants=[game, alice])
 
     with room:
-        game.talk("Board: X|O|_")
+        game.say("Board: X|O|_")
 
     assert len(room.messages) == 1
     assert room.messages[0].sender is game
@@ -859,10 +859,10 @@ def test_mini_debate_two_rounds():
 
     with room:
         room.post("Topic: AI")
-        pro.talk()
-        con.talk()
-        pro.talk()
-        con.talk()
+        pro.reply()
+        con.reply()
+        pro.reply()
+        con.reply()
 
     # Ground truth: 1 system post + 4 talk messages
     assert len(room.messages) == 5
@@ -950,7 +950,7 @@ def test_private_channel_messages_invisible_to_non_members():
 
     with channel:
         channel.post("Who to eliminate?")
-        alice.talk()
+        alice.reply()
 
     # Bob should not see channel messages in main room perspective
     # (exact mechanism depends on interleaving implementation)
@@ -1028,14 +1028,14 @@ To verify feasibility and ergonomic improvements, two full multi-agent benchmark
 #### A. Dungeon Adventure ([Original](file:///usr/local/google/home/limagoog/git/kaggle-benchmarks/docs/llm-aware-conversation/dungeon_adventure.py) vs. [ChatRoom](file:///usr/local/google/home/limagoog/git/kaggle-benchmarks/docs/llm-aware-conversation/dungeon_adventure_chatroom.py))
 
 - **Boilerplate Reduction**: Reduced from ~160 lines of complex, nested manual context switching and manual history stitching to under **60 lines** of concise game orchestration.
-- **Information Flow**: Instead of manually formatting previous story history and player moves into raw strings to send with every single prompt, agents simply invoke `player.talk()`. History projection handles attribution and roles seamlessly.
+- **Information Flow**: Instead of manually formatting previous story history and player moves into raw strings to send with every single prompt, agents simply invoke `player.reply()`. History projection handles attribution and roles seamlessly.
 - **Cognitive Shift**: The code reads like a description of a real social game, focusing purely on actions and narrative progression rather than low-level framework routing.
 
 #### B. Tic-Tac-Toe ([Original](file:///usr/local/google/home/limagoog/git/kaggle-benchmarks/docs/llm-aware-conversation/game_tic_tac_toe.py) vs. [ChatRoom](file:///usr/local/google/home/limagoog/git/kaggle-benchmarks/docs/llm-aware-conversation/game_tic_tac_toe_chatroom.py))
 
 - **Memory Retention**: In the original implementation, a brand new `Chat` was spun up every single turn, leaving LLMs with zero memory of their own past choices or peer play. With `ChatRoom`, the entire move sequence is naturally preserved as an attributed user-versus-assistant chain.
-- **Structured Tool Interaction**: Integrates perfectly with structured outputs. Calling `player.talk(schema=TicTacToeMove)` returns clean Pydantic move instances directly within the perspective-aware conversation.
-- **State Integration**: The non-LLM game engine plays as a standard code-driven `Actor`, broadcasting board states cleanly using `game_engine.talk(board)` so LLMs are fully aligned on physical game state.
+- **Structured Tool Interaction**: Integrates perfectly with structured outputs. Calling `player.reply(schema=TicTacToeMove)` returns clean Pydantic move instances directly within the perspective-aware conversation.
+- **State Integration**: The non-LLM game engine plays as a standard code-driven `Actor`, broadcasting board states cleanly using `game_engine.say(board)` so LLMs are fully aligned on physical game state.
 
 ---
 

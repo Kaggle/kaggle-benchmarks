@@ -157,18 +157,18 @@ def run_tic_tac_toe(
     players = {"X": player_x, "O": player_o}
 
     with room:
-        game_engine.talk(f"Game starts! Initial board:\n{game}")
+        game_engine.say(f"Game starts! Initial board:\n{game}")
 
         while not game.is_game_over():
             current = players[game.current_player]
-            move = current.talk(schema=TicTacToeMove)
+            move = current.reply(schema=TicTacToeMove)
 
             if not game.make_move(move):
                 # Invalid move — opponent wins by forfeit.
                 opponent_id = "O" if game.current_player == "X" else "X"
                 return {opponent_id: 1.0, game.current_player: 0.0}
 
-            game_engine.talk(f"Board after move:\n{game}")
+            game_engine.say(f"Board after move:\n{game}")
 
     return game.get_scores()
 

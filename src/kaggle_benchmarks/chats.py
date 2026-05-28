@@ -179,11 +179,11 @@ class ChatRoom(Chat):
     of the conversation history where their own messages appear as "assistant"
     and peers' messages appear as "user" with name prefixes.
 
-    Two primitives drive all interaction:
+    Three primitives drive all interaction:
 
     - ``room.post(msg)`` — narrator/system announcements (game rules, topics).
-    - ``participant.talk()`` — LLM generates a response; ``Actor.talk(msg)``
-      posts code-driven content. Both are attributed to the participant.
+    - ``actor.say(msg)`` — post scripted content from a code-driven Actor.
+    - ``llm.reply()`` — LLM generates a response based on its perspective.
 
     After exiting the room context, access ``room.messages`` for the full
     ground-truth transcript to perform evaluation or assertions.
@@ -201,8 +201,8 @@ class ChatRoom(Chat):
 
         with room:
             room.post("Topic: AI safety")
-            alice.talk()
-            bob.talk()
+            alice.reply()
+            bob.reply()
 
         # Post-room evaluation on the transcript
         for msg in room.messages:

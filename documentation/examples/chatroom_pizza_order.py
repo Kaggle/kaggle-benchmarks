@@ -171,9 +171,9 @@ def run_pizza_order(
         # 28 turns (14 rounds) to allow the conversation with multiple corrections to complete fully
         for turn in range(1, 29):
             if turn % 2 == 1:
-                clerk_llm.talk()
+                clerk_llm.reply()
             else:
-                customer_llm.talk()
+                customer_llm.reply()
 
         room.post("[The call ends. Click.]")
 

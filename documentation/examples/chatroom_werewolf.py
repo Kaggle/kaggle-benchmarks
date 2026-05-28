@@ -121,7 +121,7 @@ def run_werewolf(
         return top[0][0]
 
     with room:
-        moderator.talk("The village of Miller's Hollow falls asleep...")
+        moderator.say("The village of Miller's Hollow falls asleep...")
 
         round_num = 1
         while len(survivors) > 0:
@@ -130,15 +130,15 @@ def run_werewolf(
 
             # Win Condition Checks
             if not active_wolves:
-                moderator.talk("All Werewolves are eliminated! Villagers WIN!")
+                moderator.say("All Werewolves are eliminated! Villagers WIN!")
                 return {"winner": "VILLAGERS"}
             if len(active_wolves) >= len(active_villagers):
-                moderator.talk(
+                moderator.say(
                     "Werewolves equal or outnumber Villagers! Werewolves WIN!"
                 )
                 return {"winner": "WEREWOLVES"}
 
-            moderator.talk(f"--- Night Phase: Round {round_num} ---")
+            moderator.say(f"--- Night Phase: Round {round_num} ---")
 
             # Werewolves Night Chat: Spawns a private sub-room visible ONLY to wolves
             wolf_chat = room.private_channel(active_wolves, name="Werewolf Night Chat")
@@ -151,7 +151,7 @@ def run_werewolf(
                 )
                 # Let wolves discuss for one turn
                 for wolf in active_wolves:
-                    wolf.talk()
+                    wolf.reply()
 
                 eligible_names = ", ".join(v.name for v in active_villagers)
                 wolf_chat.post(
@@ -160,7 +160,7 @@ def run_werewolf(
                 )
                 wolf_votes = {}
                 for wolf in active_wolves:
-                    vote_result = wolf.talk(schema=WerewolfVote)
+                    vote_result = wolf.reply(schema=WerewolfVote)
                     if any(
                         v.name == vote_result.voted_player for v in active_villagers
                     ):
@@ -180,9 +180,9 @@ def run_werewolf(
                     )
 
             # Day Phase
-            moderator.talk(f"--- Day Phase: Round {round_num} ---")
+            moderator.say(f"--- Day Phase: Round {round_num} ---")
             survivors.remove(victim)
-            moderator.talk(
+            moderator.say(
                 f"Day breaks! A tragic discovery is made: {victim.name} was mauled to death last night!"
             )
 
@@ -190,12 +190,12 @@ def run_werewolf(
             active_wolves = [w for w in wolves if w in survivors]
             active_villagers = [v for v in villagers if v in survivors]
             if len(active_wolves) >= len(active_villagers):
-                moderator.talk(
+                moderator.say(
                     "Werewolves equal or outnumber Villagers! Werewolves WIN!"
                 )
                 return {"winner": "WEREWOLVES"}
 
-            moderator.talk(
+            moderator.say(
                 "Survivors, discuss who is suspicious and vote to eliminate them."
             )
 
@@ -204,17 +204,17 @@ def run_werewolf(
             # Use a deterministic seed if we want reproducible runs, or standard random
             random.shuffle(discussion_order)
             for player in discussion_order:
-                player.talk()
+                player.reply()
 
             # Execute voting
             eligible_names = ", ".join(s.name for s in survivors)
-            moderator.talk(
+            moderator.say(
                 f"VOTING TIME: Pick one of [{eligible_names}] to hang. "
                 "Use their EXACT full name in voted_player."
             )
             day_votes = {}
             for player in survivors:
-                vote_result = player.talk(schema=WerewolfVote)
+                vote_result = player.reply(schema=WerewolfVote)
                 if any(s.name == vote_result.voted_player for s in survivors):
                     day_votes[player.name] = vote_result.voted_player
 
@@ -222,15 +222,15 @@ def run_werewolf(
             if hanged_name:
                 hanged = next(p for p in survivors if p.name == hanged_name)
                 survivors.remove(hanged)
-                moderator.talk(
+                moderator.say(
                     f"The village has voted! {hanged_name} is hung from the gallows."
                 )
-                moderator.talk(
+                moderator.say(
                     f"Before dying, {hanged_name}'s secret identity is revealed: "
                     + ("🐺 WEREWOLF!" if hanged in wolves else "🧑‍🌾 VILLAGER!")
                 )
             else:
-                moderator.talk("The village is split in a tie. No one is hanged today.")
+                moderator.say("The village is split in a tie. No one is hanged today.")
 
             round_num += 1
 

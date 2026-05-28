@@ -56,8 +56,8 @@ def test_add_participant_same_llm_independent_perspectives():
 
     with room:
         room.post("Topic")
-        alice.talk()
-        bob.talk()
+        alice.reply()
+        bob.reply()
 
     # Messages attributed to correct clone
     assert room.messages[1].sender is alice
@@ -103,10 +103,10 @@ def test_chatroom_sets_active_context():
     assert chats.get_current_chat() is not room
 
 
-# ── talk() Primitives ──
+# ── say() / reply() Primitives ──
 
 
-def test_llmchat_talk_appends_to_room():
+def test_llmchat_reply_appends_to_room():
     alice = MockedChat.from_contents(["I agree!"], name="Alice", cycle=True)
     bob = MockedChat.from_contents(["x"], name="Bob")
     room = ChatRoom()
@@ -115,7 +115,7 @@ def test_llmchat_talk_appends_to_room():
 
     with room:
         room.post("Topic: AI safety")
-        result = alice.talk()
+        result = alice.reply()
 
     assert result == "I agree!"
     assert len(room.messages) == 2
@@ -123,7 +123,7 @@ def test_llmchat_talk_appends_to_room():
     assert room.messages[1].content == "I agree!"
 
 
-def test_actor_talk_appends_to_room():
+def test_actor_say_appends_to_room():
     game = actors.Actor(name="Game")
     alice = MockedChat.from_contents(["x"], name="Alice")
     room = ChatRoom()
@@ -131,33 +131,33 @@ def test_actor_talk_appends_to_room():
     alice = room.add_participant(alice)
 
     with room:
-        game.talk("Board: X|O|_")
+        game.say("Board: X|O|_")
 
     assert len(room.messages) == 1
     assert room.messages[0].sender is game
     assert room.messages[0].content == "Board: X|O|_"
 
 
-def test_llmchat_talk_outside_room_raises():
+def test_llmchat_reply_outside_room_raises():
     alice = MockedChat.from_contents(["x"], name="Alice")
     with pytest.raises(RuntimeError, match="ChatRoom context"):
-        alice.talk()
+        alice.reply()
 
 
-def test_actor_talk_outside_room_raises():
+def test_actor_say_outside_room_raises():
     game = actors.Actor(name="Game")
     with pytest.raises(RuntimeError, match="ChatRoom context"):
-        game.talk("hello")
+        game.say("hello")
 
 
-def test_actor_talk_without_message_raises_typeerror():
-    """Actor.talk() requires a message argument."""
+def test_actor_say_without_message_raises_typeerror():
+    """Actor.say() requires a message argument."""
     game = actors.Actor(name="Game")
     room = ChatRoom()
     game = room.add_participant(game)
     with room:
         with pytest.raises(TypeError):
-            game.talk()
+            game.say()
 
 
 def test_prompt_inside_chatroom_raises():
@@ -243,7 +243,7 @@ def test_system_prompt_composition():
     room.add_participant(bob)
 
     with room:
-        alice.talk()
+        alice.reply()
 
     _, kwargs = alice.invocations[0]
     system = kwargs["system"]
@@ -315,12 +315,12 @@ def test_private_channel_isolation_and_parent_visibility():
         wolf_chat = room.private_channel([alice, bob], name="Wolf Night")
         with wolf_chat:
             wolf_chat.post("Pick a victim.")
-            alice.talk()  # "wolf plan"
-            bob.talk()  # "ack"
+            alice.reply()  # "wolf plan"
+            bob.reply()  # "ack"
 
         # Public day phase
-        alice.talk()  # "I'm innocent!"
-        charlie.talk()  # "suspicious"
+        alice.reply()  # "I'm innocent!"
+        charlie.reply()  # "suspicious"
 
     # Charlie (non-member) must NOT see wolf chat content
     charlie_msgs, _ = charlie.invocations[0]
@@ -377,16 +377,16 @@ def test_nested_channels_three_levels():
 
     with room:
         room.post("Public")
-        charlie.talk()  # "cover" — public
+        charlie.reply()  # "cover" — public
 
         with team:
             team.post("Team only")
-            alice.talk()  # "intel"
+            alice.reply()  # "intel"
 
             leader = team.private_channel([alice], name="Leader")
             with leader:
                 leader.post("Leader only")
-                alice.talk()  # "report"
+                alice.reply()  # "report"
 
     # Alice (leader) saw all 3 levels
     alice_msgs_r2, _ = alice.invocations[1]
@@ -413,7 +413,7 @@ def test_reentrant_chatroom_loop():
         for i in range(3):
             with channel:
                 channel.post(f"Night {i}")
-                alice.talk()
+                alice.reply()
 
     night_posts = [m for m in channel.messages if "Night" in m.content]
     assert len(night_posts) == 3
@@ -429,7 +429,7 @@ def test_meta_chat_points_to_room():
     room = ChatRoom()
     alice = room.add_participant(alice)
     with room:
-        alice.talk()
+        alice.reply()
     assert room.messages[0]._meta.get("chat") is room
 
 
@@ -473,7 +473,7 @@ def test_meta_llm_response_path():
     alice = room.add_participant(alice)
 
     with room:
-        alice.talk()
+        alice.reply()
 
     room_msg = room.messages[0]
     assert "input_tokens" in room_msg._meta
@@ -504,12 +504,12 @@ def test_three_player_perspective():
 
     with room:
         room.post("Topic: Testing")
-        alice.talk()
-        bob.talk()
-        charlie.talk()
-        alice.talk()
-        bob.talk()
-        charlie.talk()
+        alice.reply()
+        bob.reply()
+        charlie.reply()
+        alice.reply()
+        bob.reply()
+        charlie.reply()
 
     assert len(room.messages) == 7
 

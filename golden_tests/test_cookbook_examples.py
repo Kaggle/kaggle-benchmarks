@@ -1092,8 +1092,8 @@ def test_chatroom_add_participant(llm):
         room.post(
             "Each expert, name your favorite programming language in one sentence."
         )
-        alice_reply = alice.talk()
-        bob_reply = bob.talk()
+        alice_reply = alice.reply()
+        bob_reply = bob.reply()
 
     # Clones must be distinct objects
     kbench.assertions.assert_true(
@@ -1127,8 +1127,8 @@ def test_chatroom_add_participant(llm):
 
 
 # %%
-# --- Test Case: ChatRoom — Structured Output via talk(schema=) ---
-# Verifies that talk(schema=) returns structured output (dataclass) from
+# --- Test Case: ChatRoom — Structured Output via reply(schema=) ---
+# Verifies that reply(schema=) returns structured output (dataclass) from
 # within a ChatRoom context, combining multi-participant rooms with schema.
 
 
@@ -1144,7 +1144,7 @@ class _CityFact:
 @benchmark_test(include=CHATROOM_LLM_NAMES)
 @kbench.task()
 def test_chatroom_talk_structured_output(llm):
-    """Tests that talk(schema=) works inside a ChatRoom."""
+    """Tests that reply(schema=) works inside a ChatRoom."""
     room = _ChatRoom(
         system_prompt="A geography quiz game.",
         name="QuizMaster",
@@ -1159,10 +1159,10 @@ def test_chatroom_talk_structured_output(llm):
     )
 
     with room:
-        host.talk(
+        host.say(
             "What is the capital of France? Provide city, country, and approximate population in millions."
         )
-        fact = player.talk(schema=_CityFact)
+        fact = player.reply(schema=_CityFact)
 
     kbench.assertions.assert_contains_regex(
         r"(?i)paris",
@@ -1182,7 +1182,7 @@ def test_chatroom_talk_structured_output(llm):
 
 # %%
 # --- Test Case: ChatRoom — Multi-Turn Conversation ---
-# Verifies that room.post() and talk() produce correct multi-turn histories
+# Verifies that room.post() and reply() produce correct multi-turn histories
 # and that room.messages captures the full transcript after exit.
 
 
@@ -1204,11 +1204,11 @@ def test_chatroom_multi_turn(llm):
     with room:
         # Round 1
         room.post("Round 1: What is the chemical symbol for gold?")
-        r1 = player.talk()
+        r1 = player.reply()
 
         # Round 2
         room.post("Round 2: What is the chemical symbol for silver?")
-        r2 = player.talk()
+        r2 = player.reply()
 
     # Transcript must contain all messages (2 posts + 2 replies = 4)
     kbench.assertions.assert_equal(
@@ -1264,20 +1264,20 @@ def test_chatroom_private_channel(llm):
 
     with room:
         room.post("Public phase: everyone introduces themselves briefly.")
-        alice.talk()
-        bob.talk()
+        alice.reply()
+        bob.reply()
 
         # Private channel: only Alice is a member
         secret = room.private_channel([alice], name="Secret Planning")
         with secret:
             secret.post("Alice, share your secret plan and mention the codeword.")
-            secret_reply = alice.talk()
+            secret_reply = alice.reply()
 
         # Back in public: ask Bob to summarize what he knows
         room.post(
             "Bob, summarize everything you've heard so far. Mention any codewords if you heard any."
         )
-        bob_summary = bob.talk()
+        bob_summary = bob.reply()
 
     # Alice's secret reply should contain the codeword
     kbench.assertions.assert_contains_regex(
@@ -1295,7 +1295,7 @@ def test_chatroom_private_channel(llm):
 
 # %%
 # --- Test Case: ChatRoom — Actor (Non-LLM Participant) ---
-# Verifies that Actor.talk() posts scripted messages visible to LLM
+# Verifies that Actor.say() posts scripted messages visible to LLM
 # participants, and that LLMs can respond to Actor messages correctly.
 
 
@@ -1321,8 +1321,8 @@ def test_chatroom_actor_talk(llm):
     )
 
     with room:
-        game.talk("The number is: 41")
-        reply = player.talk()
+        game.say("The number is: 41")
+        reply = player.reply()
 
     kbench.assertions.assert_contains_regex(
         r"42",

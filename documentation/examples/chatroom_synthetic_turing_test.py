@@ -102,8 +102,8 @@ def run_synthetic_turing_test(
 
         for r in range(rounds):
             room.post(f"--- Round {r + 1} ---")
-            judge_llm.talk()
-            subject_llm.talk()
+            judge_llm.reply()
+            subject_llm.reply()
 
         room.post(
             "The conversation has ended. The Judge will now prepare their final evaluation."
