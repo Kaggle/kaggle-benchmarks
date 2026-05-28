@@ -48,7 +48,7 @@ def run_synthetic_turing_test(
     judge_llm: kbench.LLMChat,
     topic: str | None = None,
     rounds: int = 5,
-) -> dict:
+):
     """Runs an interactive Synthetic Turing Test where the Judge and Subject discuss a topic."""
 
     topic_desc = (
@@ -144,8 +144,6 @@ def run_synthetic_turing_test(
         verdict_data["classification"],
         expectation=f"The subject ({subject_llm.name}) should successfully convince the Judge they are human.",
     )
-
-    return verdict_data
 
 
 # %%

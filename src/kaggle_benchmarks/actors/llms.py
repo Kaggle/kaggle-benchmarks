@@ -206,34 +206,9 @@ class LLMChat(actors.Actor):
         system = room._build_system_prompt(self)
         perspective = room._build_perspective(self)
 
-        # Enter a temporary orphan chat with the projected history.
-        # respond() reads from this temp chat, not the room's ground truth.
-        with chats.new(name=f"_perspective_{self.name}", orphan=True) as temp:
-            temp.history.extend(perspective)
-            response = self.respond(system=system, schema=schema, **kwargs)
-
-        # SUBTLE: respond() mutates response.content from raw str → parsed T
-        # via the StopIteration handler in prompting.process_schema(). Therefore
-        # room_msg.content holds the parsed schema type, not the raw string.
-        # The raw string is preserved in _meta["raw_content"].
-
-        # Re-attribute the response to this actor and append to ground truth.
-        # FRAGILE: The response was already appended to temp by @emits_message /
-        # respond() internals, so we create a clean copy for the room log.
-        # If emits_message's double-append guard changes, this may break.
-        room_msg = messages.Message(sender=self, content=response.content)
-        # Shallow copy is safe here because _meta values are currently all
-        # immutable (ints, strings, types). The only mutable concern would be
-        # tool_calls (a list), but reply() blocks tools via NotImplementedError.
-        # Deep copy is avoided because _meta["chat"] holds a Chat reference —
-        # cloning it would create a disconnected copy of the entire conversation.
-        # If tool support is added to reply(), switch to:
-        #   meta = response._meta.copy(); meta.pop("chat", None)
-        #   room_msg._meta = copy.deepcopy(meta); room_msg._meta["chat"] = room
-        room_msg._meta = response._meta.copy()
-        room_msg._meta["chat"] = room
-        room.append(room_msg)
-
+        response = self.respond(
+            system=system, schema=schema, input_messages=perspective, **kwargs
+        )
         return response.content
 
     def invoke(
@@ -332,6 +307,8 @@ class LLMChat(actors.Actor):
         self,
         system: str | None = None,
         schema: type[T] = str,
+        *,
+        input_messages: list[messages.Message] | None = None,
         **kwargs,
     ) -> messages.Message[T]:
         from kaggle_benchmarks import contexts, llm_messages
@@ -366,7 +343,9 @@ class LLMChat(actors.Actor):
         )
 
         raw_messages = [
-            msg for msg in chat.messages if msg.is_visible_to_llm
+            msg
+            for msg in (input_messages if input_messages is not None else chat.messages)
+            if msg.is_visible_to_llm
         ] + temp_messages
 
         invoke_response = self.invoke(

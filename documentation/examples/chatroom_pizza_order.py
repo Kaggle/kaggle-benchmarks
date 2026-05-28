@@ -24,11 +24,27 @@ applies a delivery fee.
 # %%
 import dataclasses
 import textwrap
-from typing import List
+from typing import List, Literal
+
+from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
 from kaggle_benchmarks import assertions
 from kaggle_benchmarks.chats import ChatRoom
+
+
+class PizzaTurn(BaseModel):
+    """A single turn in the pizza order phone conversation."""
+
+    message: str = Field(
+        description="The natural spoken response to the other participant. Keep it brief and character-appropriate."
+    )
+    action: Literal["continue", "hangup"] = Field(
+        description="Choose 'hangup' ONLY if you are hanging up the phone to end the call. Otherwise, choose 'continue'."
+    )
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclasses.dataclass
@@ -96,7 +112,7 @@ def custom_pizza_eval_prompt(criteria: List[str], response_text: str) -> str:
 def run_pizza_order(
     llm: kbench.LLMChat,
     clerk_llm: kbench.LLMChat,
-) -> dict:
+):
     """Runs a phone-ordering simulation between a Customer and a Clerk."""
 
     customer_prompt = (
@@ -168,12 +184,15 @@ def run_pizza_order(
     with room:
         room.post("[Phone rings... The call is connected.]")
 
-        # 28 turns (14 rounds) to allow the conversation with multiple corrections to complete fully
+        # Up to 28 turns to allow the conversation with multiple corrections to complete
         for turn in range(1, 29):
             if turn % 2 == 1:
-                clerk_llm.reply()
+                turn_response = clerk_llm.reply(schema=PizzaTurn)
             else:
-                customer_llm.reply()
+                turn_response = customer_llm.reply(schema=PizzaTurn)
+
+            if turn_response.action == "hangup":
+                break
 
         room.post("[The call ends. Click.]")
 
@@ -242,8 +261,6 @@ def run_pizza_order(
         evaluation.clerk_pricing_error_corrected,
         "Customer should detect and correct the clerk's pricing error.",
     )
-
-    return dataclasses.asdict(evaluation)
 
 
 # %%
