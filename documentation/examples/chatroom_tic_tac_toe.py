@@ -115,6 +115,7 @@ class TicTacToe:
 )
 def run_tic_tac_toe(
     llm: kbench.LLMChat,
+    judge_llm: kbench.LLMChat,
 ) -> dict:
     """Runs Tic-Tac-Toe using ChatRoom.
 
@@ -126,7 +127,7 @@ def run_tic_tac_toe(
     After ChatRoom:
         - Game engine is an Actor that posts board state
         - Players see the full history (own moves as "assistant", peer as "user")
-        - talk(schema=TicTacToeMove) returns structured output directly
+        - reply(schema=TicTacToeMove) returns structured output directly
     """
     game = TicTacToe()
     game_engine = actors.Actor(name="Game", role="user", avatar="🎮")
@@ -148,7 +149,7 @@ def run_tic_tac_toe(
         system_prompt="You are player X in Tic-Tac-Toe. When it's your turn, respond with your move (row and col, 0-indexed).",
     )
     player_o = room.add_participant(
-        llm,
+        judge_llm,
         name="PlayerO",
         avatar="⭕",
         system_prompt="You are player O in Tic-Tac-Toe. When it's your turn, respond with your move (row and col, 0-indexed).",
@@ -175,8 +176,6 @@ def run_tic_tac_toe(
 
 # %%
 
-model = kbench.llm
-run_tic_tac_toe.run(llm=model)
-
+run_tic_tac_toe.run(llm=kbench.llm, judge_llm=kbench.judge_llm)
 
 # %%

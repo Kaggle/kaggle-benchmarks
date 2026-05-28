@@ -34,7 +34,7 @@ Usage:
 
 # %%
 import base64
-import dataclasses as _dc
+import dataclasses
 import os
 import tempfile
 from contextlib import contextmanager
@@ -47,9 +47,13 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import actors as _actors
-from kaggle_benchmarks.chats import ChatRoom as _ChatRoom
-from kaggle_benchmarks.content_types import audios, images, videos
+from kaggle_benchmarks.actors import Actor
+from kaggle_benchmarks.chats import ChatRoom
+from kaggle_benchmarks.content_types import (
+    audios,
+    images,
+    videos,
+)
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
@@ -308,13 +312,13 @@ def test_extract_pydantic(llm):
 # --- Test Case: Structured Output (composite pydantic Extraction) ---
 
 
-class Actor(BaseModel):
+class FriendsActor(BaseModel):
     actor_name: str
     role_name: str
 
 
 class Casting(BaseModel):
-    actors: list[Actor]
+    actors: list[FriendsActor]
 
 
 # Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
@@ -1070,7 +1074,7 @@ CHATROOM_LLM_NAMES = {
 @kbench.task()
 def test_chatroom_add_participant(llm):
     """Tests that the same LLM added twice yields independent participants."""
-    room = _ChatRoom(
+    room = ChatRoom(
         system_prompt="A quick Q&A between two experts.",
         name="Host",
     )
@@ -1132,7 +1136,7 @@ def test_chatroom_add_participant(llm):
 # within a ChatRoom context, combining multi-participant rooms with schema.
 
 
-@_dc.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class _CityFact:
     """A structured fact about a city."""
 
@@ -1145,12 +1149,12 @@ class _CityFact:
 @kbench.task()
 def test_chatroom_talk_structured_output(llm):
     """Tests that reply(schema=) works inside a ChatRoom."""
-    room = _ChatRoom(
+    room = ChatRoom(
         system_prompt="A geography quiz game.",
         name="QuizMaster",
     )
 
-    host = _actors.Actor(name="QuizMaster", role="user", avatar="🎯")
+    host = Actor(name="QuizMaster", role="user", avatar="🎯")
     room.add_participant(host)
     player = room.add_participant(
         llm,
@@ -1190,7 +1194,7 @@ def test_chatroom_talk_structured_output(llm):
 @kbench.task()
 def test_chatroom_multi_turn(llm):
     """Tests multi-turn conversation: 2 rounds of moderator prompt → LLM reply."""
-    room = _ChatRoom(
+    room = ChatRoom(
         system_prompt="A two-round trivia game.",
         name="Trivia",
     )
@@ -1241,7 +1245,7 @@ def test_chatroom_multi_turn(llm):
 @kbench.task()
 def test_chatroom_private_channel(llm):
     """Tests that private_channel messages are invisible to non-members."""
-    room = _ChatRoom(
+    room = ChatRoom(
         system_prompt="A team coordination exercise with a secret planning phase.",
         name="Coordinator",
     )
@@ -1303,9 +1307,9 @@ def test_chatroom_private_channel(llm):
 @kbench.task()
 def test_chatroom_actor_talk(llm):
     """Tests that a non-LLM Actor can post messages that LLMs respond to."""
-    game = _actors.Actor(name="GameEngine", role="user", avatar="🎮")
+    game = Actor(name="GameEngine", role="user", avatar="🎮")
 
-    room = _ChatRoom(
+    room = ChatRoom(
         system_prompt="A simple number guessing game. The GameEngine posts a number, the Player guesses.",
         name="GameEngine",
     )

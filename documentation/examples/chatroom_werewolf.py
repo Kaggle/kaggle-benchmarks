@@ -14,7 +14,7 @@
 
 """Werewolf: A Benchmark for Social Deduction, Private Channels, and Deception
 
-This example showcases a complete, 4-player game of Werewolf (also known as Mafia) using ChatRoom.
+This example showcases a complete, 7-player game of Werewolf (also known as Mafia) using ChatRoom.
 Werewolf is the gold standard of multi-agent social evaluation because it requires:
 1. Information Asymmetry: Roles are secret (Werewolves know their team; Villagers do not).
 2. Private Channels: Werewolves converse secretly at night to target a victim.
@@ -22,7 +22,7 @@ Werewolf is the gold standard of multi-agent social evaluation because it requir
 
 We represent:
 - Alice and Bob as Werewolves (Secret Werewolf Team)
-- Charlie and David as Villagers (Secret Villager Team)
+- Charlie, David, Eve, Frank, and Grace as Villagers (Secret Villager Team)
 """
 
 # %%
@@ -144,7 +144,7 @@ def run_werewolf(
             wolf_chat = room.private_channel(active_wolves, name="Werewolf Night Chat")
             victim = None
 
-            # Enter the private werewolf channel. Charlie and David are blind to this context.
+            # Enter the private werewolf channel. The villagers are blind to this context.
             with wolf_chat:
                 wolf_chat.post(
                     "Werewolves, discuss and pick a Villager to eliminate tonight."

@@ -363,15 +363,30 @@ class ChatRoom(Chat):
     def post(
         self, message: str, visible_to: list["actors.Actor"] | None = None
     ) -> Message:
-        """Post a narrator message to the room.
+        """Post a system/narrator directive to the room.
 
-        Uses the room's ``_narrator`` actor (whose name matches the room name)
-        so the LLM sees consistent sender identity.
+        Messages posted via ``post()`` come from the room's internal narrator
+        — an actor that is **not** a registered participant. The roster
+        explicitly tells LLMs to treat these messages as system instructions
+        rather than peer speech, reducing the chance of LLMs "arguing back"
+        at directives.
+
+        **When to use ``post()`` vs ``actor.say()``:**
+
+        - Use ``post()`` for structural directives that no specific character
+          owns: phase transitions, rules, topic prompts.
+          Example: ``room.post("--- Phase 2: Rebuttals ---")``
+
+        - Use ``actor.say()`` when a **named participant** is speaking and
+          you want the message attributed to that identity in the transcript.
+          Example: ``game_engine.say(f"Board:\\n{board}")``
 
         Args:
             message: The message text.
-            visible_to: Optional list of Actors who can see this message.
-                If None, all participants can see it.
+            visible_to: Optional list of participants who can see this message.
+                If None (default), all participants can see it. Useful for
+                sending private instructions to specific participants without
+                creating a full ``private_channel()``.
         """
         msg = Message(sender=self._narrator, content=message)
         if visible_to is not None:
