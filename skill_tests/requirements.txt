@@ -1,0 +1,9 @@
+# Runtime dependencies for the skill-test harness (skill_tests/run_skill_tests.py).
+# Install with: pip install -r skill_tests/requirements.txt
+#
+# To exercise the optional --execute flag (which runs Cat 1-3 generated benchmarks
+# against the real library), also install kaggle_benchmarks from the repo root:
+#     pip install -e .
+# or with uv:
+#     uv pip install -e .
+anthropic>=0.40.0
