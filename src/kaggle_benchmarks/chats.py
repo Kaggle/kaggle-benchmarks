@@ -15,6 +15,7 @@
 """Core classes and functions for representing and managing chats."""
 
 import contextlib
+import copy
 import dataclasses
 import functools
 import uuid
@@ -221,6 +222,7 @@ class ChatRoom(Chat):
         self.system_prompt = system_prompt
         self._parent_room = _parent_room
         self._registered_with_parent = False
+        # Per-instance; safe as long as each thread creates its own ChatRoom.
         self._cm_stack: list[contextlib.AbstractContextManager] = []
         # Cache for synthetic Actor objects used in perspective projection.
         # Avoids creating O(n) ephemeral actors per _build_perspective() call.
@@ -229,6 +231,7 @@ class ChatRoom(Chat):
         # Narrator actor for room.post() messages — uses the room's name
         # so the LLM sees consistent "[Moderator]: ..." messages matching
         # the roster's "Note on ..." instruction.
+        # Uses role="user" because LLM APIs require user/assistant alternation.
         self._narrator = actors.Actor(name=name, role="user", avatar="📢")
 
     def add_participant(
@@ -256,7 +259,7 @@ class ChatRoom(Chat):
             ValueError: If a participant with the same name already exists, or
                 if the same plain Actor instance is registered twice.
         """
-        from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
+        from kaggle_benchmarks.actors.llms import LLMChat
 
         is_llm = isinstance(participant, LLMChat)
         effective_name = name if name is not None else participant.name
@@ -280,6 +283,37 @@ class ChatRoom(Chat):
                 f"name for correct perspective projection."
             )
 
+        p = self._clone_participant(
+            participant, name=name, avatar=avatar, system_prompt=system_prompt
+        )
+
+        for k, v in kwargs.items():
+            if not hasattr(p, k):
+                raise AttributeError(
+                    f"Participant {p.name!r} has no attribute {k!r}. Check for typos."
+                )
+            setattr(p, k, v)
+
+        self.participants.append(p)
+        return p
+
+    def _clone_participant(
+        self,
+        participant: "actors.Actor",
+        *,
+        name: str | None = None,
+        avatar: str | None = None,
+        system_prompt: str | None = None,
+    ) -> "actors.Actor":
+        """Clone or wrap a participant for room isolation.
+
+        LLMChat subclasses are always cloned to ensure per-participant
+        independence. Plain Actors are used as-is.
+        """
+        from kaggle_benchmarks.actors.llms import GoogleGenAI, LLMChat, OpenAI
+
+        effective_name = name if name is not None else participant.name
+
         if isinstance(participant, (OpenAI, GoogleGenAI)):
             # Explicit construction for production LLM classes — creates a
             # fully independent instance sharing only the (stateless) API client.
@@ -297,16 +331,19 @@ class ChatRoom(Chat):
                 support_temperature=participant.support_temperature,
             )
             p.stream_responses = participant.stream_responses
+        elif isinstance(participant, LLMChat):
+            # Fallback for other LLMChat subclasses (e.g. test mocks).
+            p = copy.copy(participant)
+            if name is not None:
+                p.name = name
+                p.id = name
+            if avatar is not None:
+                p.avatar = avatar
+            if system_prompt is not None:
+                p.system_prompt = system_prompt
         else:
-            if is_llm:
-                # Fallback for other LLMChat subclasses (e.g. test mocks).
-                import copy
-
-                p = copy.copy(participant)
-            else:
-                # Plain Actor — not cloned.
-                p = participant
-
+            # Plain Actor — not cloned.
+            p = participant
             if name is not None:
                 p.name = name
                 p.id = name
@@ -315,10 +352,6 @@ class ChatRoom(Chat):
             if system_prompt is not None:
                 p.system_prompt = system_prompt
 
-        for k, v in kwargs.items():
-            setattr(p, k, v)
-
-        self.participants.append(p)
         return p
 
     @contextlib.contextmanager
@@ -337,7 +370,7 @@ class ChatRoom(Chat):
                 if parent_chat and self not in parent_chat.history:
                     parent_chat.append(self)
                 self._registered_with_parent = True
-            except (LookupError, AttributeError):
+            except LookupError:
                 pass
 
         with contexts.enter(chat=self):
@@ -516,6 +549,9 @@ class ChatRoom(Chat):
         Any messages posted inside the child channel are interleaved into the
         parent room's ground-truth log with restricted visibility.
 
+        Nesting beyond two levels is supported — enter each channel within
+        its parent's context.
+
         Raises ValueError if any participant is not a member of this room.
         """
         unknown = [p for p in participants if p not in self.participants]
@@ -529,6 +565,14 @@ class ChatRoom(Chat):
             raise ValueError(
                 f"Private channel name must differ from parent room name "
                 f"'{self.name}' to avoid narrator identity confusion."
+            )
+
+        existing_channel_names = [
+            item.name for item in self.history if isinstance(item, ChatRoom)
+        ]
+        if name in existing_channel_names:
+            raise ValueError(
+                f"A private channel named '{name}' already exists in this room."
             )
 
         seen = set()
