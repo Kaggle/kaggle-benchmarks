@@ -15,7 +15,6 @@
 import pytest
 
 from kaggle_benchmarks import actors, chats
-from kaggle_benchmarks.chats import ChatRoom
 from kaggle_benchmarks.messages import Message
 from tests.mocks import MockedChat
 
@@ -26,7 +25,7 @@ def test_chatroom_rejects_duplicate_participants():
     """Same LLMChat added twice without name override is rejected (name collision)."""
     alice = MockedChat.from_contents(["x"], name="Alice")
 
-    room = ChatRoom()
+    room = chats.ChatRoom()
     room.add_participant(alice)
     with pytest.raises(ValueError, match="already taken"):
         room.add_participant(alice)
@@ -35,7 +34,7 @@ def test_chatroom_rejects_duplicate_participants():
 def test_add_participant_same_llm_creates_distinct_clones():
     """Same LLMChat object added with different names yields two distinct clones."""
     shared = MockedChat.from_contents(["x"], name="Model", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(shared, name="Alice")
     bob = room.add_participant(shared, name="Bob")
 
@@ -50,7 +49,7 @@ def test_add_participant_same_llm_creates_distinct_clones():
 def test_add_participant_same_llm_independent_perspectives():
     """Clones from the same LLM have correctly separated perspectives."""
     shared = MockedChat.from_contents(["hello", "world"], name="Model", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(shared, name="Alice")
     bob = room.add_participant(shared, name="Bob")
 
@@ -78,7 +77,7 @@ def test_add_participant_rejects_duplicate_name():
     """Different LLMs with the same effective name are rejected."""
     a = MockedChat.from_contents(["x"], name="Alice")
     b = MockedChat.from_contents(["y"], name="Bob")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     room.add_participant(a)
     with pytest.raises(ValueError, match="already taken"):
         room.add_participant(b, name="Alice")
@@ -87,7 +86,7 @@ def test_add_participant_rejects_duplicate_name():
 def test_add_participant_plain_actor_duplicate_rejected():
     """Same plain Actor instance added twice is rejected."""
     game = actors.Actor(name="Game")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     room.add_participant(game)
     with pytest.raises(ValueError):
         room.add_participant(game, name="Host")
@@ -96,7 +95,7 @@ def test_add_participant_plain_actor_duplicate_rejected():
 def test_chatroom_sets_active_context():
     """with room: must make the ChatRoom the active chat."""
     alice = MockedChat.from_contents(["hi"], name="Alice", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     with room:
         assert chats.get_current_chat() is room
@@ -109,7 +108,7 @@ def test_chatroom_sets_active_context():
 def test_llmchat_reply_appends_to_room():
     alice = MockedChat.from_contents(["I agree!"], name="Alice", cycle=True)
     bob = MockedChat.from_contents(["x"], name="Bob")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
 
@@ -126,7 +125,7 @@ def test_llmchat_reply_appends_to_room():
 def test_actor_say_appends_to_room():
     game = actors.Actor(name="Game")
     alice = MockedChat.from_contents(["x"], name="Alice")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     game = room.add_participant(game)
     alice = room.add_participant(alice)
 
@@ -153,7 +152,7 @@ def test_actor_say_outside_room_raises():
 def test_actor_say_without_message_raises_typeerror():
     """Actor.say() requires a message argument."""
     game = actors.Actor(name="Game")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     game = room.add_participant(game)
     with room:
         with pytest.raises(TypeError):
@@ -163,7 +162,7 @@ def test_actor_say_without_message_raises_typeerror():
 def test_prompt_inside_chatroom_raises():
     """prompt() must not be called inside an active ChatRoom."""
     alice = MockedChat.from_contents(["x"], name="Alice", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     with room:
         with pytest.raises(RuntimeError, match="cannot be called inside"):
@@ -175,7 +174,7 @@ def test_prompt_inside_chatroom_raises():
 
 def test_perspective_does_not_mutate_originals():
     alice = MockedChat.from_contents(["x"], name="Alice")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     original = Message(sender=alice, content="original")
     room.history = [original]
@@ -189,7 +188,7 @@ def test_perspective_filters_invisible_messages():
     """Messages with is_visible_to_llm=False are not shown in perspective."""
     alice = MockedChat.from_contents(["x"], name="Alice")
     bob = MockedChat.from_contents(["x"], name="Bob")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
 
@@ -210,7 +209,7 @@ def test_perspective_preserves_avatars():
     alice.avatar = "🐺"
     bob = MockedChat.from_contents(["x"], name="Bob")
     bob.avatar = "🧙"
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
 
@@ -235,7 +234,7 @@ def test_system_prompt_composition():
     bob = MockedChat.from_contents(["hi"], name="Bob")
     bob.system_prompt = "SECRET: You are a villager"
 
-    room = ChatRoom(
+    room = chats.ChatRoom(
         system_prompt="A game of Werewolf.",
         name="Moderator",
     )
@@ -269,7 +268,7 @@ def test_system_prompt_via_from_contents():
 def test_post_sender_matches_room_name():
     """room.post() sender name matches the room's name."""
     alice = MockedChat.from_contents(["x"], name="Alice")
-    room = ChatRoom(name="Moderator")
+    room = chats.ChatRoom(name="Moderator")
     room.add_participant(alice)
     with room:
         msg = room.post("Hello")
@@ -282,7 +281,7 @@ def test_post_sender_matches_room_name():
 def test_visible_to_filters_messages():
     alice = MockedChat.from_contents(["x"], name="Alice")
     bob = MockedChat.from_contents(["x"], name="Bob")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
 
@@ -301,7 +300,7 @@ def test_private_channel_isolation_and_parent_visibility():
     bob = MockedChat.from_contents(["ack"], name="Bob")
     charlie = MockedChat.from_contents(["suspicious"], name="Charlie")
 
-    room = ChatRoom(
+    room = chats.ChatRoom(
         system_prompt="Werewolf game.",
         name="Moderator",
     )
@@ -342,7 +341,7 @@ def test_private_channel_validates_participants():
     alice = MockedChat.from_contents(["x"], name="Alice")
     bob = MockedChat.from_contents(["x"], name="Bob")
     outsider = MockedChat.from_contents(["x"], name="Outsider")
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
 
@@ -354,7 +353,7 @@ def test_private_channel_rejects_same_name_as_parent():
     """private_channel() rejects name matching the parent room's name."""
     alice = MockedChat.from_contents(["x"], name="Alice")
     bob = MockedChat.from_contents(["x"], name="Bob")
-    room = ChatRoom(name="GameRoom")
+    room = chats.ChatRoom(name="GameRoom")
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
 
@@ -368,7 +367,7 @@ def test_nested_channels_three_levels():
     bob = MockedChat.from_contents(["ack"], name="Bob")
     charlie = MockedChat.from_contents(["cover"], name="Charlie")
 
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     bob = room.add_participant(bob)
     charlie = room.add_participant(charlie)
@@ -405,7 +404,7 @@ def test_nested_channels_three_levels():
 def test_reentrant_chatroom_loop():
     """Same private channel entered multiple times in a loop."""
     alice = MockedChat.from_contents(["r1", "r2", "r3"], name="Alice", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     channel = room.private_channel([alice], name="Night")
 
@@ -426,7 +425,7 @@ def test_reentrant_chatroom_loop():
 
 def test_meta_chat_points_to_room():
     alice = MockedChat.from_contents(["response"], name="Alice", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
     with room:
         alice.reply()
@@ -469,7 +468,7 @@ def test_meta_llm_response_path():
     """Verify _meta contains LLMResponse.meta fields (usage tokens etc.)
     when the LLMResponse code path is used."""
     alice = MockedLLMResponseChat.from_contents(["hello"], name="Alice", cycle=True)
-    room = ChatRoom()
+    room = chats.ChatRoom()
     alice = room.add_participant(alice)
 
     with room:
@@ -494,7 +493,7 @@ def test_three_player_perspective():
     charlie = MockedChat.from_contents(["Charlie R1", "Charlie R2"], name="Charlie")
     charlie.system_prompt = "I am Charlie"
 
-    room = ChatRoom(
+    room = chats.ChatRoom(
         system_prompt="A three-way discussion.",
         name="Moderator",
     )

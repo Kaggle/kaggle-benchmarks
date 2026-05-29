@@ -31,8 +31,7 @@ import random
 from collections import Counter
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import actors
-from kaggle_benchmarks.chats import ChatRoom
+from kaggle_benchmarks import actors, chats
 
 
 @dataclasses.dataclass(frozen=True)
@@ -74,7 +73,7 @@ def run_werewolf(
     # Initialize general room game-engine arbiter
     moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
 
-    room = ChatRoom(
+    room = chats.ChatRoom(
         system_prompt=(
             "A game of Werewolf. The Moderator coordinates rounds. "
             "Night and Day phases loop until one team wins."

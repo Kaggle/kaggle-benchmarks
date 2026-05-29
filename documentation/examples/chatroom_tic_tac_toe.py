@@ -27,11 +27,9 @@ ChatRoom version:
 
 # %%
 import dataclasses
-from typing import Dict
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import actors
-from kaggle_benchmarks.chats import ChatRoom
+from kaggle_benchmarks import actors, chats
 
 # --- Game Logic (unchanged from original) ---
 
@@ -69,7 +67,7 @@ class TicTacToe:
     def is_game_over(self) -> bool:
         return self.game_over
 
-    def get_scores(self) -> Dict[str, float]:
+    def get_scores(self) -> dict[str, float]:
         if self.winner == "X":
             return {"X": 1.0, "O": 0.0}
         elif self.winner == "O":
@@ -132,7 +130,7 @@ def run_tic_tac_toe(
     game = TicTacToe()
     game_engine = actors.Actor(name="Game", role="user", avatar="🎮")
 
-    room = ChatRoom(
+    room = chats.ChatRoom(
         system_prompt=(
             "A game of Tic-Tac-Toe. The Game participant posts the current "
             "board state. Players take turns making moves."

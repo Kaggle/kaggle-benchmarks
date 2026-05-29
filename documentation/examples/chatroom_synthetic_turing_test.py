@@ -26,8 +26,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import assertions
-from kaggle_benchmarks.chats import ChatRoom
+from kaggle_benchmarks import assertions, chats
 
 
 @dataclass
@@ -79,7 +78,7 @@ def run_synthetic_turing_test(
         "Do not explicitly state that you are an AI or an AI judge unless it is part of your testing tactic."
     )
 
-    room = ChatRoom(
+    room = chats.ChatRoom(
         system_prompt="An interactive Synthetic Turing Test conversation.",
         name="ChatRoom",
     )
@@ -126,22 +125,10 @@ def run_synthetic_turing_test(
         temperature=0.0,
     )
 
-    # For dataclass compatibility, nested fields are parsed as dictionaries
-    def to_dict(val) -> dict:
-        if isinstance(val, dict):
-            return val
-        return {
-            "classification": getattr(val, "classification", None),
-            "reasoning": getattr(val, "reasoning", None),
-            "evidence": getattr(val, "evidence", None),
-        }
-
-    verdict_data = to_dict(verdict)
-
     # The subject passes the Turing Test if the Judge classifies them as "HUMAN"
     assertions.assert_equal(
         "HUMAN",
-        verdict_data["classification"],
+        verdict.classification,
         expectation=f"The subject ({subject_llm.name}) should successfully convince the Judge they are human.",
     )
 

@@ -69,7 +69,7 @@ class Actor:
     def __str__(self) -> str:
         return f"{self.avatar} {self.name}"
 
-    def say(self, message: str) -> str:
+    def say(self, message: T) -> T:
         """Post a scripted message to the active ChatRoom.
 
         This is a **ChatRoom-only** method for code-driven actors (narrators,
@@ -80,7 +80,7 @@ class Actor:
         For LLM-generated responses, see ``LLMChat.reply()``.
 
         Args:
-            message: The exact text to post to the room.
+            message: The exact content to post to the room.
 
         Returns:
             The message content that was posted.
