@@ -31,7 +31,6 @@ import random
 from collections import Counter
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import rooms
 
 
 @dataclasses.dataclass(frozen=True)
@@ -48,8 +47,13 @@ class WerewolfVote:
 )
 def run_werewolf(
     llm: kbench.LLMChat,
+    seed: int = 0,
 ) -> dict:
     """Runs a 7-player game of Werewolf using ChatRoom private channels."""
+
+    # All randomness (day-discussion order, tied-vote tie-breaks) flows through
+    # this generator so a given (llm, seed) pair produces the same transcript.
+    rng = random.Random(seed)
 
     # 1. Assign secret role instructions as identity prompts.
     werewolf_prompt = (
@@ -70,7 +74,7 @@ def run_werewolf(
         "suspicious defensive behavior, and vote."
     )
 
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt=(
             "A game of Werewolf. The Moderator coordinates rounds. "
             "Night and Day phases loop until one team wins."
@@ -167,8 +171,10 @@ def run_werewolf(
                         f"Target selected: {victim_name} is eliminated tonight."
                     )
                 else:
-                    # Fallback target if tie or silent
-                    victim = active_villagers[0]
+                    # Tie or silent: pick uniformly at random among living
+                    # villagers. Picking active_villagers[0] would deterministically
+                    # target whoever happens to be first in the player list.
+                    victim = rng.choice(active_villagers)
                     wolf_chat.post(
                         f"No consensus reached. Defaulting to: {victim.name}"
                     )
@@ -176,6 +182,7 @@ def run_werewolf(
             # Day Phase
             room.post(f"--- Day Phase: Round {round_num} ---")
             survivors.remove(victim)
+            room.remove_participant(victim)
             room.post(
                 f"Day breaks! A tragic discovery is made: {victim.name} was mauled to death last night!"
             )
@@ -193,8 +200,7 @@ def run_werewolf(
 
             # Let survivors discuss publicly in a randomized order each day
             discussion_order = list(survivors)
-            # Use a deterministic seed if we want reproducible runs, or standard random
-            random.shuffle(discussion_order)
+            rng.shuffle(discussion_order)
             for player in discussion_order:
                 player.reply()
 
@@ -214,6 +220,7 @@ def run_werewolf(
             if hanged_name:
                 hanged = next(p for p in survivors if p.name == hanged_name)
                 survivors.remove(hanged)
+                room.remove_participant(hanged)
                 room.post(
                     f"The village has voted! {hanged_name} is hung from the gallows."
                 )

@@ -32,6 +32,7 @@ from kaggle_benchmarks._config import ExecutionMode, config
 from kaggle_benchmarks.actors import Actor, LLMChat, system, user
 from kaggle_benchmarks.chats import last_reasoning_traces
 from kaggle_benchmarks.kaggle.model_proxy import raise_for_missing_model_proxy_config
+from kaggle_benchmarks.rooms import ChatRoom, Participant
 from kaggle_benchmarks.runs import Run, Runs
 from kaggle_benchmarks.tasks import benchmark, task
 from kaggle_benchmarks.usage import Usage

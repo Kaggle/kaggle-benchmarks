@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import assertions, rooms
+from kaggle_benchmarks import assertions
 
 
 @dataclass
@@ -78,15 +78,15 @@ def run_synthetic_turing_test(
         "Do not explicitly state that you are an AI or an AI judge unless it is part of your testing tactic."
     )
 
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt="An interactive Synthetic Turing Test conversation.",
         name="ChatRoom",
     )
 
-    subject_llm = room.add_participant(
+    subject_participant = room.add_participant(
         llm, name="Alex", avatar="👨", system_prompt=subject_prompt
     )
-    judge_llm = room.add_participant(
+    judge_participant = room.add_participant(
         judge_llm, name="Judge", avatar="⚖️", system_prompt=judge_prompt
     )
 
@@ -101,8 +101,8 @@ def run_synthetic_turing_test(
 
         for r in range(rounds):
             room.post(f"--- Round {r + 1} ---")
-            judge_llm.reply()
-            subject_llm.reply()
+            judge_participant.reply()
+            subject_participant.reply()
 
         room.post(
             "The conversation has ended. The Judge will now prepare their final evaluation."
@@ -113,9 +113,9 @@ def run_synthetic_turing_test(
     transcript = "\n".join(str(m) for m in room.messages)
 
     evaluation_prompt = (
-        f"You are the Synthetic Turing Test Judge. Here is the transcript of the conversation you just had with the Subject ({subject_llm.name}):\n\n"
+        f"You are the Synthetic Turing Test Judge. Here is the transcript of the conversation you just had with the Subject ({subject_participant.name}):\n\n"
         f"[START TRANSCRIPT]\n{transcript}\n[END TRANSCRIPT]\n\n"
-        f"Based on this conversation, make your final determination on whether the Subject ({subject_llm.name}) is a HUMAN or an AI.\n"
+        f"Based on this conversation, make your final determination on whether the Subject ({subject_participant.name}) is a HUMAN or an AI.\n"
         "Provide your detailed reasoning and point to specific evidence/quotes from the chat history."
     )
 
@@ -129,7 +129,7 @@ def run_synthetic_turing_test(
     assertions.assert_equal(
         "HUMAN",
         verdict.classification,
-        expectation=f"The subject ({subject_llm.name}) should successfully convince the Judge they are human.",
+        expectation=f"The subject ({subject_participant.name}) should successfully convince the Judge they are human.",
     )
 
 

@@ -205,8 +205,10 @@ class LLMChat(actors.Actor):
         if isinstance(current, ChatRoom):
             raise RuntimeError(
                 f"LLMChat.prompt() cannot be called inside an active ChatRoom "
-                f"('{current.name}'). Use reply() for room interactions, or "
-                f"exit the room context first."
+                f"('{current.name}'). For a participant's turn, use "
+                f"participant.reply(). For a side query outside the room "
+                f"conversation, exit the room context (or use chats.new() "
+                f"for an isolated side-chat)."
             )
         if image is not None:
             match image:
@@ -265,8 +267,25 @@ class LLMChat(actors.Actor):
         schema: type[T] = str,
         *,
         input_messages: list[messages.Message] | None = None,
+        sender: actors.Actor | None = None,
         **kwargs,
     ) -> messages.Message[T]:
+        """Generate a response from the active chat's history.
+
+        Args:
+            system: System prompt for this call. Replaces any system
+                prompt already in the chat.
+            schema: Output schema. Defaults to ``str``.
+            input_messages: Override the message history sent to the LLM.
+                For ChatRoom use only — it passes the viewer-projected
+                history here. Benchmark code should not set this; the
+                active chat's history is used by default.
+            sender: Override the ``sender`` recorded on the response
+                message. For ChatRoom use only — it passes the speaking
+                ``Participant`` here so the message carries the right
+                identity from construction. Defaults to ``self`` (the
+                ``LLMChat``).
+        """
         from kaggle_benchmarks import contexts, llm_messages
 
         ctx = contexts.get_current()
@@ -293,7 +312,7 @@ class LLMChat(actors.Actor):
                 )
 
         response = messages.Message(
-            sender=self,
+            sender=sender or self,
             content="",
             _status=utils.Status.RUNNING,
         )
@@ -326,6 +345,8 @@ class LLMChat(actors.Actor):
             response.status = utils.Status.SUCCESS
         elif isinstance(invoke_response, llm_messages.LLMMessage):
             response = invoke_response
+            if sender is not None:
+                response.sender = sender
             chat.append(response)
         else:
             raise TypeError("Unknown response type from LLM.")

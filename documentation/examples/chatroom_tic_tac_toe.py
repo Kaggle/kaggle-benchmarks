@@ -29,7 +29,6 @@ ChatRoom version:
 import dataclasses
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import rooms
 
 # --- Game Logic (unchanged from original) ---
 
@@ -127,7 +126,7 @@ def run_tic_tac_toe(
         - Players see the full history (own moves as "assistant", peer as "user")
         - reply(schema=TicTacToeMove) returns structured output directly
     """
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt=(
             "A game of Tic-Tac-Toe. The Game participant posts the current "
             "board state. Players take turns making moves."

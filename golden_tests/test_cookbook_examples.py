@@ -47,7 +47,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import rooms
 from kaggle_benchmarks.content_types import (
     audios,
     images,
@@ -1073,7 +1072,7 @@ CHATROOM_LLM_NAMES = {
 @kbench.task()
 def test_chatroom_add_participant(llm):
     """Tests that the same LLM added twice yields independent participants."""
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt="A quick Q&A between two experts.",
         name="Host",
     )
@@ -1148,7 +1147,7 @@ class _CityFact:
 @kbench.task()
 def test_chatroom_talk_structured_output(llm):
     """Tests that reply(schema=) works inside a ChatRoom."""
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt="A geography quiz game.",
         name="QuizMaster",
     )
@@ -1191,7 +1190,7 @@ def test_chatroom_talk_structured_output(llm):
 @kbench.task()
 def test_chatroom_multi_turn(llm):
     """Tests multi-turn conversation: 2 rounds of moderator prompt → LLM reply."""
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt="A two-round trivia game.",
         name="Trivia",
     )
@@ -1242,7 +1241,7 @@ def test_chatroom_multi_turn(llm):
 @kbench.task()
 def test_chatroom_private_channel(llm):
     """Tests that private_channel messages are invisible to non-members."""
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt="A team coordination exercise with a secret planning phase.",
         name="Coordinator",
     )
@@ -1302,9 +1301,9 @@ def test_chatroom_private_channel(llm):
 
 @benchmark_test(include=CHATROOM_LLM_NAMES)
 @kbench.task()
-def test_chatroom_actor_talk(llm):
+def test_chatroom_room_post(llm):
     """Tests that room.post() messages are visible and LLMs respond correctly."""
-    room = rooms.ChatRoom(
+    room = kbench.ChatRoom(
         system_prompt="A simple number guessing game. The host posts a number, the Player guesses.",
         name="NumberGame",
     )

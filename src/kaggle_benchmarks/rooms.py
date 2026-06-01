@@ -1,4 +1,4 @@
-# Copyright 2025 Kaggle Inc.
+# Copyright 2026 Kaggle Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
 """Multi-agent conversation rooms with perspective-aware history.
 
 This module provides :class:`ChatRoom` for multi-participant conversations and
-:class:`Participant` — a lightweight identity wrapper that binds a backing actor
-(often a shared LLM) with per-room state (name, avatar, system_prompt).
+:class:`Participant` — a lightweight identity wrapper that binds a backing LLM
+(often shared across participants) with per-room state (name, avatar,
+system_prompt).
 
 Key design principle: **the room owns all per-participant customizations**.  The
-backing LLM/Actor object is shared and stateless.  No cloning occurs.
+backing LLM is shared and stateless.  No cloning occurs.
 
 Usage::
 
@@ -47,11 +48,11 @@ T = TypeVar("T")
 
 
 class Participant:
-    """Lightweight identity for an actor in a ChatRoom.
+    """Lightweight identity for an LLM in a ChatRoom.
 
-    Wraps a backing actor (often a shared LLM) with per-room identity
-    (name, avatar) and per-room state (system_prompt).  The backing
-    actor is never cloned.
+    Wraps a backing :class:`LLMChat` (often shared across participants)
+    with per-room identity (name, avatar) and per-room state
+    (system_prompt).  The backing LLM is never cloned.
 
     Users obtain ``Participant`` instances from
     :meth:`ChatRoom.add_participant` — they are not constructed directly.
@@ -59,26 +60,38 @@ class Participant:
     Interaction methods:
 
     - :meth:`reply` — LLM-generated response (delegates to room).
-    - :meth:`say` — scripted message (delegates to room).
-    - :meth:`prompt` — single-turn LLM call *outside* a room context
-      (delegates to the backing actor).
+
+    For one-shot LLM calls outside any room (e.g. post-room judge
+    evaluation), call the backing model directly: ``llm.prompt(...)``.
+    A `Participant` is a room-scoped identity; outside the room there is
+    no per-participant state to apply.
+
+    Removal is hard-delete by design: :meth:`ChatRoom.remove_participant`
+    drops the participant from the active roster and blocks further
+    :meth:`reply`, while historical messages remain attributed to them
+    in the transcript. If reversible deactivation is ever needed (e.g.
+    AFK chat presence, temporary muting), add an `active: bool` field
+    here and gate `ChatRoom._build_roster` and `_generate_reply` on it
+    — that extension is additive and does not break removal semantics.
     """
 
     def __init__(
         self,
-        actor: "actors.Actor",
+        llm: "LLMChat",
         *,
         name: str,
         avatar: str,
-        role: str,
         system_prompt: str | None = None,
     ):
-        self.actor = actor
+        self.llm: "LLMChat" = llm
         self.name = name
         self.id = name
         self.avatar = avatar
-        self.role = role
         self.system_prompt = system_prompt
+
+    @property
+    def role(self) -> str:
+        return self.llm.role
 
     def reply(self, schema: type[T] = str, tools=None, **kwargs) -> T:
         """Generate an LLM response in the active ChatRoom.
@@ -88,12 +101,15 @@ class Participant:
         underlying LLM, and appends the generated response to the room's
         ground-truth log.
 
-        Unlike :meth:`say`, which posts scripted content, this method
-        autonomously generates a response based on the conversation the
-        participant can see.
+        Unlike ``room.post()``, which posts scripted content from the narrator,
+        this method autonomously generates a response based on the conversation
+        the participant can see.
 
         Args:
-            schema: Output schema type for structured output.
+            schema: Output schema type for structured output. When set, the
+                response is shown to peers as ``str(content)`` — override
+                ``__str__`` on the schema if you need a different on-the-wire
+                representation (e.g. to hide a private field).
             tools: Reserved for future tool support inside rooms.
             **kwargs: Additional keyword arguments forwarded to respond().
 
@@ -110,20 +126,8 @@ class Participant:
             )
         return room._generate_reply(self, schema=schema, tools=tools, **kwargs)
 
-    def prompt(self, *args, **kwargs):
-        """Single-turn LLM call — delegates to the backing actor.
-
-        This is a convenience proxy so that code which obtained a
-        ``Participant`` from :meth:`ChatRoom.add_participant` can still call
-        ``participant.prompt(...)`` outside the room context (e.g. for
-        post-room judge evaluation).
-
-        Must NOT be called inside an active ChatRoom context.
-        """
-        return self.actor.prompt(*args, **kwargs)
-
     def __repr__(self) -> str:
-        return f"Participant(name={self.name!r}, actor={self.actor!r})"
+        return f"Participant(name={self.name!r}, llm={self.llm!r})"
 
     def __str__(self) -> str:
         return f"{self.avatar} {self.name}"
@@ -164,7 +168,8 @@ class ChatRoom(Chat):
     def __init__(
         self,
         system_prompt: str = "",
-        name: str = "Room",
+        name: str = "Narrator",
+        narrator_avatar: str = "📢",
         _parent_room: "ChatRoom | None" = None,
     ):
         super().__init__(name=name)
@@ -183,7 +188,7 @@ class ChatRoom(Chat):
         # so the LLM sees consistent "[Moderator]: ..." messages matching
         # the roster's "Note on ..." instruction.
         # Uses role="user" because LLM APIs require user/assistant alternation.
-        self._narrator = actors.Actor(name=name, role="user", avatar="📢")
+        self._narrator = actors.Actor(name=name, role="user", avatar=narrator_avatar)
 
     def add_participant(
         self,
@@ -192,7 +197,6 @@ class ChatRoom(Chat):
         name: str | None = None,
         avatar: str | None = None,
         system_prompt: str | None = None,
-        **kwargs,
     ) -> "Participant":
         """Register an LLM as a participant in this room.
 
@@ -210,6 +214,10 @@ class ChatRoom(Chat):
         """
         from kaggle_benchmarks.actors.llms import LLMChat
 
+        # Intentional: scripted/code-driven peers should be added via a future
+        # add_scripted() / ScriptedParticipant sibling, not by re-accepting Actor
+        # here. Routing scripted content through Actor reintroduces the
+        # "peer-and-narrator-at-once" roster ambiguity that this refactor fixed.
         if not isinstance(participant, LLMChat):
             raise TypeError(
                 f"add_participant() requires an LLMChat instance, got "
@@ -228,23 +236,44 @@ class ChatRoom(Chat):
             )
 
         p = Participant(
-            actor=participant,
+            llm=participant,
             name=effective_name,
             avatar=avatar if avatar is not None else participant.avatar,
-            role=participant.role,
             system_prompt=system_prompt,
         )
-
-        for k, v in kwargs.items():
-            if not hasattr(p, k):
-                raise AttributeError(
-                    f"Participant {p.name!r} has no attribute {k!r}. Check for typos."
-                )
-            setattr(p, k, v)
 
         self.participants.append(p)
 
         return p
+
+    def remove_participant(self, participant: "Participant") -> None:
+        """Remove a participant from this room's active roster.
+
+        After removal:
+
+        - The participant no longer appears in other participants'
+          rosters (so surviving LLMs are not told a dead/departed
+          peer is still in the room).
+        - Calling :meth:`Participant.reply` raises ``RuntimeError`` —
+          the room no longer accepts turns from this identity.
+        - Historical messages stay in the transcript, still attributed
+          to the participant's name and avatar. The Participant object
+          remains referenced via ``Message.sender`` for those messages.
+
+        Removal does **not** cascade to child private channels — if
+        the participant is a member of an active
+        :meth:`private_channel`, remove them from that channel
+        explicitly. Keeping cascade out of the framework matches the
+        "one knob per call" design of the rest of the room API.
+
+        Raises:
+            ValueError: If ``participant`` is not currently a member.
+        """
+        if participant not in self.participants:
+            raise ValueError(
+                f"Participant {participant.name!r} is not a member of this room."
+            )
+        self.participants.remove(participant)
 
     # ── Room Orchestration ──────────────────────────────────────────────
 
@@ -255,9 +284,10 @@ class ChatRoom(Chat):
 
         This is the internal method that :meth:`Participant.reply` delegates to.
         It constructs the perspective-projected history and system prompt for
-        the participant, calls the backing LLM's ``respond()`` method, and
-        fixes up the message sender to be the ``Participant`` (not the backing
-        LLM).
+        the participant, then calls the backing LLM's ``respond()`` method
+        with ``sender=participant`` so the message is created with the correct
+        identity from the start (important for streaming UIs and event
+        subscribers that observe messages before this method returns).
         """
         if tools:
             raise NotImplementedError(
@@ -266,16 +296,23 @@ class ChatRoom(Chat):
                 "side-chat for tool calls."
             )
 
+        if participant not in self.participants:
+            raise RuntimeError(
+                f"Participant {participant.name!r} was removed from this room "
+                f"and can no longer reply. Re-add via add_participant() if you "
+                f"intend to bring them back (which creates a new identity)."
+            )
+
         system = self._build_system_prompt(participant)
         perspective = self._build_perspective(participant)
 
-        response = participant.actor.respond(
-            system=system, schema=schema, input_messages=perspective, **kwargs
+        response = participant.llm.respond(
+            system=system,
+            schema=schema,
+            input_messages=perspective,
+            sender=participant,
+            **kwargs,
         )
-        # Fix up sender: respond() creates the message with sender=backing_llm,
-        # but we need it to be the Participant so perspective projection
-        # (which uses `is` identity) works correctly on subsequent turns.
-        response.sender = participant
         return response.content
 
     # ── Context Management ──────────────────────────────────────────────
@@ -351,28 +388,36 @@ class ChatRoom(Chat):
         """
         peers = [p for p in self.participants if p is not viewer]
         lines = [f"You are {viewer.name}."]
+        # Front-load narrator identity so the LLM knows who "[Narrator]: ..."
+        # messages come from before it sees peer names.
+        lines.append(
+            f'Messages from "{self.name}" are system/narrator instructions,'
+            " not from another participant."
+        )
+        lines.append("")
         if peers:
             lines.append("Other participants in this conversation:")
             for p in peers:
                 lines.append(f"- {p.name}")
-        lines.append("")
+            lines.append("")
         lines.append(
             "Messages from other participants are prefixed with their name,"
-            " e.g., [Bob]: ..."
+            " e.g., [Name]: ..."
         )
         lines.append("Your messages appear without a prefix.")
+        lines.append(
+            "When you reply, output only your message content. Do not prefix "
+            "your response with your name, brackets, or any attribution label "
+            "— the system adds attribution automatically."
+        )
         lines.append("")
         lines.append(
             "Messages prefixed with '[private: Channel Name]' or tagged with "
             "'(private: Channel Name)' are from a private channel visible only "
             "to its members. Other participants cannot see these messages. "
-            "When you see a private channel prompt, respond to it directly "
-            "— do not continue the public conversation."
-        )
-        lines.append("")
-        lines.append(
-            f'Note on "{self.name}": Messages from "{self.name}" are'
-            " system/narrator instructions, not from another player."
+            "When the most recent message is a private-channel directive, your "
+            "reply addresses only that directive. Do not respond to public-room "
+            "topics in the same turn."
         )
         return "\n".join(lines)
 
@@ -421,11 +466,13 @@ class ChatRoom(Chat):
                 if viewer in item.participants:
                     projected.extend(item._build_perspective(viewer, _recursive=True))
             elif isinstance(item, Message):
-                # Standard framework visibility check
+                # Both filters must pass for the viewer to see the message:
+                # - is_visible_to_llm: framework-wide hide flag (e.g. error
+                #   messages kept for the transcript but never shown to LLMs).
+                # - _meta["visible_to"]: ChatRoom-specific per-audience list,
+                #   set by room.post(visible_to=...). None means "everyone".
                 if not item.is_visible_to_llm:
                     continue
-
-                # Visibility filtering on individual messages.
                 visible = item._meta.get("visible_to")
                 if visible is not None and viewer not in visible:
                     continue
@@ -467,12 +514,17 @@ class ChatRoom(Chat):
     # ── Private Channels ────────────────────────────────────────────────
 
     def private_channel(
-        self, participants: list[Participant], name: str = "Private Channel"
+        self, participants: list[Participant], *, name: str
     ) -> "ChatRoom":
         """Create a child ChatRoom visible only to the specified participants.
 
         Any messages posted inside the child channel are interleaved into the
         parent room's ground-truth log with restricted visibility.
+
+        ``name`` is required and keyword-only — it appears in LLM-visible
+        tags like ``[private: <name>]: ...``, so it should be semantically
+        meaningful to the participants (e.g. ``"Wolf Night Chat"``,
+        ``"Team Briefing"``), not a generic placeholder.
 
         Nesting beyond two levels is supported — enter each channel within
         its parent's context.

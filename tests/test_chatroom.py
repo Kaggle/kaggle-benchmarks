@@ -19,6 +19,20 @@ from kaggle_benchmarks.messages import Message
 from kaggle_benchmarks.rooms import ChatRoom, Participant
 from tests.mocks import MockedChat
 
+# ── Public API surface ──
+
+
+def test_chatroom_and_participant_are_top_level_exports():
+    """ChatRoom and Participant must be reachable as kbench.ChatRoom /
+    kbench.Participant, for ergonomic parity with kbench.Actor / kbench.LLMChat.
+    Locks the re-export so a future refactor of __init__.py doesn't silently
+    break the public surface."""
+    import kaggle_benchmarks as kbench
+
+    assert kbench.ChatRoom is ChatRoom
+    assert kbench.Participant is Participant
+
+
 # ── Context Manager ──
 
 
@@ -42,9 +56,9 @@ def test_add_participant_same_llm_creates_distinct_participants():
     assert alice is not bob
     assert isinstance(alice, Participant)
     assert isinstance(bob, Participant)
-    # Both wrap the same backing actor
-    assert alice.actor is shared
-    assert bob.actor is shared
+    # Both wrap the same backing LLM
+    assert alice.llm is shared
+    assert bob.llm is shared
     assert alice.name == "Alice"
     assert bob.name == "Bob"
     assert len(room.participants) == 2
@@ -105,6 +119,137 @@ def test_chatroom_sets_active_context():
     assert chats.get_current_chat() is not room
 
 
+# ── remove_participant() ──
+
+
+def test_remove_participant_excludes_from_roster():
+    """Removed participant must not appear in surviving members' rosters."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice", cycle=True)
+    bob_mock = MockedChat.from_contents(["x"], name="Bob")
+    charlie_mock = MockedChat.from_contents(["x"], name="Charlie")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+    bob = room.add_participant(bob_mock)
+    room.add_participant(charlie_mock)
+
+    room.remove_participant(bob)
+
+    with room:
+        alice.reply()
+    _, kwargs = alice_mock.invocations[0]
+    system = kwargs["system"]
+    assert "Charlie" in system
+    assert "Bob" not in system
+
+
+def test_remove_participant_preserves_historical_messages():
+    """Removed participant's prior messages stay in the transcript and
+    remain visible in other members' perspectives, attributed to them."""
+    alice_mock = MockedChat.from_contents(["from Alice"], name="Alice", cycle=True)
+    bob_mock = MockedChat.from_contents(["from Bob"], name="Bob")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+    bob = room.add_participant(bob_mock)
+
+    with room:
+        bob.reply()
+    room.remove_participant(bob)
+
+    # Bob's message is still in the room
+    assert any(m.sender is bob for m in room.messages)
+
+    # And it shows up in Alice's perspective with the [Bob]: prefix
+    perspective = room._build_perspective(alice)
+    assert any("[Bob]: from Bob" in m.content for m in perspective)
+
+
+def test_remove_participant_blocks_further_reply():
+    """A removed participant's .reply() must raise."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice", cycle=True)
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+    room.remove_participant(alice)
+
+    with room:
+        with pytest.raises(RuntimeError, match="was removed from this room"):
+            alice.reply()
+
+
+def test_remove_participant_twice_raises():
+    """Double-remove raises ValueError — silently swallowing would hide bugs."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+    room.remove_participant(alice)
+    with pytest.raises(ValueError, match="not a member"):
+        room.remove_participant(alice)
+
+
+def test_remove_participant_unknown_raises():
+    """Removing a Participant that was never added raises ValueError."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom()
+    room.add_participant(alice_mock)
+    outsider = Participant(alice_mock, name="Ghost", avatar="")
+    with pytest.raises(ValueError, match="not a member"):
+        room.remove_participant(outsider)
+
+
+def test_remove_participant_does_not_cascade_to_private_channel():
+    """Removal from parent room is intentionally non-cascading; the
+    participant remains a member of any active private channel until
+    explicitly removed there too. This documents the contract."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice")
+    bob_mock = MockedChat.from_contents(["x"], name="Bob")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+    bob = room.add_participant(bob_mock)
+
+    channel = room.private_channel([alice, bob], name="Side")
+    room.remove_participant(bob)
+
+    assert bob in channel.participants
+    assert bob not in room.participants
+
+
+def test_remove_then_readd_same_name_creates_distinct_identity():
+    """Reusing a name after remove_participant produces a NEW Participant.
+
+    This pins the current "resurrection-as-amnesia" behavior so a future
+    change to restrict name reuse would notice this test and need to
+    decide intentionally. The two Participants share a name (so peer-side
+    projection tags both as [Alice]) but are distinct Python objects with
+    independent avatars and system_prompts.
+    """
+    alice_mock = MockedChat.from_contents(["before", "after"], name="Alice", cycle=True)
+    room = ChatRoom()
+
+    p1 = room.add_participant(alice_mock, name="Alice", avatar="👩")
+    with room:
+        p1.reply()  # "before"
+    room.remove_participant(p1)
+
+    # Same name allowed again
+    p2 = room.add_participant(alice_mock, name="Alice", avatar="🧙")
+    with room:
+        p2.reply()  # "after"
+
+    # Distinct objects with different avatars
+    assert p1 is not p2
+    assert p1.avatar == "👩"
+    assert p2.avatar == "🧙"
+
+    # Both messages stay in the transcript, attributed to their respective
+    # Participant identities
+    assert room.messages[0].sender is p1
+    assert room.messages[1].sender is p2
+
+    # p1 can no longer reply (was removed); p2 can
+    with room:
+        with pytest.raises(RuntimeError, match="was removed"):
+            p1.reply()
+
+
 # ── reply() Primitive ──
 
 
@@ -134,14 +279,25 @@ def test_participant_reply_outside_room_raises():
         alice.reply()
 
 
-def test_prompt_inside_chatroom_raises():
-    """prompt() must not be called inside an active ChatRoom."""
+def test_llm_prompt_inside_chatroom_raises():
+    """LLMChat.prompt() must not be called inside an active ChatRoom —
+    it bypasses perspective projection and corrupts the room transcript."""
     alice_mock = MockedChat.from_contents(["x"], name="Alice", cycle=True)
     room = ChatRoom()
-    alice = room.add_participant(alice_mock)
+    room.add_participant(alice_mock)
     with room:
         with pytest.raises(RuntimeError, match="cannot be called inside"):
-            alice.prompt("hello")
+            alice_mock.prompt("hello")
+
+
+def test_participant_has_no_prompt_method():
+    """Participant is a room-scoped identity; prompt() would silently
+    drop per-participant state. Removed intentionally — callers should
+    use llm.prompt() directly for one-shot calls outside a room."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+    assert not hasattr(alice, "prompt")
 
 
 # ── Perspective Projection ──
@@ -227,8 +383,8 @@ def test_system_prompt_composition():
     assert "SECRET: You are a werewolf" in system
     # Peer's secret NOT leaked
     assert "SECRET: You are a villager" not in system
-    # Narrator note
-    assert 'Note on "Moderator"' in system
+    # Narrator identity (front-loaded in roster)
+    assert 'Messages from "Moderator" are system/narrator instructions' in system
 
 
 def test_post_sender_matches_room_name():
@@ -257,6 +413,23 @@ def test_visible_to_filters_messages():
 
     assert len(room._build_perspective(alice)) == 2
     assert len(room._build_perspective(bob)) == 1
+
+
+def test_visibility_filters_compose_with_and():
+    """A message that fails EITHER filter is hidden. Pins the AND semantics
+    so a future refactor can't accidentally turn it into OR (which would
+    leak hidden messages to the audience listed in visible_to)."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+
+    msg = Message(sender=alice, content="hidden by is_visible_to_llm")
+    msg.is_visible_to_llm = False
+    msg._meta["visible_to"] = [alice]  # would otherwise allow Alice to see it
+    room.history = [msg]
+
+    # Alice is in visible_to BUT is_visible_to_llm is False — still hidden.
+    assert room._build_perspective(alice) == []
 
 
 def test_private_channel_isolation_and_parent_visibility():
@@ -311,9 +484,7 @@ def test_private_channel_validates_participants():
     alice = room.add_participant(alice_mock)
     room.add_participant(bob_mock)
 
-    outsider_participant = Participant(
-        outsider_mock, name="Outsider", avatar="", role="assistant"
-    )
+    outsider_participant = Participant(outsider_mock, name="Outsider", avatar="")
     with pytest.raises(ValueError, match="Unknown: Outsider"):
         room.private_channel([alice, outsider_participant], name="Bad Channel")
 
@@ -328,6 +499,18 @@ def test_private_channel_rejects_same_name_as_parent():
 
     with pytest.raises(ValueError, match="must differ from parent room name"):
         room.private_channel([alice], name="GameRoom")
+
+
+def test_private_channel_requires_name():
+    """private_channel() requires a keyword-only name argument — the name
+    appears in LLM-visible '[private: ...]' tags, so a generic default
+    would degrade prompt quality silently."""
+    alice_mock = MockedChat.from_contents(["x"], name="Alice")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+
+    with pytest.raises(TypeError):
+        room.private_channel([alice])  # missing required name=
 
 
 def test_nested_channels_three_levels():
@@ -449,6 +632,71 @@ def test_meta_llm_response_path():
     assert "input_tokens" in room_msg._meta
     assert room_msg._meta["input_tokens"] == 10
     assert room_msg._meta.get("chat") is room
+
+
+# ── Sender Identity at Event Time ──
+
+
+def test_sender_is_participant_at_event_time_llm_message():
+    """Message sender must be the Participant (not the backing LLMChat)
+    at the moment new_message fires — not patched after the fact."""
+    from kaggle_benchmarks import events
+
+    alice_mock = MockedChat.from_contents(["hi"], name="Alice", cycle=True)
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock, name="AliceP", avatar="👩")
+
+    captured_senders = []
+
+    class SenderCapture:
+        def new_message(self, chat, message):
+            captured_senders.append(message.sender)
+
+    capture = SenderCapture()
+    events.manager.bind(capture)
+    try:
+        with room:
+            room.post("Topic")
+            alice.reply()
+    finally:
+        events.manager.unbind(capture)
+
+    # Find the reply message (not the post)
+    reply_senders = [
+        s for s in captured_senders if getattr(s, "name", None) == "AliceP"
+    ]
+    assert len(reply_senders) == 1
+    assert reply_senders[0] is alice  # Participant, not backing LLMChat
+
+
+def test_sender_is_participant_at_event_time_llm_response():
+    """Same as above but for the LLMResponse code path."""
+    from kaggle_benchmarks import events
+
+    alice_mock = MockedLLMResponseChat.from_contents(["hi"], name="Alice", cycle=True)
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock, name="AliceP", avatar="👩")
+
+    captured_senders = []
+
+    class SenderCapture:
+        def new_message(self, chat, message):
+            captured_senders.append(message.sender)
+
+    capture = SenderCapture()
+    events.manager.bind(capture)
+    try:
+        with room:
+            room.post("Topic")
+            alice.reply()
+    finally:
+        events.manager.unbind(capture)
+
+    reply_senders = [
+        s for s in captured_senders if getattr(s, "name", None) == "AliceP"
+    ]
+    assert len(reply_senders) == 1
+    assert reply_senders[0] is alice
 
 
 # ── Comprehensive Perspective Verification ──
