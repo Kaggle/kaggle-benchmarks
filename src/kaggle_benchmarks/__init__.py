@@ -22,6 +22,7 @@ from kaggle_benchmarks import (
     kaggle,
     orchestration,
     prompting,
+    rooms,
     tasks,
     tools,
     ui,

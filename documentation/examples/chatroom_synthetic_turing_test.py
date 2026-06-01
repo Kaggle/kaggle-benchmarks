@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import assertions, chats
+from kaggle_benchmarks import assertions, rooms
 
 
 @dataclass
@@ -78,7 +78,7 @@ def run_synthetic_turing_test(
         "Do not explicitly state that you are an AI or an AI judge unless it is part of your testing tactic."
     )
 
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt="An interactive Synthetic Turing Test conversation.",
         name="ChatRoom",
     )

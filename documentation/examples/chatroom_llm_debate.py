@@ -25,7 +25,7 @@ A third independent LLM (Judge) evaluates the entire debate transcript to declar
 
 # %%
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import assertions, chats
+from kaggle_benchmarks import assertions, rooms
 
 
 @kbench.task(
@@ -55,7 +55,7 @@ def run_debate(
         "Directly address and rebut the points raised by the Pro debater."
     )
 
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt=(
             f"A structured formal debate on the topic: '{topic}'.\n"
             "The debate consists of three structured phases:\n"

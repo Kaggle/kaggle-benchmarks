@@ -47,8 +47,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import chats
-from kaggle_benchmarks.actors import Actor
+from kaggle_benchmarks import rooms
 from kaggle_benchmarks.content_types import (
     audios,
     images,
@@ -1074,7 +1073,7 @@ CHATROOM_LLM_NAMES = {
 @kbench.task()
 def test_chatroom_add_participant(llm):
     """Tests that the same LLM added twice yields independent participants."""
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt="A quick Q&A between two experts.",
         name="Host",
     )
@@ -1149,13 +1148,11 @@ class _CityFact:
 @kbench.task()
 def test_chatroom_talk_structured_output(llm):
     """Tests that reply(schema=) works inside a ChatRoom."""
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt="A geography quiz game.",
         name="QuizMaster",
     )
 
-    host = Actor(name="QuizMaster", role="user", avatar="🎯")
-    room.add_participant(host)
     player = room.add_participant(
         llm,
         name="Player",
@@ -1163,7 +1160,7 @@ def test_chatroom_talk_structured_output(llm):
     )
 
     with room:
-        host.say(
+        room.post(
             "What is the capital of France? Provide city, country, and approximate population in millions."
         )
         fact = player.reply(schema=_CityFact)
@@ -1194,7 +1191,7 @@ def test_chatroom_talk_structured_output(llm):
 @kbench.task()
 def test_chatroom_multi_turn(llm):
     """Tests multi-turn conversation: 2 rounds of moderator prompt → LLM reply."""
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt="A two-round trivia game.",
         name="Trivia",
     )
@@ -1245,7 +1242,7 @@ def test_chatroom_multi_turn(llm):
 @kbench.task()
 def test_chatroom_private_channel(llm):
     """Tests that private_channel messages are invisible to non-members."""
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt="A team coordination exercise with a secret planning phase.",
         name="Coordinator",
     )
@@ -1298,23 +1295,20 @@ def test_chatroom_private_channel(llm):
 
 
 # %%
-# --- Test Case: ChatRoom — Actor (Non-LLM Participant) ---
-# Verifies that Actor.say() posts scripted messages visible to LLM
-# participants, and that LLMs can respond to Actor messages correctly.
+# --- Test Case: ChatRoom — Scripted Messages via room.post() ---
+# Verifies that room.post() messages are visible to LLM participants
+# and that LLMs can respond to scripted messages correctly.
 
 
 @benchmark_test(include=CHATROOM_LLM_NAMES)
 @kbench.task()
 def test_chatroom_actor_talk(llm):
-    """Tests that a non-LLM Actor can post messages that LLMs respond to."""
-    game = Actor(name="GameEngine", role="user", avatar="🎮")
-
-    room = chats.ChatRoom(
-        system_prompt="A simple number guessing game. The GameEngine posts a number, the Player guesses.",
-        name="GameEngine",
+    """Tests that room.post() messages are visible and LLMs respond correctly."""
+    room = rooms.ChatRoom(
+        system_prompt="A simple number guessing game. The host posts a number, the Player guesses.",
+        name="NumberGame",
     )
 
-    room.add_participant(game)
     player = room.add_participant(
         llm,
         name="Player",
@@ -1325,7 +1319,7 @@ def test_chatroom_actor_talk(llm):
     )
 
     with room:
-        game.say("The number is: 41")
+        room.post("The number is: 41")
         reply = player.reply()
 
     kbench.assertions.assert_contains_regex(
@@ -1334,8 +1328,8 @@ def test_chatroom_actor_talk(llm):
         expectation="Player should respond with 42 (41 + 1).",
     )
 
-    # Actor message is in transcript
+    # Post message is in transcript
     kbench.assertions.assert_true(
-        room.messages[0].sender.name == "GameEngine",
-        "First message should be from the GameEngine Actor.",
+        room.messages[0].sender.name == "NumberGame",
+        "First message should be from the room narrator.",
     )

@@ -29,7 +29,7 @@ ChatRoom version:
 import dataclasses
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import actors, chats
+from kaggle_benchmarks import rooms
 
 # --- Game Logic (unchanged from original) ---
 
@@ -127,18 +127,13 @@ def run_tic_tac_toe(
         - Players see the full history (own moves as "assistant", peer as "user")
         - reply(schema=TicTacToeMove) returns structured output directly
     """
-    game = TicTacToe()
-    game_engine = actors.Actor(name="Game", role="user", avatar="🎮")
-
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt=(
             "A game of Tic-Tac-Toe. The Game participant posts the current "
             "board state. Players take turns making moves."
         ),
         name="Game",
     )
-
-    room.add_participant(game_engine)
 
     player_x = room.add_participant(
         llm,
@@ -155,8 +150,10 @@ def run_tic_tac_toe(
 
     players = {"X": player_x, "O": player_o}
 
+    game = TicTacToe()
+
     with room:
-        game_engine.say(f"Game starts! Initial board:\n{game}")
+        room.post(f"Game starts! Initial board:\n{game}")
 
         while not game.is_game_over():
             current = players[game.current_player]
@@ -167,7 +164,7 @@ def run_tic_tac_toe(
                 opponent_id = "O" if game.current_player == "X" else "X"
                 return {opponent_id: 1.0, game.current_player: 0.0}
 
-            game_engine.say(f"Board after move:\n{game}")
+            room.post(f"Board after move:\n{game}")
 
     return game.get_scores()
 

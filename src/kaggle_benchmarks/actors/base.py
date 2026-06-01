@@ -69,37 +69,6 @@ class Actor:
     def __str__(self) -> str:
         return f"{self.avatar} {self.name}"
 
-    def say(self, message: T) -> T:
-        """Post a scripted message to the active ChatRoom.
-
-        This is a **ChatRoom-only** method for code-driven actors (narrators,
-        game engines, moderators) to inject predetermined content into the
-        room's ground-truth log. The message is posted as-is — no LLM
-        generation occurs.
-
-        For LLM-generated responses, see ``LLMChat.reply()``.
-
-        Args:
-            message: The exact content to post to the room.
-
-        Returns:
-            The message content that was posted.
-
-        Raises:
-            RuntimeError: If called outside of an active ChatRoom context.
-        """
-        from kaggle_benchmarks import chats
-
-        chat = chats.get_current_chat()
-        if not isinstance(chat, chats.ChatRoom):
-            raise RuntimeError(
-                "Actor.say() must be called within an active ChatRoom context."
-            )
-
-        msg = Message(sender=self, content=message)
-        chat.append(msg)
-        return message
-
 
 class Tool(Actor):
     def __init__(self, name: str = "tool"):

@@ -29,7 +29,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import assertions, chats
+from kaggle_benchmarks import assertions, rooms
 
 
 class PizzaTurn(BaseModel):
@@ -168,7 +168,7 @@ def run_pizza_order(
         "Keep your responses natural but concise, rude, and transactional (1-2 sentences)."
     )
 
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt="A phone call between a customer and an impatient pizzeria clerk.",
         name="Phone Call",
     )

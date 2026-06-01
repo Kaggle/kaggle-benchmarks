@@ -31,7 +31,7 @@ import random
 from collections import Counter
 
 import kaggle_benchmarks as kbench
-from kaggle_benchmarks import actors, chats
+from kaggle_benchmarks import rooms
 
 
 @dataclasses.dataclass(frozen=True)
@@ -70,18 +70,13 @@ def run_werewolf(
         "suspicious defensive behavior, and vote."
     )
 
-    # Initialize general room game-engine arbiter
-    moderator = actors.Actor(name="Moderator", role="user", avatar="🧙")
-
-    room = chats.ChatRoom(
+    room = rooms.ChatRoom(
         system_prompt=(
             "A game of Werewolf. The Moderator coordinates rounds. "
             "Night and Day phases loop until one team wins."
         ),
         name="Moderator",
     )
-
-    room.add_participant(moderator)
 
     alice = room.add_participant(
         llm, name="Alice", avatar="👩", system_prompt=werewolf_prompt
@@ -120,7 +115,7 @@ def run_werewolf(
         return top[0][0]
 
     with room:
-        moderator.say("The village of Miller's Hollow falls asleep...")
+        room.post("The village of Miller's Hollow falls asleep...")
 
         round_num = 1
         while len(survivors) > 0:
@@ -129,18 +124,18 @@ def run_werewolf(
 
             # Win Condition Checks
             if not active_wolves:
-                moderator.say("All Werewolves are eliminated! Villagers WIN!")
+                room.post("All Werewolves are eliminated! Villagers WIN!")
                 return {"winner": "VILLAGERS"}
             if len(active_wolves) >= len(active_villagers):
-                moderator.say(
-                    "Werewolves equal or outnumber Villagers! Werewolves WIN!"
-                )
+                room.post("Werewolves equal or outnumber Villagers! Werewolves WIN!")
                 return {"winner": "WEREWOLVES"}
 
-            moderator.say(f"--- Night Phase: Round {round_num} ---")
+            room.post(f"--- Night Phase: Round {round_num} ---")
 
             # Werewolves Night Chat: Spawns a private sub-room visible ONLY to wolves
-            wolf_chat = room.private_channel(active_wolves, name="Werewolf Night Chat")
+            wolf_chat = room.private_channel(
+                active_wolves, name=f"Werewolf Night Chat Round {round_num}"
+            )
             victim = None
 
             # Enter the private werewolf channel. The villagers are blind to this context.
@@ -179,9 +174,9 @@ def run_werewolf(
                     )
 
             # Day Phase
-            moderator.say(f"--- Day Phase: Round {round_num} ---")
+            room.post(f"--- Day Phase: Round {round_num} ---")
             survivors.remove(victim)
-            moderator.say(
+            room.post(
                 f"Day breaks! A tragic discovery is made: {victim.name} was mauled to death last night!"
             )
 
@@ -189,12 +184,10 @@ def run_werewolf(
             active_wolves = [w for w in wolves if w in survivors]
             active_villagers = [v for v in villagers if v in survivors]
             if len(active_wolves) >= len(active_villagers):
-                moderator.say(
-                    "Werewolves equal or outnumber Villagers! Werewolves WIN!"
-                )
+                room.post("Werewolves equal or outnumber Villagers! Werewolves WIN!")
                 return {"winner": "WEREWOLVES"}
 
-            moderator.say(
+            room.post(
                 "Survivors, discuss who is suspicious and vote to eliminate them."
             )
 
@@ -207,7 +200,7 @@ def run_werewolf(
 
             # Execute voting
             eligible_names = ", ".join(s.name for s in survivors)
-            moderator.say(
+            room.post(
                 f"VOTING TIME: Pick one of [{eligible_names}] to hang. "
                 "Use their EXACT full name in voted_player."
             )
@@ -221,15 +214,15 @@ def run_werewolf(
             if hanged_name:
                 hanged = next(p for p in survivors if p.name == hanged_name)
                 survivors.remove(hanged)
-                moderator.say(
+                room.post(
                     f"The village has voted! {hanged_name} is hung from the gallows."
                 )
-                moderator.say(
+                room.post(
                     f"Before dying, {hanged_name}'s secret identity is revealed: "
                     + ("🐺 WEREWOLF!" if hanged in wolves else "🧑‍🌾 VILLAGER!")
                 )
             else:
-                moderator.say("The village is split in a tie. No one is hanged today.")
+                room.post("The village is split in a tie. No one is hanged today.")
 
             round_num += 1
 

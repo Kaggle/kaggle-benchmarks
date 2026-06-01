@@ -154,7 +154,6 @@ class LLMChat(actors.Actor):
     def __init__(
         self,
         *,
-        system_prompt: str | None = None,
         support_structured_outputs: bool = False,
         support_temperature: bool = False,
         **kwargs,
@@ -162,54 +161,9 @@ class LLMChat(actors.Actor):
         kwargs.setdefault("role", "assistant")
         kwargs.setdefault("avatar", "🤖")
         super().__init__(**kwargs)
-        self.system_prompt = system_prompt
         self.support_structured_outputs = support_structured_outputs
         self.support_temperature = support_temperature
         self.stream_responses = config.interactive_mode
-
-    def reply(self, schema: type[T] = str, tools=None, **kwargs) -> T:
-        """Generate an LLM response in the active ChatRoom.
-
-        This is a **ChatRoom-only** method for LLM participants. It builds a
-        perspective-projected history for this participant, invokes the
-        underlying LLM, and appends the generated response to the room's
-        ground-truth log.
-
-        Unlike ``Actor.say(message)``, which posts scripted content, this
-        method autonomously generates a response based on the conversation
-        the participant can see.
-
-        Args:
-            schema: Output schema type for structured output.
-            tools: Reserved for future tool support inside rooms.
-            **kwargs: Additional keyword arguments forwarded to respond().
-
-        Returns:
-            The LLM-generated response content (parsed to ``schema`` type).
-
-        Raises:
-            RuntimeError: If called outside of an active ChatRoom context.
-        """
-        if tools:
-            raise NotImplementedError(
-                "Tool support inside ChatRoom.reply() is planned for a future "
-                "release. As a workaround, use an orphan chats.new() "
-                "side-chat for tool calls."
-            )
-
-        room = chats.get_current_chat()
-        if not isinstance(room, chats.ChatRoom):
-            raise RuntimeError(
-                "LLMChat.reply() must be called within an active ChatRoom context."
-            )
-
-        system = room._build_system_prompt(self)
-        perspective = room._build_perspective(self)
-
-        response = self.respond(
-            system=system, schema=schema, input_messages=perspective, **kwargs
-        )
-        return response.content
 
     def invoke(
         self,
@@ -245,8 +199,10 @@ class LLMChat(actors.Actor):
         """
         # Guard: prompt() bypasses perspective projection — it must not
         # be called when a ChatRoom is the active context.
+        from kaggle_benchmarks.rooms import ChatRoom
+
         current = chats.get_current_chat()
-        if isinstance(current, chats.ChatRoom):
+        if isinstance(current, ChatRoom):
             raise RuntimeError(
                 f"LLMChat.prompt() cannot be called inside an active ChatRoom "
                 f"('{current.name}'). Use reply() for room interactions, or "
