@@ -24,6 +24,12 @@ genai://anthropic/claude-sonnet-4-6@default:
   config:
     structured_output: true
   tests:
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -96,7 +102,7 @@ genai://google/gemini-2.0-flash:
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
-    test_tool_with_schema_output: failed
+    test_tool_with_schema_output: passed
 genai://google/gemini-2.5-flash:
   config:
     structured_output: true
@@ -104,6 +110,12 @@ genai://google/gemini-2.5-flash:
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -149,7 +161,7 @@ genai://google/gemini-2.5-pro:
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
-    test_tool_with_schema_output: failed
+    test_tool_with_schema_output: passed
     test_video_url: passed
 genai://google/gemini-3-flash-preview:
   config:
@@ -158,6 +170,12 @@ genai://google/gemini-3-flash-preview:
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extra_api_params_max_tokens_genai: passed
@@ -173,7 +191,7 @@ genai://google/gemini-3-flash-preview:
     test_image_with_media_resolution: passed
     test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
-    test_reasoning_captures_traces: passed
+    test_reasoning_captures_traces: failed
     test_reasoning_param: passed
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
@@ -233,12 +251,12 @@ genai://openai/gpt-5.5-2026-04-23:
   tests:
     test_complex_tool_return: passed
     test_dataset_eval: passed
-    test_extract_bool: failed
-    test_extract_composite_pydantic: failed
-    test_extract_dataclass: failed
-    test_extract_dict: failed
-    test_extract_int: failed
-    test_extract_pydantic: failed
+    test_extract_bool: passed
+    test_extract_composite_pydantic: passed
+    test_extract_dataclass: passed
+    test_extract_dict: passed
+    test_extract_int: passed
+    test_extract_pydantic: passed
     test_image_base64: failed
     test_image_local_file: passed
     test_image_url: passed
@@ -248,7 +266,7 @@ genai://openai/gpt-5.5-2026-04-23:
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
-    test_tool_with_schema_output: failed
+    test_tool_with_schema_output: passed
 genai://qwen/qwen3-235b-a22b-instruct-2507:
   config:
     structured_output: false
@@ -313,6 +331,12 @@ openai://anthropic/claude-sonnet-4-6@default:
   config:
     structured_output: true
   tests:
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -393,6 +417,12 @@ openai://google/gemini-2.5-flash:
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -447,6 +477,12 @@ openai://google/gemini-3-flash-preview:
     test_audio_base64: passed
     test_audio_local_file: passed
     test_audio_url: passed
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extra_api_params_max_tokens_openai: passed

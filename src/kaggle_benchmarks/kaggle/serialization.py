@@ -193,14 +193,16 @@ def _format_timestamp(dt: datetime.datetime | None) -> str | None:
 
 def _extract_model_version_data(run: runs.Run) -> dict[str, Any | None]:
     """Extracts model version information from run parameters."""
-    actor_param_name = param.name if (param := run.evaluated_subject) else None
+    slug = None
+    if param := run.evaluated_subject:
+        slug = getattr(param, "model", None) or param.name
     return {
         "id": None,
         "benchmark_model_id": None,
         "external_url": None,
         "knowledge_cutoff": None,
         "is_default": None,
-        "slug": actor_param_name,
+        "slug": slug,
     }
 
 

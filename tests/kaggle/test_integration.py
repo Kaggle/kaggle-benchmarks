@@ -21,6 +21,7 @@ from kaggle_benchmarks import (
     assertions,
     config,
     kaggle,
+    runs,
     task,
     utils,
 )
@@ -31,6 +32,10 @@ def client(monkeypatch):
     with tempfile.TemporaryDirectory() as temp_dir:
         kaggle_client = kaggle.KaggleClient(directory=temp_dir)
         config.execution_mode = ExecutionMode.RUN
+        # Reset global run counters to avoid flaky filenames: the counter
+        # is keyed by id(task), and CPython can reuse addresses of GC'd
+        # Task objects from earlier tests, inflating the counter.
+        runs._run_counters.clear()
 
         monkeypatch.setattr("kaggle_benchmarks.client", kaggle_client)
         yield kaggle_client
@@ -224,3 +229,45 @@ def test_load_failed_cached_run_reruns(client, monkeypatch, duck):
     assert not run2.cached  # Should not be loaded from cache.
     assert run2.passed  # Should succeed on the second attempt.
     assert call_count == 2  # Should have been called again.
+
+
+def test_cache_id_uses_model_over_name(client):
+    """cache_id should prefer the `model` attribute over `name` when present."""
+    from tests.mocks import MockedChat
+
+    llm = MockedChat.from_contents(["quack"], name="My Custom Name", cycle=True)
+    llm.model = "vendor/actual-model-slug"
+
+    call_count = 0
+
+    @task()
+    def model_task(llm) -> bool:
+        nonlocal call_count
+        call_count += 1
+        return True
+
+    # First run: file should be named with the model slug, not the display name.
+    run1 = model_task.run(llm, _id="test123")
+    assert not run1.cached
+    assert call_count == 1
+
+    expected_file = (
+        client.directory
+        / "Model_Task-run_param_id_test123_vendor_actual-model-slug.run.json"
+    )
+    assert expected_file.is_file(), (
+        f"Expected cache file using model slug, got: {list(client.directory.iterdir())}"
+    )
+
+    # Verify the name-based file does NOT exist.
+    wrong_file = (
+        client.directory / "Model_Task-run_param_id_test123_My_Custom_Name.run.json"
+    )
+    assert not wrong_file.is_file()
+
+    # Second run with cache: should load from the model-slug-based file.
+    client.use_cache = True
+    run2 = model_task.run(llm, _id="test123")
+    assert run2.cached
+    assert run2.result is True
+    assert call_count == 1  # Should not have been called again.

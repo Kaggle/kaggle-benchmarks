@@ -449,7 +449,10 @@ class PanelUI:
 
     def new_chunk(self, message, chunk):
         if message in self:
-            self[message].stream(chunk)
+            chunk_text = (
+                chunk if isinstance(chunk, str) else getattr(chunk, "content", "")
+            )
+            self[message].stream(chunk_text)
 
     def end_content(self, message):
         # doesn't work as expected

@@ -393,36 +393,68 @@ Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-convers
 
 ### Recipe: Managing Multi-Agent Conversations
 
-In complex multi-agent scenarios, you often need to maintain separate
-conversation histories for each agent. The *Dungeon Adventure* example
-demonstrates how to do this by creating a dedicated `Chat` object for
-each agent and using the `contexts.enter()` context manager to switch
-between them. This allows each agent to have its own isolated
-conversation history, which is crucial for role-playing and other
-complex interactions.
+For multi-agent scenarios — debate, negotiation, social deduction,
+cooperative games — use `kbench.ChatRoom`. A `ChatRoom` is a shared
+conversation space where each LLM sees the right perspective: its own
+messages as `assistant`, peers' messages as `user` with a name prefix.
+
+The same LLM can act as many participants without cloning. Identity
+(`name`, `avatar`, per-participant `system_prompt`) lives on a
+lightweight `Participant` wrapper returned by `add_participant`.
 
 ``` python
-# Create isolated chat contexts for each agent
-dm_chat = chats.Chat(name="Dungeon Master")
-player1_chat = chats.Chat(name="Player 1")
+import kaggle_benchmarks as kbench
 
-# Create the agents with their own chat contexts
-dungeon_master = DungeonMasterAgent(dm_llm, dm_chat, story)
-player1 = PlayerAgent(player1_llm, player1_chat, "Aragorn")
+@kbench.task()
+def debate_task(llm):
+    room = kbench.ChatRoom(
+        system_prompt="A short debate. Each speaker gets one turn.",
+        name="Moderator",
+    )
+    pro = room.add_participant(
+        llm, name="Pro", avatar="🔵",
+        system_prompt="Argue IN FAVOR of the topic. Be concise.",
+    )
+    con = room.add_participant(
+        llm, name="Con", avatar="🔴",
+        system_prompt="Argue AGAINST the topic. Be concise.",
+    )
 
-# --- In the PlayerAgent's __call__ method ---
-with contexts.enter(chat=self.player_chat):
-    # This prompt is only added to the player's chat history
-    action = self.llm.prompt(prompt)
+    with room:
+        # room.post() = narrator directive (no LLM call)
+        room.post("Topic: Should we phase out fossil fuels by 2035?")
+        # participant.reply() = LLM takes a turn
+        pro_argument = pro.reply()
+        con_argument = con.reply()
 
-# --- In the DungeonMasterAgent's __call__ method ---
-with contexts.enter(chat=self.dm_chat):
-    # This prompt is only added to the Dungeon Master's chat history
-    self.story = self.llm.prompt(prompt)
+    # After the room exits, room.messages is the full transcript.
+    return {"pro": pro_argument, "con": con_argument}
 ```
 
-[See Example: Dungeon Adventure
-Notebook](https://www.kaggle.com/code/kerneler/kaggle-benchmark-cookbook-dungeon-adventure)
+**The two primitives inside `with room:`**
+
+| What you write | Who writes the content | LLM call? |
+|---|---|---|
+| `room.post(msg)` | Code — narrator/system directive | No |
+| `participant.reply()` | The LLM | Yes |
+
+**Structured replies**: `reply(schema=YourDataclass)` returns the parsed
+object directly, the same way `llm.prompt(schema=...)` does.
+
+**Private channels**: for multi-turn private conversations (e.g. the
+werewolves' night phase), call
+`room.private_channel(participants, name="...")` and enter it with
+`with channel:`. Members see both the parent room and the channel
+interleaved; non-members never see channel messages.
+
+**Removing participants**: `room.remove_participant(p)` drops a
+participant from the active roster so surviving LLMs no longer see
+them as a peer. Historical messages stay attributed to them.
+
+[See full examples in
+`documentation/examples/chatroom_*.py`](documentation/examples/) —
+debate, pizza-order negotiation, Turing test, tic-tac-toe, and a
+7-player Werewolf game with private channels and eliminations.
 
 ------------------------------------------------------------------------
 

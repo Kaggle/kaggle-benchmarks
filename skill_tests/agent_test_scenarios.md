@@ -989,6 +989,176 @@ These test the agent's ability to **combine** basic patterns from the skill file
 
 ---
 
+## Category 8: Multi-Agent ChatRoom
+
+These scenarios validate the agent's understanding of the `ChatRoom` / `Participant` API for multi-agent conversations with perspective-aware history.
+
+### Scenario 8.1 — Two-Participant Debate (Basic ChatRoom)
+
+**Prompt:**
+> Write a kaggle-benchmarks task that runs a 2-turn debate between two LLM participants named "Pro" and "Con" in a `ChatRoom`. The topic is posted by the room: "Should AI labs need mandatory licensing?". Each participant takes two turns. After the room exits, assert the transcript has at least 5 messages (1 topic post + 4 replies).
+
+**Expected Answer:**
+- [ ] Uses `kbench.ChatRoom(system_prompt="...")` (not the deprecated `LLMChat.reply()` self-clone pattern)
+- [ ] Uses `room.add_participant(llm, name="Pro", system_prompt="...")` and similarly for "Con"
+- [ ] Uses `with room:` as a context manager
+- [ ] Uses `room.post("Topic: ...")` for the topic (NOT `Participant.post` — that doesn't exist)
+- [ ] Calls `pro.reply()` and `con.reply()` inside the `with` block
+- [ ] Asserts using `room.messages` (the ground-truth transcript) after the `with` block exits
+- [ ] Uses `kbench.assertions.assert_true(len(room.messages) >= 5)`
+
+**Source of Truth:** Skill file §6 "ChatRoom — Multi-Agent Conversations"; `docs/chatroom/rooms_walkthrough.md`
+
+---
+
+### Scenario 8.2 — Same LLM, Many Participants (No Cloning)
+
+**Prompt:**
+> I want both "Alice" and "Bob" in my ChatRoom to be backed by the same underlying `kbench.llm` model. Will they interfere with each other? Do I need to clone the LLM?
+
+**Expected Answer:**
+- [ ] Says **no cloning is needed**
+- [ ] Explains the same `LLMChat` can back multiple participants without interference
+- [ ] Explains that the per-room identity (`name`, `avatar`, `system_prompt`) lives on the lightweight `Participant` wrapper, not on the `LLMChat`
+- [ ] Shows passing the same `kbench.llm` to two `add_participant()` calls with different `name=` arguments
+- [ ] Mentions that participant identity is `is`-based (each `Participant` is a distinct object), which is what lets perspective projection distinguish "my message" from "their message"
+- [ ] Does NOT recommend manually copying or cloning the LLM
+
+**Source of Truth:** Skill file §6 "ChatRoom"; `docs/chatroom/rooms_walkthrough.md` "add_participant" section; `docs/chatroom/pr-summary-rooms.md`
+
+---
+
+### Scenario 8.3 — room.post() vs participant.reply()
+
+**Prompt:**
+> What's the difference between `room.post(msg)` and `participant.reply()`? When should I use each?
+
+**Expected Answer:**
+- [ ] Explains `room.post()` is a **narrator/system directive** (e.g. game rules, phase transitions, topic prompts) — does NOT invoke an LLM
+- [ ] Explains `participant.reply()` triggers an **LLM generation** from that participant's perspective
+- [ ] Notes that LLMs are explicitly told (via the auto-generated roster) to treat narrator messages as system instructions, not peer speech
+- [ ] Mentions these are the **two primitives** that drive all `ChatRoom` interaction
+- [ ] Does NOT confuse them or suggest `Participant.post()` exists (it doesn't)
+
+**Source of Truth:** Skill file §6 "ChatRoom"; `docs/chatroom/rooms_walkthrough.md` "post()" section
+
+---
+
+### Scenario 8.4 — One-Shot Private Directive (visible_to)
+
+**Prompt:**
+> In a 4-player game, I want to assign each player a secret role at the start (only that player should see their role). Should I use `room.post(visible_to=...)` or `room.private_channel(...)`? Write the code.
+
+**Expected Answer:**
+- [ ] Recommends `room.post(msg, visible_to=[player])` for one-shot directives
+- [ ] Explains `private_channel` is for **multi-turn** private conversations (overkill for a one-shot role assignment)
+- [ ] Shows a loop assigning roles: `room.post(f"Your secret role is X.", visible_to=[player])` for each player
+- [ ] Uses `with room:` context
+- [ ] Does NOT use `private_channel` for the one-shot case
+
+**Source of Truth:** Skill file §6 "ChatRoom" private information section; `docs/chatroom/rooms_walkthrough.md` "post()" / "private_channel" sections
+
+---
+
+### Scenario 8.5 — Multi-Turn Private Channel (Werewolf Night Phase)
+
+**Prompt:**
+> Write code for a Werewolf game's night phase: two wolves (Alice and Bob) discuss privately for 2 turns to pick a victim, while a third player Cleo does NOT see any of their messages. Use a single `ChatRoom` so the daytime context carries over.
+
+**Expected Answer:**
+- [ ] Creates the parent `ChatRoom` with all three participants
+- [ ] Uses `room.private_channel([alice, bob], name="Wolf Night")` to create the wolves' channel
+- [ ] Channel name is required, keyword-only, and **semantically meaningful** (e.g. `"Wolf Night"`, not `"channel1"`)
+- [ ] Enters the channel with `with wolves:` (nested or sequential to `with room:`)
+- [ ] Has alice and bob each call `reply()` twice in the channel
+- [ ] Notes (or implicitly relies on) the fact that Cleo's perspective never includes the wolf messages
+- [ ] Does NOT add Cleo to the wolf channel
+
+**Source of Truth:** Skill file §6 "ChatRoom" private channel section; `docs/chatroom/rooms_walkthrough.md` "private_channel" + "Traced Example: Private Channel"
+
+---
+
+### Scenario 8.6 — Hidden-Role Safety (system_prompt is Not Exposed)
+
+**Prompt:**
+> In a Werewolf game, I set each participant's secret role via `system_prompt=` when calling `add_participant`. Are other participants able to see each other's `system_prompt` through the auto-generated roster?
+
+**Expected Answer:**
+- [ ] Says **NO** — peers' `system_prompt` is never exposed
+- [ ] Explains the roster lists **only names** of other participants, never their system prompts
+- [ ] Explicitly mentions this is the anti-leak property that makes hidden-role games like Werewolf safe
+- [ ] Does NOT suggest a workaround is needed — the default behavior is already safe
+- [ ] May mention `visible_to` / `private_channel` as the proper mechanisms for sharing information selectively
+
+**Source of Truth:** Skill file §6 "ChatRoom"; `docs/chatroom/rooms_walkthrough.md` "_build_roster" section
+
+---
+
+### Scenario 8.7 — Removing a Participant Mid-Game
+
+**Prompt:**
+> In a game, when a player is eliminated, I call `room.remove_participant(player)`. What happens to (1) future `player.reply()` calls, (2) historical messages from that player, and (3) the player's membership in any private channels they were in?
+
+**Expected Answer:**
+- [ ] (1) Says future `player.reply()` calls raise `RuntimeError`
+- [ ] (2) Says historical messages **stay** in the transcript, still attributed to the player's name
+- [ ] (3) Says removal does **NOT cascade** to private channels — must remove from each channel explicitly
+- [ ] Notes peers' rosters on the next turn will no longer list the removed player
+- [ ] Does NOT claim historical messages are deleted
+
+**Source of Truth:** Skill file §6 "ChatRoom" hard-delete removal; `docs/chatroom/rooms_walkthrough.md` "remove_participant" section
+
+---
+
+### Scenario 8.8 — Tools Inside reply() — Not Supported
+
+**Prompt:**
+> Can I pass `tools=[my_function]` to `participant.reply()` in a `ChatRoom`?
+
+**Expected Answer:**
+- [ ] Says **no** — passing `tools=` currently raises `NotImplementedError`
+- [ ] Mentions the workaround: use an orphan `chats.new()` side-chat for tool calls
+- [ ] Does NOT make up a working `tools=` example for `reply()`
+- [ ] May mention this is a known future-work item
+
+**Source of Truth:** Skill file §6 "ChatRoom"; `src/kaggle_benchmarks/rooms.py` `_generate_reply` lines 292-297
+
+---
+
+### Scenario 8.9 — Choosing ChatRoom vs contexts.enter()
+
+**Prompt:**
+> I have two LLMs and want them to talk to each other and be aware of each other's responses. Should I use `kbench.ChatRoom` or `contexts.enter()` with two separate chats?
+
+**Expected Answer:**
+- [ ] Recommends **`ChatRoom`** — it is the right tool for "multiple LLMs aware of each other"
+- [ ] Explains `ChatRoom` provides automatic perspective projection (each LLM sees its own messages as `assistant` and peers' as attributed `user`)
+- [ ] Explains `contexts.enter()` with separate chats is for **fully isolated** agents that should NOT see each other
+- [ ] Does NOT recommend manual message routing between two isolated chats for this use case
+
+**Source of Truth:** Skill file §6 "ChatRoom" + "contexts.enter()" sections + "Choosing Conversation Strategy" table
+
+---
+
+### Scenario 8.10 — End-to-End ChatRoom Benchmark with Judge
+
+**Prompt:**
+> Build a benchmark that runs a 4-message conversation between two LLM participants in a `ChatRoom` on a topic of your choice. After the room exits, have a judge LLM rate the conversation quality 0-10 in an isolated `chats.new()` chat. Return the score as a float.
+
+**Expected Answer:**
+- [ ] Uses `kbench.ChatRoom`, `add_participant`, `with room:`, `room.post`, `participant.reply` correctly
+- [ ] Has at least 4 `reply()` calls inside the `with room:` block
+- [ ] Builds the transcript from `room.messages` after the `with` block exits
+- [ ] Uses `with kbench.chats.new("judge"):` to isolate the judge call
+- [ ] Calls `judge_llm.prompt(..., schema=float)` (or schema=int) for the rating
+- [ ] Task signature accepts both `llm` and `judge_llm` parameters
+- [ ] Has `-> float` return type annotation
+- [ ] Calls `.run(kbench.llm, kbench.judge_llm)` at module top level (no `__name__` guard)
+
+**Source of Truth:** Skill file §9 "Pattern I.5: Multi-Agent ChatRoom (Debate)"; Skill file §6 "ChatRoom"
+
+---
+
 ## Scoring Guide
 
 | Rating | Criteria |
@@ -1055,3 +1225,13 @@ These test the agent's ability to **combine** basic patterns from the skill file
 | 7.10 | Tricky questions eval | Generalization | Advanced | |
 | 7.11 | Hallucination competition | Generalization | Advanced | |
 | 7.12 | Run introspection | Generalization | Advanced | |
+| 8.1 | Two-participant debate | ChatRoom | Basic | |
+| 8.2 | Same LLM, many participants | ChatRoom | Knowledge | |
+| 8.3 | room.post vs participant.reply | ChatRoom | Knowledge | |
+| 8.4 | visible_to for secret roles | ChatRoom | Medium | |
+| 8.5 | Private channel (Werewolf night) | ChatRoom | Medium | |
+| 8.6 | Hidden-role safety | ChatRoom | Knowledge | |
+| 8.7 | remove_participant semantics | ChatRoom | Knowledge | |
+| 8.8 | Tools in reply() not supported | ChatRoom | Troubleshooting | |
+| 8.9 | ChatRoom vs contexts.enter | ChatRoom | Knowledge | |
+| 8.10 | End-to-end ChatRoom + judge | ChatRoom | Advanced | |

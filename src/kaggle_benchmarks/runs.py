@@ -95,9 +95,11 @@ class Run(Generic[T]):
         Additionally, if an `evaluated_subject` is present, its name is appended
         as a suffix to distinguish results across different subjects or actors.
         """
-        actor_param_suffix = (
-            f"_{param.name}" if (param := self.evaluated_subject) else ""
-        )
+        actor_model = None
+        if param := self.evaluated_subject:
+            actor_model = getattr(param, "model", None) or param.name
+
+        actor_param_suffix = f"_{actor_model}" if actor_model else ""
 
         return (
             f"run_param_id_{self.param_id}{actor_param_suffix}"
