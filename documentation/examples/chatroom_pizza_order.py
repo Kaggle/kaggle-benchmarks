@@ -264,10 +264,7 @@ def run_pizza_order(
 
 # %%
 
-# Load default model proxy
-model = kbench.llm
-
 # Run pizza order game reusing model
-run_pizza_order.run(llm=model, clerk_llm=model)
+run_pizza_order.run(llm=kbench.llm, clerk_llm=kbench.judge_llm)
 
 # %%

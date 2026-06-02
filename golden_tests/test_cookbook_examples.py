@@ -181,8 +181,8 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 @pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
 def test_assess_with_judge(llm_name, judge_llm_name):
-    llm = kbench.llms[llm_name]
-    judge_llm = kbench.llms[judge_llm_name]
+    llm = kbench.kaggle.load_model(llm_name)
+    judge_llm = kbench.kaggle.load_model(judge_llm_name)
     run = assess_with_judge_task.run(llm, judge_llm)
     assert run.passed
 
@@ -1331,4 +1331,88 @@ def test_chatroom_room_post(llm):
     kbench.assertions.assert_true(
         room.messages[0].sender.name == "NumberGame",
         "First message should be from the room narrator.",
+    )
+
+
+# %%
+# --- Test Case: ChatRoom — remove_participant ---
+# Verifies that room.remove_participant() drops a participant from the active
+# roster so that surviving participants no longer see them, and that calling
+# reply() on the removed participant raises RuntimeError.
+# Pattern from: documentation/examples/chatroom_werewolf.py (night elimination).
+
+
+@benchmark_test(include=CHATROOM_LLM_NAMES)
+@kbench.task()
+def test_chatroom_remove_participant(llm):
+    """Tests that remove_participant removes a participant from the room."""
+    room = kbench.ChatRoom(
+        system_prompt="A survival game. Players are eliminated each round.",
+        name="GameMaster",
+    )
+
+    alice = room.add_participant(
+        llm,
+        name="Alice",
+        avatar="👩",
+        system_prompt="You are Alice. Answer questions concisely.",
+    )
+    bob = room.add_participant(
+        llm,
+        name="Bob",
+        avatar="👨",
+        system_prompt="You are Bob. Answer questions concisely.",
+    )
+    charlie = room.add_participant(
+        llm,
+        name="Charlie",
+        avatar="🧑",
+        system_prompt="You are Charlie. Answer questions concisely.",
+    )
+
+    with room:
+        # Pre-removal: everyone participates
+        room.post("All players, say hello briefly.")
+        alice.reply()
+        bob.reply()
+        charlie.reply()
+
+        # Remove Bob (mirrors werewolf night elimination)
+        room.remove_participant(bob)
+        room.post("Bob has been eliminated! Only surviving players remain.")
+
+        # Ask a survivor who is still in the game
+        room.post(
+            "Alice, list the names of ALL other players still in this conversation. "
+            "Reply with only their names separated by commas."
+        )
+        alice_response = alice.reply()
+
+    # Bob should NOT appear in the survivor's awareness
+    kbench.assertions.assert_true(
+        "bob" not in alice_response.lower(),
+        f"Alice should not mention eliminated Bob, but said: '{alice_response[:200]}'",
+    )
+
+    # Charlie should still be mentioned
+    kbench.assertions.assert_contains_regex(
+        r"(?i)charlie",
+        alice_response,
+        expectation="Alice should mention surviving player Charlie.",
+    )
+
+    # Removed participant cannot reply — RuntimeError expected
+    try:
+        with room:
+            bob.reply()
+        raise AssertionError("bob.reply() should have raised RuntimeError")
+    except RuntimeError:
+        pass  # Expected
+
+    # Historical messages are preserved in the transcript
+    senders = [msg.sender.name for msg in room.messages]
+    kbench.assertions.assert_in(
+        "Bob",
+        senders,
+        expectation="Bob's pre-removal messages should remain in the transcript.",
     )

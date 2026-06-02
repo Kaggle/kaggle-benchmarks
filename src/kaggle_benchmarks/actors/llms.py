@@ -345,11 +345,13 @@ class LLMChat(actors.Actor):
             response.status = utils.Status.SUCCESS
         elif isinstance(invoke_response, llm_messages.LLMMessage):
             response = invoke_response
-            if sender is not None:
-                response.sender = sender
             chat.append(response)
         else:
             raise TypeError("Unknown response type from LLM.")
+
+        # Ensure correct sender identity across all branches (needed for
+        # ChatRoom, where sender is a Participant, not the raw LLM).
+        response.sender = sender or self
 
         answer = response.content
         response._meta.update(chat=chat, schema=schema, raw_content=answer, **kwargs)

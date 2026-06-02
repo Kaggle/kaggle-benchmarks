@@ -104,9 +104,9 @@ def run_werewolf(
         llm, name="Grace", avatar="👵", system_prompt=villager_prompt
     )
 
-    players = [alice, bob, charlie, david, eve, frank, grace]
     wolves = [alice, bob]
     villagers = [charlie, david, eve, frank, grace]
+    players = wolves + villagers
     survivors = list(players)
 
     def count_votes(vote_dict: dict) -> str | None:
@@ -240,11 +240,8 @@ def run_werewolf(
 
 # kbench.config.enable_interactive_mode()
 
-# Load default model proxy
-model = kbench.llm
-
 # Run werewolf game reusing model
-run = run_werewolf.run(llm=model)
+run = run_werewolf.run(llm=kbench.llm)
 run
 
 # %%

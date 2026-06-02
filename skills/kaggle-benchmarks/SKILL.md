@@ -23,6 +23,7 @@ import kaggle_benchmarks as kbench
 | `kbench.llms` | Dict of all available models (e.g. `kbench.llms["google/gemini-2.5-flash"]`) |
 | `kbench.assertions` | Module with all assertion functions |
 | `kbench.chats` | Conversation/chat context management |
+| `kbench.ChatRoom` / `kbench.Participant` | Multi-agent conversation room with perspective-aware history |
 | `kbench.tools` | Built-in tools (Python runner, etc.) |
 | `kbench.user` / `kbench.actors.user` | Send user messages to conversation |
 | `kbench.system` / `kbench.actors.system` | Send system-level messages |
@@ -726,9 +727,70 @@ with kbench.chats.fork("hypothesis") as branch:
 response = llm.prompt("What's my name?")  # Still remembers "Alice"
 ```
 
-### `contexts.enter()` — Multi-Agent
+### `ChatRoom` — Multi-Agent Conversations (Preferred)
 
-For complex multi-agent scenarios:
+When multiple LLMs need to converse with **awareness of each other** —
+debate, negotiation, social deduction, cooperative games —
+use `kbench.ChatRoom`. It owns a single ground-truth transcript and
+gives each participant a perspective-projected view automatically.
+
+```python
+import kaggle_benchmarks as kbench
+
+room = kbench.ChatRoom(system_prompt="A friendly debate on AI safety.")
+alice = room.add_participant(kbench.llm,        name="Alice", system_prompt="Argue FOR.")
+bob   = room.add_participant(kbench.judge_llm,  name="Bob",   system_prompt="Argue AGAINST.")
+
+with room:
+    room.post("Topic: Should we phase out fossil fuels by 2035?")
+    alice.reply()        # LLM sees Alice's view, generates a response
+    bob.reply()          # LLM sees Bob's view (with Alice's reply attributed)
+
+# After the room exits, the full ground-truth transcript is available
+for msg in room.messages:
+    print(msg.sender.name, ":", msg.content)
+```
+
+Key behaviors to remember:
+
+- **Same LLM, many participants — no cloning.** The backing `LLMChat` is reused
+  as-is. A lightweight `Participant` wrapper owns per-room identity. The same
+  `kbench.llm` can back many participants in many rooms without interference.
+- **Two primitives, that's it.**
+  - `room.post(msg)` — narrator/system directive (rules, phase transitions,
+    topics). LLMs are told to treat these as system instructions, not peer speech.
+  - `participant.reply(schema=..., **kwargs)` — that participant's LLM generates
+    a response. Must be called inside `with room:`. Supports `schema=` for
+    structured output, same as `llm.prompt()`.
+- **Perspective projection is automatic.** Each `reply()` rebuilds the system
+  prompt and re-projects history so the calling participant sees its own
+  messages as `assistant` and peers' messages as `user` with `[Name]:` prefixes.
+- **Private information** — two mechanisms with different weights:
+  - `room.post(msg, visible_to=[alice])` — single-message audience filter.
+    Right for one-shot directives (e.g. handing each player a secret role).
+  - `room.private_channel([alice, bob], name="Wolf Night")` — a child
+    `ChatRoom` for multi-turn private conversations. Members see private
+    messages interleaved chronologically with the public timeline;
+    non-members never see them.
+- **Hard-delete removal.** `room.remove_participant(p)` drops `p` from the
+  active roster; `p.reply()` afterwards raises `RuntimeError`. Historical
+  messages stay attributed to `p` in the transcript.
+- **Hidden role safety.** Peers' `system_prompt` is **never** exposed in the
+  roster (only their names). This is what makes hidden-role games like
+  Werewolf safe.
+- **Tool support inside `reply()` is not yet available** — raises
+  `NotImplementedError`. Workaround: use an orphan `chats.new()` side-chat
+  for tool calls.
+
+> See `docs/chatroom/rooms_walkthrough.md` for a step-by-step implementation
+> walkthrough, and `docs/chatroom/pr-summary-rooms.md` for the design rationale.
+
+### `contexts.enter()` — Low-Level Multi-Agent Plumbing
+
+`ChatRoom` is built on top of `contexts.enter()`. Reach for `contexts.enter()`
+directly only when you need fully custom multi-agent orchestration that doesn't
+fit the `ChatRoom` model (e.g. agents that should **not** see each other —
+isolated parallel runs that just happen to share infrastructure).
 
 ```python
 from kaggle_benchmarks import chats, contexts
@@ -751,7 +813,10 @@ with contexts.enter(chat=agent_b_chat):
 | Judge evaluation | `chats.new("judge")` — no history leakage |
 | System instructions for a section | `chats.new(system_instructions="...")` |
 | Continue with shared history | `chats.fork("branch")` |
-| Multiple agents with separate histories | `contexts.enter(chat=...)` |
+| **Multiple LLMs aware of each other** (debate, games, negotiation) | **`kbench.ChatRoom` + `participant.reply()`** |
+| Private side-channel between a subset of participants | `room.private_channel([...], name="...")` |
+| One-shot private directive to a subset | `room.post(msg, visible_to=[...])` |
+| Multiple agents with fully isolated histories | `contexts.enter(chat=...)` |
 
 ---
 
@@ -1155,6 +1220,47 @@ runs = riddle_solver.evaluate(
 )
 runs.as_dataframe()
 ```
+
+### Pattern I.5: Multi-Agent ChatRoom (Debate)
+
+Two LLMs converse in a shared room with perspective-aware history. Each
+participant sees its own messages as `assistant` and the other's as
+attributed `user` messages — no manual message routing.
+
+```python
+import kaggle_benchmarks as kbench
+
+@kbench.task(name="ai_safety_debate")
+def ai_safety_debate(llm, judge_llm) -> float:
+    room = kbench.ChatRoom(system_prompt="A structured 2-turn debate.")
+    pro  = room.add_participant(llm,       name="Pro",
+                                system_prompt="Argue FOR strict AI regulation.")
+    con  = room.add_participant(llm,       name="Con",
+                                system_prompt="Argue AGAINST strict AI regulation.")
+
+    with room:
+        room.post("Topic: Should AI labs be subject to mandatory licensing?")
+        for _ in range(2):
+            pro.reply()
+            con.reply()
+
+    # Judge the full transcript in an isolated chat (no history leakage)
+    transcript = "\n".join(f"{m.sender.name}: {m.content}" for m in room.messages)
+    with kbench.chats.new("judge"):
+        score = judge_llm.prompt(
+            f"Rate the overall debate quality 0-10:\n\n{transcript}",
+            schema=float,
+        )
+    return score
+
+ai_safety_debate.run(kbench.llm, kbench.judge_llm)
+```
+
+> **Hidden-role variant:** For social deduction games (Werewolf, etc.), use
+> `room.post(msg, visible_to=[wolf1, wolf2])` to hand out secret roles, and
+> `room.private_channel([wolf1, wolf2], name="Wolf Night")` for the wolves'
+> night-phase chat. Non-members never see those messages in their perspective,
+> and peers' `system_prompt` (their secret role) is never exposed in the roster.
 
 ### Pattern I: Code Analysis with System Prompt + Tools
 
