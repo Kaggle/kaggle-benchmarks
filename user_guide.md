@@ -15,6 +15,8 @@
     `respond`](#other-interaction-methods-send-and-respond)
   - [Managing Chat Context](#managing-chat-context)
   - [Tracking Token Usage and Costs](#tracking-token-usage-and-costs)
+  - [Multi-Agent Conversations with
+    `ChatRoom`](#multi-agent-conversations-with-chatroom)
 - [3. Writing Assertions](#3-writing-assertions)
   - [Built-in Assertions](#built-in-assertions)
   - [The `expectation` Parameter](#the-expectation-parameter)
@@ -446,6 +448,149 @@ The `Usage` dataclass contains the following fields:
 
 All fields return `None` if the metric is not available from the model
 provider.
+
+### Multi-Agent Conversations with `ChatRoom`
+
+For benchmarks where two or more LLMs need to talk to each other
+(debate, negotiation, social deduction, cooperative games), use
+`kbench.ChatRoom`. The room handles three things you would otherwise
+hand-roll:
+
+1. **Perspective projection**. Each LLM sees its own past messages as
+   `assistant` and peers' messages as `user` with a name prefix.
+2. **Shared identity routing**. One LLM instance can act as many
+   participants. The room wraps each in a lightweight `Participant`
+   with its own `name`, `avatar`, and `system_prompt`. The LLM is
+   never cloned.
+3. **A single ground-truth transcript** for post-room evaluation.
+
+#### Basic usage: two primitives
+
+Inside `with room:` you only ever do two things:
+
+- `room.post(msg)` — narrator/system directive. **No LLM call.** Use
+  for phase transitions, topic prompts, or game-state announcements.
+- `participant.reply()` — the LLM takes a turn. **One LLM call.** The
+  response is automatically added to the room transcript and attributed
+  to the participant.
+
+``` python
+import kaggle_benchmarks as kbench
+
+@kbench.task()
+def debate_task(llm):
+    room = kbench.ChatRoom(
+        system_prompt="A short debate. Each speaker gets one turn.",
+        name="Moderator",
+    )
+    pro = room.add_participant(
+        llm, name="Pro", avatar="🔵",
+        system_prompt="Argue IN FAVOR of the topic. Be concise.",
+    )
+    con = room.add_participant(
+        llm, name="Con", avatar="🔴",
+        system_prompt="Argue AGAINST the topic. Be concise.",
+    )
+
+    with room:
+        room.post("Topic: Should we phase out fossil fuels by 2035?")
+        pro_argument = pro.reply()
+        con_argument = con.reply()
+
+    # room.messages is the full transcript, in order.
+    return {"pro": pro_argument, "con": con_argument}
+```
+
+#### Structured replies
+
+`reply(schema=...)` works the same way as `llm.prompt(schema=...)` —
+the returned value is the parsed object.
+
+``` python
+import dataclasses
+
+@dataclasses.dataclass
+class Move:
+    row: int
+    col: int
+
+move = player.reply(schema=Move)  # returns Move instance
+```
+
+#### Private channels
+
+For multi-turn private conversations (e.g. werewolves coordinating at
+night), create a sub-room with `room.private_channel(...)`. Members
+see both the parent room and the channel interleaved in time; non-members
+never see channel messages.
+
+``` python
+wolf_chat = room.private_channel(
+    [alice, bob], name="Werewolf Night Chat"
+)
+with wolf_chat:
+    wolf_chat.post("Pick a villager to eliminate.")
+    for wolf in [alice, bob]:
+        wolf.reply()
+```
+
+For a one-off private directive (not a multi-turn discussion), pass
+`visible_to=[...]` to `room.post()`:
+
+``` python
+room.post("Your secret role is Werewolf.", visible_to=[alice])
+```
+
+#### Removing participants
+
+When a participant leaves the game (e.g. a werewolf player is
+eliminated), call `room.remove_participant(p)`. The framework's
+roster stops listing them, so surviving LLMs no longer see them as a
+peer. Their past messages remain attributed to them in the transcript.
+
+``` python
+room.remove_participant(victim)
+```
+
+A removed participant raises `RuntimeError` if you call `.reply()` on
+them inside the room.
+
+#### One-shot calls outside the room
+
+A judge that scores the finished debate is **not** a room participant.
+Use the raw `LLMChat` directly after the room exits:
+
+``` python
+with room:
+    # ... debate happens ...
+    ...
+
+transcript = "\n".join(str(m) for m in room.messages)
+verdict = judge_llm.prompt(
+    f"Who argued better?\n\n{transcript}",
+)
+```
+
+> **Rule of thumb**: if a model does not call `.reply()` inside the
+> room, do not register it with `add_participant`. Registering puts
+> it in every peer's roster (changing how the peers behave) without
+> a real role for it to play. Post-room judging reads `room.messages`;
+> live observation can subscribe to the `new_message` event.
+
+#### Full examples
+
+Five worked examples live in `documentation/examples/`:
+
+- `chatroom_llm_debate.py` — two-sided structured debate with an
+  external judge.
+- `chatroom_pizza_order.py` — customer-vs-clerk negotiation under
+  budget, allergy, and pricing constraints.
+- `chatroom_synthetic_turing_test.py` — judge tries to detect a
+  human-impersonating subject.
+- `chatroom_tic_tac_toe.py` — structured-output game moves between
+  two LLMs.
+- `chatroom_werewolf.py` — 7-player social deduction with private
+  channels and eliminations.
 
 ## 3. Writing Assertions
 
