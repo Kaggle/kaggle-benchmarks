@@ -21,6 +21,7 @@ from kaggle_benchmarks import (
     assertions,
     config,
     kaggle,
+    runs,
     task,
     utils,
 )
@@ -31,6 +32,10 @@ def client(monkeypatch):
     with tempfile.TemporaryDirectory() as temp_dir:
         kaggle_client = kaggle.KaggleClient(directory=temp_dir)
         config.execution_mode = ExecutionMode.RUN
+        # Reset global run counters to avoid flaky filenames: the counter
+        # is keyed by id(task), and CPython can reuse addresses of GC'd
+        # Task objects from earlier tests, inflating the counter.
+        runs._run_counters.clear()
 
         monkeypatch.setattr("kaggle_benchmarks.client", kaggle_client)
         yield kaggle_client
