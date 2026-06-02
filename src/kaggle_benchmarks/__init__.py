@@ -67,4 +67,4 @@ client: clients.Client = clients.resolve_client()
 config.apply()
 
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
