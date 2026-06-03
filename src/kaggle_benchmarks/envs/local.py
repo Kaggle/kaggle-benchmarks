@@ -29,8 +29,6 @@ class InternalUnsafeLocalEnvironment(mixins.TemporalDirectoryMixin):
 
         - Path traversal (e.g. ``../``) can escape the temporary directory and
           read/write anywhere the current user has access.
-        - String commands run with ``shell=True``, allowing shell metacharacter
-          injection.
 
         **Do not use this with untrusted or adversarial model outputs.** For
         isolated execution, use :class:`DockerEnvironment` instead.
@@ -55,17 +53,29 @@ class InternalUnsafeLocalEnvironment(mixins.TemporalDirectoryMixin):
             )
 
     def run(
-        self, command: str | list[str], input: str | None = None
+        self, command: list[str], input: str | None = None
     ) -> environment.RunResult:
-        """Runs a shell command in the temporary directory.
+        """Runs a command in the temporary directory.
+
+        ``command`` must be a list of argument strings (``argv`` form). String
+        commands are rejected to avoid a shell-injection foot-gun when callers
+        interpolate untrusted input. To intentionally invoke a shell, pass
+        ``["bash", "-c", "<script>"]`` explicitly.
 
         .. warning::
             No sandboxing is applied. The command has full access to the host
             filesystem and network.
         """
+        if isinstance(command, str):
+            raise TypeError(
+                "command must be a list[str], not str. "
+                "Pass arguments as a list (e.g. ['echo', 'hi']). "
+                "To run a shell pipeline, use ['bash', '-c', '<script>']."
+            )
+
         result = subprocess.run(
             command,
-            shell=isinstance(command, str),
+            shell=False,
             input=input,
             cwd=self.temp_dir.name,
             capture_output=True,

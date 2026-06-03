@@ -47,6 +47,14 @@ class TestInternalUnsafeLocalEnvironmentWarning:
             warnings.simplefilter("ignore")
             for internal in (True, False):
                 with InternalUnsafeLocalEnvironment(_internal=internal) as env:
-                    result = env.run("echo hello")
+                    result = env.run(["echo", "hello"])
                     assert result.exit_code == 0
                     assert result.stdout.strip() == "hello"
+
+    def test_run_rejects_string_command(self):
+        """String commands must be rejected to prevent shell-injection foot-guns."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with InternalUnsafeLocalEnvironment(_internal=True) as env:
+                with pytest.raises(TypeError, match="list"):
+                    env.run("echo hello; touch /tmp/should_not_exist")
