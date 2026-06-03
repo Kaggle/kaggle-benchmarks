@@ -34,19 +34,13 @@ envs = [
 @pytest.mark.parametrize(("cls", "params"), envs)
 def test_run(cls, params):
     with cls(**params) as env:
-        result = env.run("echo Hi")
+        result = env.run(["echo", "Hi"])
 
         assert result.exit_code == 0
         assert result.stdout.strip() == "Hi"
         assert result.stderr.strip() == ""
 
-        result = env.run("echo Hi".split())
-
-        assert result.exit_code == 0
-        assert result.stdout.strip() == "Hi"
-        assert result.stderr.strip() == ""
-
-        result = env.run("cat schrödinger")
+        result = env.run(["cat", "schrödinger"])
 
         assert result.exit_code != 0
         assert result.stdout.strip() == ""
