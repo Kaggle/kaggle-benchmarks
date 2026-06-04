@@ -151,31 +151,52 @@ success_rate = runs.as_dataframe()["result"].mean()
 print(f"Success rate: {success_rate:.2f}")
 ```
 
-By default, `.evaluate()` raises on the first per-sample failure (the
-right behavior for development). For production-scale evaluations where
-some samples may hit transient errors (API timeouts, rate limits, etc.),
-pass `on_failure="continue"` to collect failed runs into the returned
-`Runs` instead of raising:
+### Handling per-sample failures
+
+`.evaluate()` has one knob for per-sample failures, `on_failure`:
+
+- **`on_failure="raise"`** (default) — if any sample fails, `.evaluate()`
+  raises. Use for development, CI, and small evals; you want failures to
+  be loud.
+- **`on_failure="continue"`** — failed samples land in
+  `results.errored_runs` and the eval keeps going. Use for large/flaky
+  production evals, typically paired with `max_attempts > 1` and
+  `enable_cache()` to retry only the failed samples:
 
 ``` python
-results = solve_and_check_riddle.evaluate(
-    llm=[kbench.llm],
-    evaluation_data=riddle_df,
-    on_failure="continue",
-)
+with kbench.client.enable_cache():
+    results = solve_and_check_riddle.evaluate(
+        llm=[kbench.llm],
+        evaluation_data=riddle_df,
+        on_failure="continue",   # collect failures into results.errored_runs
+        max_attempts=3,          # retry transient failures
+    )
 
-# Split successes from failures
 print(f"Completed: {len(results.completed_runs)}")
 print(f"Errored:   {len(results.errored_runs)}")
+
+for run in results.errored_runs:
+    print(f"{run.params}: {run.error_message[:200]}")
 
 # Always aggregate over completed_runs only — failed runs carry the
 # results.FAILED sentinel which breaks .mean() / .sum().
 success_rate = results.completed_runs.as_dataframe()["result"].mean()
 ```
 
-Combine with `max_attempts > 1` and `enable_cache()` to retry only the
-failed samples on subsequent attempts. See the cookbook recipe "Best
-Practices for Large Datasets" for the full pattern.
+How the retry works: attempt 1 runs every sample. Successes persist to
+disk as `state=COMPLETED`; failures persist as `state=ERRORED`. On the
+next attempt the cache check skips `COMPLETED` files (no re-run) but
+re-runs `ERRORED` ones, so only the failed samples actually re-execute.
+Results from all attempts merge by positional index into one `Runs` in
+evaluation-data row order. The loop exits early when no failures remain.
+
+> **Note (Kaggle batch):** In `"raise"` mode, the Kaggle batch runner
+> waits for all parallel workers to finish before raising a single
+> `RuntimeError` summarizing all failures — so you still get a hard
+> failure, just at the end rather than on the first error. The
+> exception type differs (`RuntimeError` summary vs. the original
+> `ValueError`/`TimeoutError` in dev), but `try/except Exception`
+> catches both.
 
 ## 2. Interacting with LLMs
 

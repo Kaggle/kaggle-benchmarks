@@ -330,12 +330,12 @@ results.as_dataframe()
 
 ### Failure Handling: `on_failure="raise"` vs `"continue"`
 
-`.evaluate()` has two modes for handling per-sample failures (a task body raising an exception, e.g., from an API timeout):
+`.evaluate()` has one knob for per-sample failures:
 
-| Mode | Behavior | When to use |
-|---|---|---|
-| `"raise"` (default) | First per-sample failure aborts the eval. Dev: raises immediately. Kaggle batch: waits for all parallel workers, then raises a summary. | Default — strict, loud, the right choice for development and tests that should never have failures. |
-| `"continue"` | Failed runs are caught, recorded with `status=FAILED`, and included in the returned `Runs`. The eval keeps going. | Production-scale evals where transient failures (timeouts, rate limits) are expected. |
+- **`on_failure="raise"`** (default) — if any sample fails, `.evaluate()` raises. Use for development, CI, and small evals; you want failures to be loud.
+- **`on_failure="continue"`** — failed samples land in `results.errored_runs` and the eval keeps going. Use for large/flaky production evals, typically paired with `max_attempts > 1` and `enable_cache()` for selective retry.
+
+> **Note (Kaggle batch):** In `"raise"` mode, the Kaggle batch runner waits for all parallel workers to finish, then raises a single `RuntimeError` summarizing all failures — so you still get a hard failure, just at the end rather than on the first error. The exception type differs (`RuntimeError` summary vs. the original `ValueError`/`TimeoutError` in dev), but `try/except Exception` catches both.
 
 When `on_failure="continue"` returns a mixed `Runs`, split it with the two properties:
 

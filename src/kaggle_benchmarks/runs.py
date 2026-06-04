@@ -125,16 +125,19 @@ class Run(Generic[T]):
 
     @property
     def passed(self):
-        # Short-circuit only for cached SUCCESS runs. A cached FAILED run
-        # (possible once Task.run() persists failures) should report False.
-        if self.cached and self.status == utils.Status.SUCCESS:
-            return True
-        # A run that hit a general exception in the task body is FAILED.
-        # Most result types' `passed(value)` returns True regardless of the
-        # value passed, so without this guard a failed run with no failing
-        # assertions would incorrectly report passed=True.
+        # Reject known-bad first: a run whose task body raised an exception.
+        # Without this guard, result_type.passed() would return True for most
+        # result types regardless of the value, masking the failure.
         if self.status == utils.Status.FAILED:
             return False
+        # TODO: cached runs always report passed=True here because
+        # _handle_cached_run restores self.result but not assertion_results
+        # or subruns. This is fine for dataset eval (the primary use case),
+        # where correctness lives in the result value, not assertions.
+        # To fix for assertion-heavy tasks: restore assertions + subruns
+        # from disk on cache load, then remove this short-circuit.
+        if self.cached:
+            return True
         return (
             self.task.result_type.passed(self.result)
             and all(result.passed for result in self.assertion_results)

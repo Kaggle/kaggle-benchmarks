@@ -532,6 +532,33 @@ def test_store_run_error_doesnt_mask_task_error(monkeypatch):
         bad.run()
 
 
+def test_store_run_error_swallowed_for_successful_run(monkeypatch, caplog):
+    """A store_run failure on a SUCCESSFUL task is logged, not raised.
+
+    Pre-PR behavior was to propagate the IO error (store_run was unguarded).
+    This PR wraps the call in `_finalize_and_persist` with a try/except so
+    persistence failures never mask the task outcome — true for failed runs
+    (see test_store_run_error_doesnt_mask_task_error) and also for successful
+    ones (this test). Guard against silently regressing back to raising.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+    monkeypatch.setattr(
+        "kaggle_benchmarks.client.store_run",
+        lambda run: (_ for _ in ()).throw(IOError("disk full")),
+    )
+
+    @tasks.task(name="IO OK")
+    def ok():
+        return True
+
+    with caplog.at_level("WARNING", logger="kaggle_benchmarks.tasks"):
+        run = ok.run()  # must not raise
+
+    assert run.status == utils.Status.SUCCESS
+    assert run.result is True
+    assert any("Failed to store run" in r.message for r in caplog.records)
+
+
 def test_nonrecoverable_propagates_despite_suppress():
     """Change 1: NonRecoverableError always propagates, even with _suppress_raise."""
 

@@ -114,10 +114,15 @@ class KaggleClient(clients.Client):
             case {"booleanResult": value}:
                 return value
 
-            case {"numericResult": {"value": value, "confidenceInterval": ci}}:
-                return (value, ci)
-
-            case {"numericResult": {"value": value}}:
+            # proto3 JSON drops default-valued fields, so a numeric result
+            # of 0.0 round-trips to `{}`, and (0.0, ci) to `{"confidenceInterval": ci}`.
+            # Extract by key with defaults instead of matching by shape.
+            # Known limitation: a tuple `(v, 0.0)` collapses to scalar `v`
+            # because zero CI is indistinguishable from "no CI" on disk.
+            case {"numericResult": nr}:
+                value = nr.get("value", 0.0)
+                if "confidenceInterval" in nr:
+                    return (value, nr["confidenceInterval"])
                 return value
 
             case {"dictResult": value}:

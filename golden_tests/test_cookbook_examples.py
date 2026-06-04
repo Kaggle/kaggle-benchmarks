@@ -402,12 +402,8 @@ def assert_resilient_with_failure_result(run):
     assert errored == 1
 
 
-@benchmark_test(
-    df=df,
-    verify_fn=assert_resilient_with_failure_result,
-)
 @kbench.task()
-def test_dataset_eval_with_failure(llm, df) -> tuple[int, int]:
+def dataset_eval_with_failure(llm, df) -> tuple[int, int]:
     @kbench.task(name="qa_with_failure", store_task=False)
     def qa_with_failure(llm, question, answer) -> dict:
         response = llm.prompt(question)
@@ -424,6 +420,14 @@ def test_dataset_eval_with_failure(llm, df) -> tuple[int, int]:
     )
 
     return len(results.completed_runs), len(results.errored_runs)
+
+
+@pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
+def test_dataset_eval_with_failure_run(llm_name):
+    llm = kbench.kaggle.load_model(llm_name)
+    run = dataset_eval_with_failure.run(llm, df=df)
+    assert run.status == kbench.utils.Status.SUCCESS
+    assert_resilient_with_failure_result(run)
 
 
 # %%
