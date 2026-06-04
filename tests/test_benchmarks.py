@@ -523,3 +523,36 @@ def test_on_failure_raise_in_batch_mode(monkeypatch):
 
     with pytest.raises(RuntimeError, match="batch boom"):
         bad.evaluate(on_failure="raise")
+
+
+def test_completed_and_errored_runs_split():
+    """Change 3: completed_runs + errored_runs partition the results cleanly."""
+
+    @tasks.task(name="Split")
+    def mixed(x):
+        if x == 2:
+            raise ValueError("fail")
+
+    result = mixed.evaluate(
+        evaluation_data=pd.DataFrame({"x": [1, 2, 3]}),
+        on_failure="continue",
+    )
+
+    assert len(result.completed_runs) + len(result.errored_runs) == len(result)
+    assert len(result.completed_runs) == 2
+    assert len(result.errored_runs) == 1
+    # Both return Runs (not list), so .as_dataframe() chains.
+    assert hasattr(result.completed_runs, "as_dataframe")
+
+
+def test_failed_run_reports_passed_false():
+    """Change 4: a FAILED run reports passed=False even when result_type.passed()
+    would return True (which most types do by default)."""
+
+    @tasks.task(name="Passed Guard")
+    def bad():
+        raise ValueError("fail")
+
+    run = bad.run(_suppress_raise=True)
+    assert run.status == utils.Status.FAILED
+    assert not run.passed
