@@ -186,24 +186,22 @@ class Task(Generic[T]):
                     except Exception as e:
                         run.handle_general_exception(e)
         except (NonRecoverableError, KeyboardInterrupt):
-            # Don't persist runs interrupted by Ctrl-C or unrecoverable
-            # errors. contexts.enter's KbdInt handler skips setting the
-            # FAILED status (see contexts.py:75-76), so a persisted run
-            # would end up with state=COMPLETED and pollute the cache.
+            # Fatal — propagate without persisting (prevents cache pollution).
             raise
         except Exception:
-            # contexts.enter has exited and set run.status=FAILED. Persist
-            # the failed run for debugging and for the retry loop, then
-            # decide whether to propagate.
+            # The exception escaped contexts.enter (which has already set
+            # run.status=FAILED). This happens in dev mode, or for nested
+            # runs in batch mode. Persist the failed run, then optionally
+            # suppress the exception (for on_failure="continue").
             self._finalize_and_persist(run, ctx)
             if not _suppress_raise:
                 raise
         else:
-            # No exception reached us: either the task body succeeded
-            # (status=SUCCESS) or contexts.enter swallowed a failure at
-            # root with continue_with_exceptions=True (status=FAILED).
-            # Either way, contexts.enter's finally has set the right
-            # status — persist now.
+            # No exception escaped contexts.enter. Two sub-cases:
+            #  (a) Task succeeded → status=SUCCESS
+            #  (b) Task failed but contexts.enter swallowed the exception
+            #      at root (batch mode, continue_with_exceptions) → status=FAILED
+            # Either way, persist with the final status.
             self._finalize_and_persist(run, ctx)
 
         return run
@@ -327,16 +325,20 @@ class Task(Generic[T]):
                 failures = [r for r in all_runs if r.status == utils.Status.FAILED]
                 if failures:
                     first = failures[0]
+                    summary = (
+                        f"1 of {len(all_runs)} runs failed."
+                        if len(failures) == 1
+                        else f"{len(failures)} of {len(all_runs)} runs failed."
+                    )
                     msg = (
                         f"Task {self.name!r} run {first.id} failed:\n"
-                        f"{first.error_message}"
+                        f"{first.error_message}\n\n"
+                        f"({summary} Pass on_failure='continue' to collect "
+                        "failures into results.errored_runs instead of "
+                        "raising. For large evals with transient errors, "
+                        "pair with max_attempts > 1 and enable_cache() to "
+                        "retry only the failed samples.)"
                     )
-                    if len(failures) > 1:
-                        msg += (
-                            f"\n\n({len(failures)} of {len(all_runs)} runs "
-                            "failed. Pass on_failure='continue' to collect "
-                            "failures instead of raising.)"
-                        )
                     raise RuntimeError(msg)
 
             return all_runs

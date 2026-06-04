@@ -391,6 +391,45 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
 
 
 # %%
+# --- Test Case: Dataset evaluation with failure tolerance (production pattern) ---
+# Demonstrates the recommended call shape for large evals where transient
+# per-sample failures (timeouts, 5xx, network blips) are expected. Pair
+# on_failure="continue" with max_attempts > 1 and enable_cache() so that:
+#   - failed samples are retried on subsequent attempts
+#   - successful samples are skipped (cache hit) on retry
+#   - results from all attempts are merged into one Runs object
+
+
+def assert_resilient_qa_result(run):
+    completed, errored = run.result
+    # All 2 simple QA samples should complete on the first attempt.
+    assert completed == 2
+    assert errored == 0
+
+
+@benchmark_test(
+    df=df,
+    verify_fn=assert_resilient_qa_result,
+)
+@kbench.task()
+def test_dataset_eval_resilient(llm, df) -> tuple[int, int]:
+    with kbench.client.enable_cache():
+        results = single_qa_task.evaluate(
+            llm=[llm],
+            evaluation_data=df,
+            n_jobs=2,
+            on_failure="continue",  # collect failures instead of raising
+            max_attempts=3,  # retry transient failures up to twice
+            remove_run_files=True,
+        )
+
+    # Split results: completed vs errored. Always filter to .completed_runs
+    # before aggregating numeric columns — .result for errored runs is the
+    # `results.FAILED` sentinel, which would break .mean() / .sum() / etc.
+    return len(results.completed_runs), len(results.errored_runs)
+
+
+# %%
 # --- Test Case: Image inputs (URL) ---
 
 

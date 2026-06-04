@@ -271,6 +271,64 @@ def test_evaluate_with_retries_parallel(monkeypatch):
     assert all(run.passed for run in result)
 
 
+def test_runs_completed_and_errored_partition(monkeypatch):
+    """Runs.completed_runs and .errored_runs cleanly split a mixed Runs.
+
+    Demonstrates the Change 3 API surface: when `on_failure="continue"` lets
+    failed runs into the returned Runs, users can split successes and
+    failures with two convenience properties.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task()
+    def per_sample_task(x: str) -> bool:
+        if x == "fail":
+            raise ValueError(f"intentional failure for {x}")
+        return True
+
+    df = pd.DataFrame({"x": ["ok_a", "fail", "ok_b"]})
+
+    results = per_sample_task.evaluate(
+        evaluation_data=df,
+        on_failure="continue",
+        max_attempts=1,
+    )
+
+    assert len(results) == 3
+    assert len(results.completed_runs) == 2
+    assert len(results.errored_runs) == 1
+
+    completed_ids = {r.id for r in results.completed_runs}
+    errored_ids = {r.id for r in results.errored_runs}
+    assert completed_ids.isdisjoint(errored_ids)
+
+    # The errored run is the one for x="fail"; its params reflect that.
+    [errored] = list(results.errored_runs)
+    assert errored.params["x"] == "fail"
+    assert errored.status == utils.Status.FAILED
+
+
+def test_run_passed_false_when_status_failed(monkeypatch):
+    """Run.passed reports False when the run hit a general exception, regardless
+    of result type's default `passed(value)` behavior.
+
+    Demonstrates the Change 4 guard: most Result subclasses' `passed()`
+    returns True by default for any value; without an explicit
+    `status == FAILED -> False` check, a failed run with no failing
+    assertions would incorrectly report passed=True.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task()
+    def fails_with_score() -> float:
+        raise ValueError("boom")
+
+    run = fails_with_score.run()
+
+    assert run.status == utils.Status.FAILED
+    assert not run.passed
+
+
 def test_subruns(duck):
     @tasks.task()
     def outer(llm):
@@ -512,40 +570,6 @@ def test_on_failure_raise_in_batch_mode(monkeypatch):
 
     with pytest.raises(RuntimeError, match="batch boom"):
         bad.evaluate(on_failure="raise")
-
-
-def test_completed_and_errored_runs_split():
-    """Change 3: completed_runs + errored_runs partition the results cleanly."""
-
-    @tasks.task(name="Split")
-    def mixed(x):
-        if x == 2:
-            raise ValueError("fail")
-
-    result = mixed.evaluate(
-        evaluation_data=pd.DataFrame({"x": [1, 2, 3]}),
-        on_failure="continue",
-    )
-
-    assert len(result.completed_runs) + len(result.errored_runs) == len(result)
-    assert len(result.completed_runs) == 2
-    assert len(result.errored_runs) == 1
-    # Both return Runs (not list), so .as_dataframe() chains.
-    assert hasattr(result.completed_runs, "as_dataframe")
-
-
-def test_failed_run_reports_passed_false():
-    """Change 4: a FAILED run reports passed=False even when result_type.passed()
-    would return True (which most types do by default)."""
-
-    @tasks.task(name="Passed Guard")
-    def bad():
-        raise ValueError("fail")
-
-    run = bad.run(_suppress_raise=True)
-    assert run.status == utils.Status.FAILED
-    assert not run.passed
-
 
 def test_retry_merge_overwrites_failures():
     """Change 5: retried successes overwrite earlier failures at the same

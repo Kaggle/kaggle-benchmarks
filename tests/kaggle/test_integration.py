@@ -231,6 +231,51 @@ def test_load_failed_cached_run_reruns(client, monkeypatch, duck):
     assert call_count == 2  # Should have been called again.
 
 
+def test_evaluate_retries_only_failed_samples_with_cache(client, monkeypatch, duck):
+    """End-to-end demonstration of the production retry pattern.
+
+    With `enable_cache()` + `on_failure="continue"` + `max_attempts > 1`,
+    the retry attempt skips successful samples (cache hit on COMPLETED file)
+    and re-runs only the failed ones (no skip on ERRORED file). Results
+    from all attempts are merged into one Runs.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+    import pandas as pd
+
+    call_counts: dict[str, int] = {}
+
+    @task()
+    def per_sample_task(llm, sample_id: str) -> bool:
+        call_counts[sample_id] = call_counts.get(sample_id, 0) + 1
+        # Sample "b" fails on its first call, succeeds on retry.
+        # Samples "a" and "c" always succeed.
+        if sample_id == "b" and call_counts[sample_id] == 1:
+            raise ValueError(f"transient failure for {sample_id}")
+        return True
+
+    df = pd.DataFrame({"sample_id": ["a", "b", "c"]})
+
+    with client.enable_cache():
+        results = per_sample_task.evaluate(
+            llm=[duck],
+            evaluation_data=df,
+            on_failure="continue",
+            max_attempts=2,
+        )
+
+    # All three samples present in the merged result (positions 0, 1, 2),
+    # all successful after the retry.
+    assert len(results) == 3
+    assert len(results.completed_runs) == 3
+    assert len(results.errored_runs) == 0
+
+    # The whole point: "a" and "c" ran exactly once (cache hit on retry),
+    # "b" ran twice (failed first, retried successfully).
+    assert call_counts["a"] == 1
+    assert call_counts["c"] == 1
+    assert call_counts["b"] == 2
+
+
 def test_cache_id_uses_model_over_name(client):
     """cache_id should prefer the `model` attribute over `name` when present."""
     from tests.mocks import MockedChat
