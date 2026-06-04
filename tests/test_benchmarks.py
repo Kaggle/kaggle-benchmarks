@@ -111,9 +111,7 @@ def test_evaluate_with_retries_succeeds_on_retry(monkeypatch):
 
     # Stop when all runs succeed.
     result = fallible_task.evaluate(
-        stop_condition=lambda runs: all(
-            r.status == utils.Status.SUCCESS for r in runs
-        ),
+        stop_condition=lambda runs: all(r.status == utils.Status.SUCCESS for r in runs),
         max_attempts=5,
         on_failure="continue",
     )
@@ -134,9 +132,7 @@ def test_evaluate_with_retries_fails_after_retries(monkeypatch):
         return failer()
 
     result = fallible_task.evaluate(
-        stop_condition=lambda runs: all(
-            r.status == utils.Status.SUCCESS for r in runs
-        ),
+        stop_condition=lambda runs: all(r.status == utils.Status.SUCCESS for r in runs),
         max_attempts=2,
         on_failure="continue",
     )
@@ -266,9 +262,7 @@ def test_evaluate_with_retries_parallel(monkeypatch):
     result = fallible_task.evaluate(
         evaluation_data=evaluation_data,
         n_jobs=2,
-        stop_condition=lambda runs: all(
-            r.status == utils.Status.SUCCESS for r in runs
-        ),
+        stop_condition=lambda runs: all(r.status == utils.Status.SUCCESS for r in runs),
         max_attempts=5,
         on_failure="continue",
     )
@@ -417,11 +411,6 @@ def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
     assert len(nested_runs) == df.shape[0]
 
 
-# ---------------------------------------------------------------------------
-# Change 1 & 2 tests: failure persistence + on_failure parameter
-# ---------------------------------------------------------------------------
-
-
 class RecordingClient(clients.InMemoryClient):
     """InMemoryClient that records store_run calls for inspection."""
 
@@ -465,7 +454,7 @@ def test_successful_run_stored_with_success_status(recording_client):
     def ok():
         return True
 
-    run = ok.run()
+    ok.run()
     assert recording_client.stored_runs[0].status == utils.Status.SUCCESS
 
 
@@ -556,3 +545,24 @@ def test_failed_run_reports_passed_false():
     run = bad.run(_suppress_raise=True)
     assert run.status == utils.Status.FAILED
     assert not run.passed
+
+
+def test_retry_merge_overwrites_failures():
+    """Change 5: retried successes overwrite earlier failures at the same
+    position, so len(result) == sample count, not accumulated across attempts."""
+    call_counts = [0, 0, 0]
+
+    @tasks.task(name="Merge Retry")
+    def flaky(x):
+        call_counts[x] += 1
+        if x == 1 and call_counts[x] <= 1:
+            raise ValueError("transient")
+
+    result = flaky.evaluate(
+        evaluation_data=pd.DataFrame({"x": [0, 1, 2]}),
+        max_attempts=3,
+        on_failure="continue",
+    )
+
+    assert len(result) == 3  # merged, not 6
+    assert all(r.passed for r in result)

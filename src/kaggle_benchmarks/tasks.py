@@ -248,7 +248,13 @@ class Task(Generic[T]):
                             If provided, the evaluation will stop when this
                             condition is met.
             max_attempts: The maximum number of evaluation attempts.
-                          Defaults to 1 (no retries).
+                          Defaults to 1 (no retries). When combined with
+                          `on_failure="continue"` and `enable_cache()`,
+                          subsequent attempts re-run only the previously
+                          failed samples (cached successes are skipped);
+                          results from all attempts are merged into the
+                          returned `Runs`. The loop also exits early when
+                          no failed runs remain.
                           Note: Nested task evaluations always run with
                           `max_attempts=1` regardless of the value passed;
                           a warning is logged if a different value is provided.
@@ -335,6 +341,20 @@ class Task(Generic[T]):
 
             return all_runs
 
+        # Accumulator across attempts, keyed by positional index within the
+        # attempt. Position is stable across attempts because joblib returns
+        # results in input order regardless of n_jobs or cache hits, and
+        # because the grid/evaluation_data don't change between attempts.
+        #
+        # We use position rather than run.cache_id because cache_id falls
+        # back to the per-run sequential `id` when param_id is None
+        # (no evaluation_data), which would generate a fresh key on every
+        # attempt and prevent the merge from ever overwriting.
+        #
+        # Python dicts preserve insertion order, and reassigning an existing
+        # key updates the value without moving its iteration position — so
+        # output order matches the original attempt-1 order.
+        runs_by_position: dict[int, "runs.Run[T]"] = {}
         all_runs = runs.Runs()
         attempt = 0
         try:
@@ -344,7 +364,7 @@ class Task(Generic[T]):
                     logging.info(f"Attempt {attempt}/{max_attempts}.")
 
                 try:
-                    all_runs = _evaluate_once()
+                    attempt_runs = _evaluate_once()
                 except Exception as e:
                     logging.warning(
                         f"An error occurred during evaluation attempt {attempt}: {e}"
@@ -352,6 +372,16 @@ class Task(Generic[T]):
                     # Always re-raise exception because the `continue_with_exceptions``
                     # setting should only apply to the subruns level.
                     raise e
+
+                # Merge: new successes append at their position; retried
+                # failures overwrite in place at the same position.
+                for position, run in enumerate(attempt_runs):
+                    runs_by_position[position] = run
+                all_runs = runs.Runs(list(runs_by_position.values()))
+
+                # Nothing failed — no point trying again.
+                if not any(r.status == utils.Status.FAILED for r in all_runs):
+                    break
 
                 if stop_condition and stop_condition(all_runs):
                     logging.info("Stop condition met.")
