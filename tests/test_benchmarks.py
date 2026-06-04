@@ -591,3 +591,37 @@ def test_retry_merge_overwrites_failures():
 
     assert len(result) == 3  # merged, not 6
     assert all(r.passed for r in result)
+
+
+def test_on_failure_raise_in_dev_mode(monkeypatch):
+    """Gap 1: on_failure='raise' in dev mode propagates the original exception
+    type (ValueError), not RuntimeError — because in dev mode the exception
+    escapes the joblib worker directly, never reaching the RuntimeError wrapper."""
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+
+    @tasks.task(name="Dev Raise")
+    def bad():
+        raise ValueError("dev boom")
+
+    with pytest.raises(ValueError, match="dev boom"):
+        bad.evaluate(on_failure="raise")
+
+
+def test_swallowed_failure_persisted_in_batch_mode(monkeypatch):
+    """Gap 3: when contexts.enter swallows a root-level exception in batch mode,
+    the run still gets persisted with status=FAILED via the else branch."""
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    recording_client = RecordingClient()
+    monkeypatch.setattr("kaggle_benchmarks.client", recording_client)
+
+    @tasks.task(name="Swallowed")
+    def bad():
+        raise ValueError("swallowed")
+
+    run = bad.run()
+    # The exception was swallowed — we get a Run back, not an exception.
+    assert run.status == utils.Status.FAILED
+    # The run was persisted via the else branch (no exception escaped).
+    assert len(recording_client.stored_runs) == 1
+    assert recording_client.stored_runs[0].status == utils.Status.FAILED

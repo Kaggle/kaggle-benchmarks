@@ -55,7 +55,6 @@ from kaggle_benchmarks.content_types import (
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
-    "google/gemini-2.0-flash",
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
@@ -78,7 +77,6 @@ JUDGE_LLM_NAMES = {
 
 # Models that support audio input.
 AUDIO_LLM_NAMES = {
-    "google/gemini-2.0-flash",
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
@@ -391,41 +389,40 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
 
 
 # %%
-# --- Test Case: Dataset evaluation with failure tolerance (production pattern) ---
-# Demonstrates the recommended call shape for large evals where transient
-# per-sample failures (timeouts, 5xx, network blips) are expected. Pair
-# on_failure="continue" with max_attempts > 1 and enable_cache() so that:
-#   - failed samples are retried on subsequent attempts
-#   - successful samples are skipped (cache hit) on retry
-#   - results from all attempts are merged into one Runs object
+# --- Test Case: Dataset evaluation with intentional failure ---
+# Exercises the on_failure="continue" path with an actual failure: one sample
+# raises after the LLM call. Verifies that completed_runs and errored_runs
+# split correctly end-to-end with real API calls.
 
 
-def assert_resilient_qa_result(run):
+def assert_resilient_with_failure_result(run):
     completed, errored = run.result
-    # All 2 simple QA samples should complete on the first attempt.
-    assert completed == 2
-    assert errored == 0
+    # One of two samples intentionally fails → 1 completed, 1 errored.
+    assert completed == 1
+    assert errored == 1
 
 
 @benchmark_test(
     df=df,
-    verify_fn=assert_resilient_qa_result,
+    verify_fn=assert_resilient_with_failure_result,
 )
 @kbench.task()
-def test_dataset_eval_resilient(llm, df) -> tuple[int, int]:
-    with kbench.client.enable_cache():
-        results = single_qa_task.evaluate(
-            llm=[llm],
-            evaluation_data=df,
-            n_jobs=2,
-            on_failure="continue",  # collect failures instead of raising
-            max_attempts=3,  # retry transient failures up to twice
-            remove_run_files=True,
-        )
+def test_dataset_eval_with_failure(llm, df) -> tuple[int, int]:
+    @kbench.task(name="qa_with_failure", store_task=False)
+    def qa_with_failure(llm, question, answer) -> dict:
+        response = llm.prompt(question)
+        # Intentionally fail the first sample to exercise the failure path.
+        if "Singapore" in answer:
+            raise ValueError(f"Intentional failure for sample: {answer}")
+        return {"question": question, "predicted_answer": response}
 
-    # Split results: completed vs errored. Always filter to .completed_runs
-    # before aggregating numeric columns — .result for errored runs is the
-    # `results.FAILED` sentinel, which would break .mean() / .sum() / etc.
+    results = qa_with_failure.evaluate(
+        llm=[llm],
+        evaluation_data=df,
+        n_jobs=1,
+        on_failure="continue",
+    )
+
     return len(results.completed_runs), len(results.errored_runs)
 
 
@@ -633,7 +630,7 @@ def test_audio_url(llm):
 # support it (not all models return traces).
 
 
-# Known failures: gemini-2.0-flash, gemma-4-31b — do not support reasoning.
+# Known failures: gemma-4-31b — does not support reasoning.
 @benchmark_test()
 @kbench.task()
 def test_reasoning_param(llm):
@@ -952,7 +949,7 @@ def get_user_profile(user_id: str) -> dict:
     return {"name": "Unknown", "role": "User", "skills": []}
 
 
-# Known failures: gemini-2.0-flash returns incorrect role on both APIs.
+# Known failures: (none currently).
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
