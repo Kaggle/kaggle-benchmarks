@@ -18,7 +18,16 @@ import functools
 import inspect
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, Self, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Literal,
+    Self,
+    TypeVar,
+)
 
 import pandas as pd
 
@@ -96,6 +105,11 @@ class Task(Generic[T]):
     def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
         from kaggle_benchmarks import client, contexts, runs
 
+        # Internal flag set only by Task._evaluate_once() when
+        # on_failure="continue". Popped from kwargs (not added to the public
+        # signature) to keep it out of inspect.signature() and IDE autocomplete.
+        _suppress_raise = kwargs.pop("_suppress_raise", False)
+
         signature = inspect.signature(self.func)
         bound_args = signature.bind(*args, **kwargs)
         bound_args.apply_defaults()
@@ -113,42 +127,75 @@ class Task(Generic[T]):
             param_id=_id,
         )
 
-        with contexts.enter(run=run) as ctx:
-            cached_run = self._handle_cached_run(run, ctx)
-            if cached_run is not None:
-                return cached_run
+        try:
+            with contexts.enter(run=run) as ctx:
+                cached_run = self._handle_cached_run(run, ctx)
+                if cached_run is not None:
+                    # Cached path is fully handled by _handle_cached_run
+                    # (parent linkage included). Skip the finalize/persist
+                    # path entirely.
+                    return cached_run
 
-            run.start_time = datetime.datetime.now(datetime.timezone.utc)
-
-            with chats.new(self.name, orphan=True) as chat:
                 try:
-                    run.chat = chat
-                    events.manager.dispatch("run_update", run)
-                    run.result = self.func(*args, **kwargs)
-                    if not self.result_type.check_value(run.result):
-                        logger.warning(
-                            f"Wrong return type {type(run.result)}. Expected {self.result_type._type}. This may need to lead to unexpected task behavior."
-                        )
-                # Always make AssertionError non-blocking.
-                # This allows users to write/track native Python asserts within a task.
-                except AssertionError as e:
-                    run.handle_assertion_exception(e)
-                # Let KeyboardInterrupt propagate to stop execution.
-                except (NonRecoverableError, KeyboardInterrupt):
-                    raise
-                # Handle all other exceptions.
-                # Always re-raise the exception because it will be handled in contexts.enter.
-                except Exception as e:
-                    run.handle_general_exception(e)
+                    run.start_time = datetime.datetime.now(datetime.timezone.utc)
 
-        run.end_time = datetime.datetime.now(datetime.timezone.utc)
+                    with chats.new(self.name, orphan=True) as chat:
+                        try:
+                            run.chat = chat
+                            events.manager.dispatch("run_update", run)
+                            run.result = self.func(*args, **kwargs)
+                            if not self.result_type.check_value(run.result):
+                                logger.warning(
+                                    f"Wrong return type {type(run.result)}. Expected {self.result_type._type}. This may need to lead to unexpected task behavior."
+                                )
+                        # Always make AssertionError non-blocking.
+                        # This allows users to write/track native Python asserts within a task.
+                        except AssertionError as e:
+                            run.handle_assertion_exception(e)
+                        # Let KeyboardInterrupt propagate to stop execution.
+                        except (NonRecoverableError, KeyboardInterrupt):
+                            raise
+                        # Handle all other exceptions.
+                        # Always re-raise — contexts.enter and the outer
+                        # except below decide whether to propagate further.
+                        except Exception as e:
+                            run.handle_general_exception(e)
+                finally:
+                    # Always finalize and persist, even on exception, so
+                    # failed runs are debuggable on disk and the retry loop
+                    # can overwrite them on success.
+                    run.end_time = datetime.datetime.now(datetime.timezone.utc)
 
-        if ctx.parent and ctx.parent.run:
-            ctx.parent.run.subruns.append(run)
+                    if (
+                        ctx.parent
+                        and ctx.parent.run
+                        and run not in ctx.parent.run.subruns
+                    ):
+                        ctx.parent.run.subruns.append(run)
 
-        if self.store_run:
-            client.store_run(run)
+                    if self.store_run:
+                        try:
+                            client.store_run(run)
+                        except Exception as store_exc:
+                            # Persistence failure must not mask the original
+                            # task failure (if any).
+                            logger.warning(f"Failed to store run {run.id}: {store_exc}")
+        except (NonRecoverableError, KeyboardInterrupt):
+            # Ctrl-C and unrecoverable errors always propagate, even when
+            # the caller asked for suppression.
+            raise
+        except Exception:
+            # By here, run.status=FAILED and run.error_message is populated
+            # (handle_general_exception did this inside the with-block).
+            # The finally already persisted the failed run.
+            if not _suppress_raise:
+                raise
 
+        # Note: when continue_with_exceptions=True (Kaggle batch default),
+        # contexts.enter swallows the exception above and we return the
+        # failed Run here — matching today's behavior for direct callers.
+        # Task.evaluate() handles "raise on any FAILED" at the eval level
+        # so this method's contract stays stable for everyone else.
         return run
 
     def evaluate(
@@ -161,6 +208,7 @@ class Task(Generic[T]):
         max_attempts: int = 1,
         retry_delay: int = 1,
         remove_run_files: bool = False,
+        on_failure: Literal["raise", "continue"] = "raise",
         **kwargs: Iterable[Any],
     ) -> "runs.Runs[T]":
         """Evaluates the function over a grid of parameters, with optional retries.
@@ -196,11 +244,24 @@ class Task(Generic[T]):
                           a warning is logged if a different value is provided.
             retry_delay: The delay in seconds between retry attempts.
             remove_run_files: Remove generated run files when done.
+            on_failure: How to handle per-sample task failures.
+                - `"raise"` (default): if any sample fails, raise after the
+                  current attempt finishes. In dev mode (no
+                  `continue_with_exceptions`), a failure raises immediately
+                  via the joblib worker. In Kaggle batch mode, the eval
+                  finishes all parallel workers and then raises a summary —
+                  so you still get a hard failure instead of a silent drop.
+                - `"continue"`: catch per-sample failures, include the
+                  failed runs in the returned `Runs`, and keep going.
+                  Use `results.completed_runs` / `results.errored_runs` to
+                  split them. Pair with `enable_cache()` + `max_attempts > 1`
+                  to retry only the failures.
             **kwargs: Alternative way to specify the parameter grid.
 
         Returns:
-            A `runs.Runs` object containing the results of all successful
-            evaluations.
+            A `runs.Runs` object. With `on_failure="raise"` (default) it
+            contains only successful runs. With `on_failure="continue"` it
+            contains both successful and failed runs.
         """
         from kaggle_benchmarks import contexts, orchestration, runs
         from kaggle_benchmarks.kaggle import serialization
@@ -222,19 +283,47 @@ class Task(Generic[T]):
             evaluation_data = evaluation_data.reset_index(names=["_id"])
 
         def _evaluate_once():
-            return runs.Runs(
+            # In "continue" mode, tell Task.run() not to re-raise so the
+            # failed Run object comes back to us instead of crashing the
+            # joblib worker. In "raise" mode, leave Task.run()'s behavior
+            # untouched (it raises in dev, returns the failed Run in batch).
+            runner = functools.partial(
+                self.run, _suppress_raise=(on_failure == "continue")
+            )
+            all_runs = runs.Runs(
                 [
                     run
                     for _, _, run in orchestration.evaluate_function(
-                        self.run,
+                        runner,
                         grid=grid,
                         evaluation_data=evaluation_data,
                         n_jobs=n_jobs,
                         timeout=timeout,
                     )
-                    if run is not None and run.status == utils.Status.SUCCESS
+                    if run is not None
                 ]
             )
+
+            # In "raise" mode, surface any failed runs that slipped through
+            # because contexts.enter swallowed them (Kaggle batch). In dev
+            # mode, the worker already raised and we never reach here.
+            if on_failure == "raise":
+                failures = [r for r in all_runs if r.status == utils.Status.FAILED]
+                if failures:
+                    first = failures[0]
+                    msg = (
+                        f"Task {self.name!r} run {first.id} failed:\n"
+                        f"{first.error_message}"
+                    )
+                    if len(failures) > 1:
+                        msg += (
+                            f"\n\n({len(failures)} of {len(all_runs)} runs "
+                            "failed. Pass on_failure='continue' to collect "
+                            "failures instead of raising.)"
+                        )
+                    raise RuntimeError(msg)
+
+            return all_runs
 
         all_runs = runs.Runs()
         attempt = 0
