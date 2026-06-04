@@ -18,7 +18,7 @@ import pandas as pd
 import panel as pn
 import pytest
 
-from kaggle_benchmarks import chats, config, runs, tasks, utils
+from kaggle_benchmarks import chats, clients, config, runs, tasks, utils
 
 
 @tasks.task()
@@ -109,33 +109,39 @@ def test_evaluate_with_retries_succeeds_on_retry(monkeypatch):
     def fallible_task():
         return failer()
 
-    # Stop after 2 attempts if the task is still failing.
-    runs = fallible_task.evaluate(
-        stop_condition=lambda runs: len(runs.runs) == 1,
+    # Stop when all runs succeed.
+    result = fallible_task.evaluate(
+        stop_condition=lambda runs: all(
+            r.status == utils.Status.SUCCESS for r in runs
+        ),
         max_attempts=5,
+        on_failure="continue",
     )
 
-    assert len(runs.runs) == 1
-    run = runs.runs[0]
-    assert run.passed
     assert failer.attempts == 2
+    successes = [r for r in result if r.status == utils.Status.SUCCESS]
+    assert len(successes) >= 1
+    assert successes[0].passed
 
 
 def test_evaluate_with_retries_fails_after_retries(monkeypatch):
     monkeypatch.setattr(config, "continue_with_exceptions", True)
     failer = Failer(fail_times=10)
 
-    # With 2 retries, it will attempt 3 times (1 initial + 2 retries) and fail each time.
+    # With 2 retries, it will attempt 2 times and fail each time.
     @tasks.task()
     def fallible_task():
         return failer()
 
-    runs = fallible_task.evaluate(
-        stop_condition=lambda runs: len(runs.runs) == 1,
+    result = fallible_task.evaluate(
+        stop_condition=lambda runs: all(
+            r.status == utils.Status.SUCCESS for r in runs
+        ),
         max_attempts=2,
+        on_failure="continue",
     )
 
-    assert len(runs.runs) == 0
+    assert any(r.status == utils.Status.FAILED for r in result)
     assert failer.attempts == 2
 
 
@@ -223,19 +229,23 @@ def test_evaluate_on_exception(monkeypatch, continue_with_exceptions):
         failer()
 
     if continue_with_exceptions:
-        # It will eventually succeed with enough attempts.
-        runs = fallible_task.evaluate(
-            stop_condition=lambda runs: len(runs.runs) == 1,
+        # With on_failure="continue", it will eventually succeed.
+        result = fallible_task.evaluate(
+            stop_condition=lambda runs: all(
+                r.status == utils.Status.SUCCESS for r in runs
+            ),
             max_attempts=3,
+            on_failure="continue",
         )
-        assert len(runs.runs) == 1
+        successes = [r for r in result if r.status == utils.Status.SUCCESS]
+        assert len(successes) == 1
         assert failer.attempts == 3
-        assert runs.runs[0].passed
-        assert runs.runs[0].status == utils.Status.SUCCESS
-        assert runs.runs[0].error_message is None
+        assert successes[0].passed
+        assert successes[0].status == utils.Status.SUCCESS
+        assert successes[0].error_message is None
     else:
         with pytest.raises(ValueError, match="Intentional failure on attempt 1"):
-            runs = fallible_task.evaluate(
+            fallible_task.evaluate(
                 stop_condition=lambda runs: len(runs.runs) == 1,
                 max_attempts=3,
             )
@@ -253,15 +263,18 @@ def test_evaluate_with_retries_parallel(monkeypatch):
         index=[f"run{i}" for i in range(4)],
     )
 
-    runs = fallible_task.evaluate(
+    result = fallible_task.evaluate(
         evaluation_data=evaluation_data,
         n_jobs=2,
-        stop_condition=lambda runs: len(runs.runs) == 4,
+        stop_condition=lambda runs: all(
+            r.status == utils.Status.SUCCESS for r in runs
+        ),
         max_attempts=5,
+        on_failure="continue",
     )
 
-    assert len(runs) == 4
-    assert all(run.passed for run in runs)
+    assert len(result) == 4
+    assert all(run.passed for run in result)
 
 
 def test_subruns(duck):
@@ -402,3 +415,111 @@ def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
     nested_runs = run.result
     assert isinstance(nested_runs, runs.Runs)
     assert len(nested_runs) == df.shape[0]
+
+
+# ---------------------------------------------------------------------------
+# Change 1 & 2 tests: failure persistence + on_failure parameter
+# ---------------------------------------------------------------------------
+
+
+class RecordingClient(clients.InMemoryClient):
+    """InMemoryClient that records store_run calls for inspection."""
+
+    def __init__(self):
+        super().__init__()
+        self.stored_runs: list[runs.Run] = []
+
+    def store_run(self, run: runs.Run):
+        self.stored_runs.append(run)
+
+
+@pytest.fixture()
+def recording_client(monkeypatch):
+    rc = RecordingClient()
+    monkeypatch.setattr("kaggle_benchmarks.client", rc)
+    return rc
+
+
+def test_failed_run_persisted_with_correct_status(monkeypatch, recording_client):
+    """Change 1: failed runs are always persisted, even in dev mode."""
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+
+    @tasks.task(name="Persist Fail")
+    def bad():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError, match="boom"):
+        bad.run()
+
+    assert len(recording_client.stored_runs) == 1
+    stored = recording_client.stored_runs[0]
+    assert stored.status == utils.Status.FAILED
+    assert "boom" in stored.error_message
+    assert stored.end_time is not None
+
+
+def test_successful_run_stored_with_success_status(recording_client):
+    """Change 1: successful runs are stored with SUCCESS (not RUNNING)."""
+
+    @tasks.task(name="Persist OK")
+    def ok():
+        return True
+
+    run = ok.run()
+    assert recording_client.stored_runs[0].status == utils.Status.SUCCESS
+
+
+def test_store_run_error_doesnt_mask_task_error(monkeypatch):
+    """Change 1: if store_run raises, the original task error surfaces."""
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+    monkeypatch.setattr(
+        "kaggle_benchmarks.client.store_run",
+        lambda run: (_ for _ in ()).throw(IOError("disk full")),
+    )
+
+    @tasks.task(name="IO Mask")
+    def bad():
+        raise ValueError("original")
+
+    with pytest.raises(ValueError, match="original"):
+        bad.run()
+
+
+def test_nonrecoverable_propagates_despite_suppress():
+    """Change 1: NonRecoverableError always propagates, even with _suppress_raise."""
+
+    @tasks.task(name="Fatal")
+    def fatal():
+        raise tasks.NonRecoverableError("fatal")
+
+    with pytest.raises(tasks.NonRecoverableError):
+        fatal.run(_suppress_raise=True)
+
+
+def test_on_failure_continue_returns_failed_runs():
+    """Change 2: on_failure='continue' includes failures in returned Runs."""
+
+    @tasks.task(name="Mixed")
+    def mixed(x):
+        if x == 2:
+            raise ValueError("fail")
+
+    result = mixed.evaluate(
+        evaluation_data=pd.DataFrame({"x": [1, 2, 3]}),
+        on_failure="continue",
+    )
+    assert len(result) == 3
+    assert len([r for r in result if r.status == utils.Status.SUCCESS]) == 2
+    assert len([r for r in result if r.status == utils.Status.FAILED]) == 1
+
+
+def test_on_failure_raise_in_batch_mode(monkeypatch):
+    """Change 2: on_failure='raise' (default) raises even in batch mode."""
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task(name="Batch Raise")
+    def bad():
+        raise ValueError("batch boom")
+
+    with pytest.raises(RuntimeError, match="batch boom"):
+        bad.evaluate(on_failure="raise")

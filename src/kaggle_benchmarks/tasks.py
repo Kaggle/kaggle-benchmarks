@@ -102,8 +102,34 @@ class Task(Generic[T]):
                 logger.warning(f"Reading cached run failed: {e}")
         return None
 
+    def _finalize_and_persist(self, run: "runs.Run[T]", ctx) -> None:
+        """Stamp end_time, link to parent, and write the run file.
+
+        Called after `contexts.enter` has exited, so `run.status` is
+        already set to its final value (SUCCESS or FAILED) by
+        `contexts.enter`'s own finally block. Skipped for cached runs,
+        which are fully handled by `_handle_cached_run`.
+        """
+        from kaggle_benchmarks import client
+
+        if run.cached:
+            return
+
+        run.end_time = datetime.datetime.now(datetime.timezone.utc)
+
+        if ctx.parent and ctx.parent.run and run not in ctx.parent.run.subruns:
+            ctx.parent.run.subruns.append(run)
+
+        if self.store_run:
+            try:
+                client.store_run(run)
+            except Exception as store_exc:
+                # Persistence failure must not mask the original task
+                # outcome (success or failure).
+                logger.warning(f"Failed to store run {run.id}: {store_exc}")
+
     def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
-        from kaggle_benchmarks import client, contexts, runs
+        from kaggle_benchmarks import contexts, runs
 
         # Internal flag set only by Task._evaluate_once() when
         # on_failure="continue". Popped from kwargs (not added to the public
@@ -132,70 +158,54 @@ class Task(Generic[T]):
                 cached_run = self._handle_cached_run(run, ctx)
                 if cached_run is not None:
                     # Cached path is fully handled by _handle_cached_run
-                    # (parent linkage included). Skip the finalize/persist
-                    # path entirely.
+                    # (parent linkage included). Early return skips both
+                    # the except/else clauses below.
                     return cached_run
 
-                try:
-                    run.start_time = datetime.datetime.now(datetime.timezone.utc)
+                run.start_time = datetime.datetime.now(datetime.timezone.utc)
 
-                    with chats.new(self.name, orphan=True) as chat:
-                        try:
-                            run.chat = chat
-                            events.manager.dispatch("run_update", run)
-                            run.result = self.func(*args, **kwargs)
-                            if not self.result_type.check_value(run.result):
-                                logger.warning(
-                                    f"Wrong return type {type(run.result)}. Expected {self.result_type._type}. This may need to lead to unexpected task behavior."
-                                )
-                        # Always make AssertionError non-blocking.
-                        # This allows users to write/track native Python asserts within a task.
-                        except AssertionError as e:
-                            run.handle_assertion_exception(e)
-                        # Let KeyboardInterrupt propagate to stop execution.
-                        except (NonRecoverableError, KeyboardInterrupt):
-                            raise
-                        # Handle all other exceptions.
-                        # Always re-raise — contexts.enter and the outer
-                        # except below decide whether to propagate further.
-                        except Exception as e:
-                            run.handle_general_exception(e)
-                finally:
-                    # Always finalize and persist, even on exception, so
-                    # failed runs are debuggable on disk and the retry loop
-                    # can overwrite them on success.
-                    run.end_time = datetime.datetime.now(datetime.timezone.utc)
-
-                    if (
-                        ctx.parent
-                        and ctx.parent.run
-                        and run not in ctx.parent.run.subruns
-                    ):
-                        ctx.parent.run.subruns.append(run)
-
-                    if self.store_run:
-                        try:
-                            client.store_run(run)
-                        except Exception as store_exc:
-                            # Persistence failure must not mask the original
-                            # task failure (if any).
-                            logger.warning(f"Failed to store run {run.id}: {store_exc}")
+                with chats.new(self.name, orphan=True) as chat:
+                    try:
+                        run.chat = chat
+                        events.manager.dispatch("run_update", run)
+                        run.result = self.func(*args, **kwargs)
+                        if not self.result_type.check_value(run.result):
+                            logger.warning(
+                                f"Wrong return type {type(run.result)}. Expected {self.result_type._type}. This may need to lead to unexpected task behavior."
+                            )
+                    # Always make AssertionError non-blocking.
+                    # This allows users to write/track native Python asserts within a task.
+                    except AssertionError as e:
+                        run.handle_assertion_exception(e)
+                    # Let KeyboardInterrupt propagate to stop execution.
+                    except (NonRecoverableError, KeyboardInterrupt):
+                        raise
+                    # Handle all other exceptions.
+                    # Always re-raise — the outer except below decides
+                    # whether to propagate further.
+                    except Exception as e:
+                        run.handle_general_exception(e)
         except (NonRecoverableError, KeyboardInterrupt):
-            # Ctrl-C and unrecoverable errors always propagate, even when
-            # the caller asked for suppression.
+            # Don't persist runs interrupted by Ctrl-C or unrecoverable
+            # errors. contexts.enter's KbdInt handler skips setting the
+            # FAILED status (see contexts.py:75-76), so a persisted run
+            # would end up with state=COMPLETED and pollute the cache.
             raise
         except Exception:
-            # By here, run.status=FAILED and run.error_message is populated
-            # (handle_general_exception did this inside the with-block).
-            # The finally already persisted the failed run.
+            # contexts.enter has exited and set run.status=FAILED. Persist
+            # the failed run for debugging and for the retry loop, then
+            # decide whether to propagate.
+            self._finalize_and_persist(run, ctx)
             if not _suppress_raise:
                 raise
+        else:
+            # No exception reached us: either the task body succeeded
+            # (status=SUCCESS) or contexts.enter swallowed a failure at
+            # root with continue_with_exceptions=True (status=FAILED).
+            # Either way, contexts.enter's finally has set the right
+            # status — persist now.
+            self._finalize_and_persist(run, ctx)
 
-        # Note: when continue_with_exceptions=True (Kaggle batch default),
-        # contexts.enter swallows the exception above and we return the
-        # failed Run here — matching today's behavior for direct callers.
-        # Task.evaluate() handles "raise on any FAILED" at the eval level
-        # so this method's contract stays stable for everyone else.
         return run
 
     def evaluate(
