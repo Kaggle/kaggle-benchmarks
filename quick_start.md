@@ -440,6 +440,14 @@ visual indicator of how many tasks have been completed. It returns a
 `Runs` object, which is a list of individual `Run` objects for each row
 in your dataset.
 
+By default, `.evaluate()` raises if any sample fails — the right
+behavior for development. For large datasets where transient failures
+(API timeouts, rate limits) are expected, pass `on_failure="continue"`
+to collect failures into `results.errored_runs` instead of raising, and
+pair with `max_attempts > 1` and `enable_cache()` to retry only the
+failed samples. See the cookbook recipe "Best Practices for Large
+Datasets" for the full pattern.
+
 For large datasets, the detailed evaluation of individual items can be
 verbose and slow. To dramatically speed up the process and remove this
 detail, simply set the environment variable:

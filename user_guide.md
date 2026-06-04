@@ -151,6 +151,32 @@ success_rate = runs.as_dataframe()["result"].mean()
 print(f"Success rate: {success_rate:.2f}")
 ```
 
+By default, `.evaluate()` raises on the first per-sample failure (the
+right behavior for development). For production-scale evaluations where
+some samples may hit transient errors (API timeouts, rate limits, etc.),
+pass `on_failure="continue"` to collect failed runs into the returned
+`Runs` instead of raising:
+
+``` python
+results = solve_and_check_riddle.evaluate(
+    llm=[kbench.llm],
+    evaluation_data=riddle_df,
+    on_failure="continue",
+)
+
+# Split successes from failures
+print(f"Completed: {len(results.completed_runs)}")
+print(f"Errored:   {len(results.errored_runs)}")
+
+# Always aggregate over completed_runs only — failed runs carry the
+# results.FAILED sentinel which breaks .mean() / .sum().
+success_rate = results.completed_runs.as_dataframe()["result"].mean()
+```
+
+Combine with `max_attempts > 1` and `enable_cache()` to retry only the
+failed samples on subsequent attempts. See the cookbook recipe "Best
+Practices for Large Datasets" for the full pattern.
+
 ## 2. Interacting with LLMs
 
 The `LLM` object provides several methods to communicate with the model.

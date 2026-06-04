@@ -423,6 +423,61 @@ These map directly to golden test patterns in `golden_tests/test_cookbook_exampl
 
 ---
 
+### Scenario 4.6 — Failure-Tolerant Evaluation (`on_failure="continue"`)
+
+**Prompt:**
+> I'm running a 500-sample benchmark against a third-party API. A few samples fail every run because of API timeouts and 5xx errors. By default `.evaluate()` raises on the first failure and I lose all the work. How do I make it collect failures into the results instead of raising?
+
+**Expected Answer:**
+- [ ] Recommends `on_failure="continue"` parameter on `.evaluate()`
+- [ ] Explains the default is `"raise"` (which is why the eval aborts today)
+- [ ] Explains failed runs are returned in the `Runs` object with `status=FAILED`
+- [ ] Shows splitting via `results.completed_runs` and `results.errored_runs`
+- [ ] Warns that aggregating over the full `Runs` (e.g., `.as_dataframe().result.mean()`) will break because failed runs carry the `results.FAILED` sentinel — must aggregate over `results.completed_runs` only
+- [ ] Mentions inspecting `run.error_message` on errored runs for debugging
+
+**Source of Truth:** `SKILL.md` §3 "Failure Handling: `on_failure='raise'` vs `'continue'`"; `golden_tests/test_cookbook_examples.py` `test_dataset_eval_resilient`; `tests/test_benchmarks.py` `test_runs_completed_and_errored_partition`
+
+---
+
+### Scenario 4.7 — Resilient Production Pattern (Cache + Retry + Continue)
+
+**Prompt:**
+> Write a complete benchmark task for a 500-sample evaluation against a flaky API. The eval should: (1) collect failures rather than raising, (2) automatically retry failed samples up to 3 times (without re-running samples that already succeeded), (3) merge results from all attempts, (4) return accuracy as a float computed over only the samples that completed.
+
+**Expected Answer:**
+- [ ] Defines a per-sample sub-task with `store_task=False`
+- [ ] Main task wraps `.evaluate()` in `with kbench.client.enable_cache():`
+- [ ] Passes `on_failure="continue"` to `.evaluate()`
+- [ ] Passes `max_attempts=3` (or similar > 1) to `.evaluate()`
+- [ ] May also pass `retry_delay=` for backoff between attempts
+- [ ] Uses `results.completed_runs.as_dataframe()` (NOT `results.as_dataframe()`) for accuracy aggregation
+- [ ] Optionally reports `len(results.errored_runs)` for visibility
+- [ ] Returns `-> float` (or `-> dict` with accuracy + error stats)
+- [ ] Does NOT manually loop and call `.run()` per sample — uses `.evaluate()`
+- [ ] Does NOT try to catch exceptions inside the task body (that would poison the cache with bogus successes)
+
+**Source of Truth:** `SKILL.md` §3 "Resilient Pattern for Large Datasets" + §9 Pattern H.5; `cookbook.md` "Recipe: Best Practices for Large Datasets"; `documentation/examples/dataset_evaluation.py`
+
+---
+
+### Scenario 4.8 — Default `on_failure` Behavior
+
+**Prompt:**
+> What's the default value of `on_failure` on `.evaluate()`? What happens when I don't pass it and one of my samples raises?
+
+**Expected Answer:**
+- [ ] Says the default is `"raise"`
+- [ ] In dev mode: the first per-sample exception aborts the eval immediately (joblib worker raises, propagates out)
+- [ ] In Kaggle batch mode: all parallel workers finish, then `evaluate()` raises a `RuntimeError` summarizing the failures (NOT silent partial results)
+- [ ] The `RuntimeError` message includes a hint pointing at `on_failure="continue"` and the `max_attempts` + `enable_cache()` pattern
+- [ ] Says `"raise"` is the right default because silent failures are worse than loud ones
+- [ ] Does NOT claim the default is `"continue"` or that batch mode silently drops failures (that was old behavior, fixed in v0.7.0)
+
+**Source of Truth:** `SKILL.md` §3 "Failure Handling" table; `src/kaggle_benchmarks/tasks.py` `evaluate()` `on_failure` parameter default; `docs/large_eval_rerun/detailed_design.md` §1
+
+---
+
 ## Category 5: Medium — Combining Basics
 
 ### Scenario 5.1 — Structured Output + Judge Evaluation
@@ -1194,6 +1249,9 @@ These scenarios validate the agent's understanding of the `ChatRoom` / `Particip
 | 4.3 | Eval with full params | Dataset Eval | Medium | |
 | 4.4 | Multi-model comparison | Dataset Eval | Medium | |
 | 4.5 | Math word problems | Dataset Eval | Medium | |
+| 4.6 | on_failure="continue" | Dataset Eval | Medium | |
+| 4.7 | Resilient prod pattern | Dataset Eval | Advanced | |
+| 4.8 | Default on_failure behavior | Dataset Eval / Knowledge | Basic | |
 | 5.1 | Structured + judge | Combined | Medium | |
 | 5.2 | Hallucination detect | Combined | Medium | |
 | 5.3 | System + struct + code | Combined | Medium | |

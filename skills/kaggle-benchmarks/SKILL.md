@@ -1,12 +1,12 @@
 ---
 name: kaggle-benchmarks
-version: 0.5.0
-description: Write benchmark tasks to evaluate LLMs using the kaggle_benchmarks Python library. Covers task decorators, structured outputs, assertions, tools, dataset evaluation, and multi-turn conversations.
+version: 0.7.0
+description: Write benchmark tasks to evaluate LLMs using the kaggle_benchmarks Python library. Covers task decorators, structured outputs, assertions, tools, dataset evaluation (including failure-tolerant retry patterns for large datasets), and multi-turn conversations.
 ---
 
 # Skill: Writing Kaggle Benchmarks Tasks
 
-> This skill file teaches you how to write high-quality benchmark tasks using the `kaggle-benchmarks` Python library (version 0.5.0+).
+> This skill file teaches you how to write high-quality benchmark tasks using the `kaggle-benchmarks` Python library (version 0.7.0+).
 > Always verify patterns against the actual source code in `src/kaggle_benchmarks/` when in doubt.
 
 ## Quick Reference
@@ -105,6 +105,8 @@ math_benchmark.run(kbench.llm)
 | Using `store_task=True` for sub-tasks | Set `store_task=False` for helper tasks called inside other tasks |
 | Using `!pip install` without commenting | Use `# !pip install -q pkg` — uncommented magics break local execution |
 | Forgetting `last_reasoning_traces()` can be `None` | Always check: `traces = kbench.last_reasoning_traces(); if traces: ...` |
+| Aggregating over all runs after `on_failure="continue"` | Filter first: `results.completed_runs.as_dataframe().result.mean()` — failed runs carry the `results.FAILED` sentinel which breaks `.mean()` / `.sum()` |
+| Using `max_attempts > 1` without `on_failure="continue"` | The default `"raise"` aborts on first failure, so retries never happen. Pair `max_attempts > 1` with `on_failure="continue"` and `enable_cache()` for selective retry. |
 
 ---
 
@@ -315,6 +317,7 @@ results = my_task.evaluate(
     timeout=120,                          # Per-job timeout in seconds
     max_attempts=3,                       # Retry count
     retry_delay=15,                       # Seconds between retries
+    on_failure="raise",                   # "raise" (default) or "continue"
     stop_condition=lambda runs: len(runs) == df.shape[0],  # Early stop
     remove_run_files=True,                # Clean up after
 )
@@ -324,6 +327,56 @@ results.as_dataframe()
 ```
 
 > **Note:** Any extra keyword arguments (beyond `llm`, `evaluation_data`, etc.) are forwarded to the task function. For example, if your task has a `critic` parameter, pass `critic=[critic_llm]` to `.evaluate()`.
+
+### Failure Handling: `on_failure="raise"` vs `"continue"`
+
+`.evaluate()` has two modes for handling per-sample failures (a task body raising an exception, e.g., from an API timeout):
+
+| Mode | Behavior | When to use |
+|---|---|---|
+| `"raise"` (default) | First per-sample failure aborts the eval. Dev: raises immediately. Kaggle batch: waits for all parallel workers, then raises a summary. | Default — strict, loud, the right choice for development and tests that should never have failures. |
+| `"continue"` | Failed runs are caught, recorded with `status=FAILED`, and included in the returned `Runs`. The eval keeps going. | Production-scale evals where transient failures (timeouts, rate limits) are expected. |
+
+When `on_failure="continue"` returns a mixed `Runs`, split it with the two properties:
+
+```python
+results = my_task.evaluate(..., on_failure="continue")
+
+print(f"Completed: {len(results.completed_runs)}")  # status=SUCCESS
+print(f"Errored:   {len(results.errored_runs)}")    # status=FAILED
+
+# Inspect failures for debugging
+for run in results.errored_runs:
+    print(f"{run.params}: {run.error_message[:200]}")
+
+# CRITICAL: always aggregate over completed_runs ONLY.
+# Failed runs carry the `results.FAILED` sentinel which breaks .mean() / .sum().
+accuracy = results.completed_runs.as_dataframe().result.mean()
+```
+
+### Resilient Pattern for Large Datasets
+
+The production pattern combines three features so that transient failures don't lose work:
+
+```python
+import kaggle_benchmarks as kbench
+
+with kbench.client.enable_cache():
+    results = my_task.evaluate(
+        llm=[kbench.llm],
+        evaluation_data=df,         # e.g. 500 samples
+        n_jobs=20,
+        on_failure="continue",      # collect failures instead of raising
+        max_attempts=3,             # retry transient failures up to twice
+        retry_delay=30,
+    )
+```
+
+How it works:
+- **Attempt 1** runs every sample. Successes persist to disk as `state=COMPLETED`; failures persist as `state=ERRORED`.
+- **Attempt 2** re-runs everything via `Task.run()`. The cache check skips `COMPLETED` files (no re-run) but re-runs `ERRORED` ones. So only the failed samples actually re-execute.
+- **Results merge** across attempts by positional index — attempt 2's successes overwrite attempt 1's failures at the same slot. Output order matches `evaluation_data` row order.
+- **Early exit** when no failed runs remain (stops the loop before exhausting `max_attempts`).
 
 ### Multi-Model Comparison
 
@@ -1200,6 +1253,8 @@ judge_poem.run(kbench.llm, question="Write a haiku about clouds.")
 
 ### Pattern H: Dataset Evaluation with Parallel Execution
 
+The basic shape — for small datasets where any failure should abort.
+
 ```python
 import pandas as pd
 
@@ -1219,6 +1274,50 @@ runs = riddle_solver.evaluate(
     llm=[kbench.llm], evaluation_data=df, n_jobs=3
 )
 runs.as_dataframe()
+```
+
+### Pattern H.5: Resilient Dataset Evaluation (Production)
+
+For large datasets (500+ samples) where transient API failures are expected. Combines `on_failure="continue"` for visibility, `max_attempts` for selective retry, and `enable_cache()` for skipping work that already succeeded.
+
+```python
+import pandas as pd
+
+@kbench.task(name="per_sample_qa", store_task=False)
+def per_sample_qa(llm, question: str, answer: str) -> dict:
+    response = llm.prompt(question)
+    return {"is_correct": answer.lower() in response.lower()}
+
+
+@kbench.task(name="resilient_qa_benchmark")
+def resilient_qa_benchmark(llm, df) -> dict:
+    with kbench.client.enable_cache():
+        results = per_sample_qa.evaluate(
+            llm=[llm],
+            evaluation_data=df,
+            n_jobs=20,
+            on_failure="continue",   # collect failures into results.errored_runs
+            max_attempts=3,          # retry transient failures up to twice
+            retry_delay=30,
+        )
+
+    # Split successes from failures.
+    completed = results.completed_runs
+    errored = results.errored_runs
+
+    # IMPORTANT: aggregate over completed_runs only — results.FAILED breaks .mean()
+    accuracy = float(completed.as_dataframe().result.str.get("is_correct").mean())
+
+    return {
+        "accuracy": accuracy,
+        "completed": len(completed),
+        "errored": len(errored),
+        "total": len(results),
+        "failed_samples": [r.params for r in errored],  # for debugging
+    }
+
+
+# resilient_qa_benchmark.run(kbench.llm, df)
 ```
 
 ### Pattern I.5: Multi-Agent ChatRoom (Debate)

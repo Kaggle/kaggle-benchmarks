@@ -571,6 +571,7 @@ def test_on_failure_raise_in_batch_mode(monkeypatch):
     with pytest.raises(RuntimeError, match="batch boom"):
         bad.evaluate(on_failure="raise")
 
+
 def test_retry_merge_overwrites_failures():
     """Change 5: retried successes overwrite earlier failures at the same
     position, so len(result) == sample count, not accumulated across attempts."""
