@@ -280,6 +280,14 @@ class Task(Generic[T]):
         from kaggle_benchmarks import contexts, orchestration, runs
         from kaggle_benchmarks.kaggle import serialization
 
+        # Literal[] is a static hint only; validate at runtime so a typo
+        # like on_failure="contiune" fails loudly instead of silently
+        # falling through both branches.
+        if on_failure not in ("raise", "continue"):
+            raise ValueError(
+                f"on_failure must be 'raise' or 'continue', got {on_failure!r}"
+            )
+
         ctx = contexts.get_current()
         if ctx.parent and ctx.parent.run and max_attempts > 1:
             logger.warning(

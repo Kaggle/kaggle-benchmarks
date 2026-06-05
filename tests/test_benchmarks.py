@@ -587,6 +587,21 @@ def test_on_failure_continue_returns_failed_runs():
     assert len([r for r in result if r.status == utils.Status.FAILED]) == 1
 
 
+def test_on_failure_rejects_invalid_value():
+    """Typos like on_failure='contiune' must fail loudly, not silently
+    flow through as a falsy comparison against both 'raise' and 'continue'."""
+
+    @tasks.task(name="Validate OnFailure")
+    def ok(x):
+        return True
+
+    with pytest.raises(ValueError, match="on_failure must be 'raise' or 'continue'"):
+        ok.evaluate(
+            evaluation_data=pd.DataFrame({"x": [1]}),
+            on_failure="contiune",  # typo
+        )
+
+
 def test_on_failure_raise_in_batch_mode(monkeypatch):
     """Change 2: on_failure='raise' (default) raises even in batch mode."""
     monkeypatch.setattr(config, "continue_with_exceptions", True)
