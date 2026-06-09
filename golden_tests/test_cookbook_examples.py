@@ -176,10 +176,15 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 
 
 # We fix the test LLM to one reliable model to focus on testing the judges.
-@pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
+    ]
+)
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
-def test_assess_with_judge(llm_name, judge_llm_name):
-    llm = kbench.kaggle.load_model(llm_name)
+def test_assess_with_judge(llm, api, judge_llm_name):
     judge_llm = kbench.kaggle.load_model(judge_llm_name)
     run = assess_with_judge_task.run(llm, judge_llm)
     assert run.passed
@@ -422,9 +427,14 @@ def dataset_eval_with_failure(llm, df) -> tuple[int, int]:
     return len(results.completed_runs), len(results.errored_runs)
 
 
-@pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
-def test_dataset_eval_with_failure_run(llm_name):
-    llm = kbench.kaggle.load_model(llm_name)
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
+    ]
+)
+def test_dataset_eval_with_failure_run(llm, api):
     run = dataset_eval_with_failure.run(llm, df=df)
     assert run.status == kbench.utils.Status.SUCCESS
     assert_resilient_with_failure_result(run)
