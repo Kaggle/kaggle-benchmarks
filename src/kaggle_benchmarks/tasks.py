@@ -281,7 +281,7 @@ class Task(Generic[T]):
         from kaggle_benchmarks.kaggle import serialization
 
         # Literal[] is a static hint only; validate at runtime so a typo
-        # like on_failure="contiune" fails loudly instead of silently
+        # like on_failure="continue" fails loudly instead of silently
         # falling through both branches.
         if on_failure not in ("raise", "continue"):
             raise ValueError(
