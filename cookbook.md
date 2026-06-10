@@ -293,9 +293,13 @@ print(results.as_dataframe())
 
 ### Recipe: Best Practices for Large Datasets (Caching & Retries)
 
-When running benchmarks on large datasets (like MMLU or GSM8K), runs can take hours and may fail midway due to API rate limits, timeouts, or transient errors. 
+When running benchmarks on large datasets (like MMLU or GSM8K), evaluations can take hours and may hit transient failures — API rate limits, network blips, or 5xx errors. By default, `evaluate()` raises on the first such failure, which is the right behavior for development but not for production-scale runs where a single flake shouldn't waste hundreds of already-completed samples.
 
-You can use the framework's built-in caching and retry mechanisms to handle these failures gracefully without losing progress.
+The recommended production pattern combines three features:
+
+- **`on_failure="continue"`** — tell `evaluate()` to catch per-sample exceptions, record them as failed runs, and keep going instead of raising.
+- **`max_attempts > 1`** — retry the evaluation; with `on_failure="continue"`, only the samples that failed get re-run.
+- **`enable_cache()`** — persist successful samples to disk so that retries (and reruns of the whole notebook) skip the work that's already done.
 
 ``` python
 import kaggle_benchmarks as kbench
@@ -311,20 +315,33 @@ def evaluate_sample(llm, question, expected_answer) -> bool:
     return expected_answer.lower() in response.lower()
 
 
-# 2. Use enable_cache() and evaluate() with retry parameters
-with kbench.enable_cache():
-    runs = evaluate_sample.evaluate(
+# 2. Run with failure tolerance + caching + retries
+with kbench.client.enable_cache():
+    results = evaluate_sample.evaluate(
         llm=[kbench.llm],
         evaluation_data=df,
-        max_attempts=3,  # Retry failed samples up to 3 times within this run
-        retry_delay=5,  # Wait 5 seconds between retries
-        remove_run_files=False,  # Keep per-sample files for safety
+        on_failure="continue",  # collect failures instead of raising
+        max_attempts=3,         # retry transient failures up to twice
+        retry_delay=5,          # wait 5 seconds between attempts
     )
 
-# 3. Calculate aggregate score
-accuracy = runs.as_dataframe()["result"].mean()
+# 3. Inspect what completed and what didn't
+print(f"Completed: {len(results.completed_runs)} / {len(results)}")
+print(f"Errored:   {len(results.errored_runs)}")
+for run in results.errored_runs:
+    print(f"  {run.params}: {run.error_message[:200]}")
+
+# 4. Aggregate over successful runs ONLY.
+# Important: failed runs have run.result == results.FAILED (a sentinel).
+# Aggregating over the full Runs would raise TypeError on .mean() / .sum().
+# Always filter to .completed_runs before numeric aggregation.
+accuracy = results.completed_runs.as_dataframe()["result"].mean()
 print(f"Final Accuracy: {accuracy:.4f}")
 ```
+
+**How the retry mechanic works.** On attempt 1, every sample runs. Successful samples write a `.run.json` to disk with `state=COMPLETED`; failed samples write one with `state=ERRORED`. On attempt 2, the cache check skips `COMPLETED` files (no re-run) but treats `ERRORED` files as cache misses (re-run). So credits and wall time are only spent on the samples that actually need to be retried. Results from all attempts merge into one `Runs` object in evaluation-data row order.
+
+**Without `on_failure="continue"`.** A single per-sample failure causes `evaluate()` to raise a `RuntimeError` summarizing the failure count, with a hint pointing back at the `on_failure="continue"` option. This is the default because silent failures are worse than loud ones — but for production-scale runs you almost always want the opt-in.
 
 ### Recipe: Comparing Multiple Models Side-by-Side
 

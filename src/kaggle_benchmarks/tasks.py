@@ -18,7 +18,16 @@ import functools
 import inspect
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Callable, Generic, Iterable, Self, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Literal,
+    Self,
+    TypeVar,
+)
 
 import pandas as pd
 
@@ -93,8 +102,39 @@ class Task(Generic[T]):
                 logger.warning(f"Reading cached run failed: {e}")
         return None
 
+    def _finalize_and_persist(self, run: "runs.Run[T]", ctx) -> None:
+        """Stamp end_time, link to parent, and write the run file.
+
+        Called after `contexts.enter` has exited, so `run.status` is
+        already set to its final value (SUCCESS or FAILED) by
+        `contexts.enter`'s own finally block. Skipped for cached runs,
+        which are fully handled by `_handle_cached_run`.
+        """
+        from kaggle_benchmarks import client
+
+        if run.cached:
+            return
+
+        run.end_time = datetime.datetime.now(datetime.timezone.utc)
+
+        if ctx.parent and ctx.parent.run and run not in ctx.parent.run.subruns:
+            ctx.parent.run.subruns.append(run)
+
+        if self.store_run:
+            try:
+                client.store_run(run)
+            except Exception as store_exc:
+                # Persistence failure must not mask the original task
+                # outcome (success or failure).
+                logger.warning(f"Failed to store run {run.id}: {store_exc}")
+
     def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
-        from kaggle_benchmarks import client, contexts, runs
+        from kaggle_benchmarks import contexts, runs
+
+        # Internal flag set only by Task._evaluate_once() when
+        # on_failure="continue". Popped from kwargs (not added to the public
+        # signature) to keep it out of inspect.signature() and IDE autocomplete.
+        _suppress_raise = kwargs.pop("_suppress_raise", False)
 
         signature = inspect.signature(self.func)
         bound_args = signature.bind(*args, **kwargs)
@@ -113,41 +153,56 @@ class Task(Generic[T]):
             param_id=_id,
         )
 
-        with contexts.enter(run=run) as ctx:
-            cached_run = self._handle_cached_run(run, ctx)
-            if cached_run is not None:
-                return cached_run
+        try:
+            with contexts.enter(run=run) as ctx:
+                cached_run = self._handle_cached_run(run, ctx)
+                if cached_run is not None:
+                    # Cached path is fully handled by _handle_cached_run
+                    # (parent linkage included). Early return skips both
+                    # the except/else clauses below.
+                    return cached_run
 
-            run.start_time = datetime.datetime.now(datetime.timezone.utc)
+                run.start_time = datetime.datetime.now(datetime.timezone.utc)
 
-            with chats.new(self.name, orphan=True) as chat:
-                try:
-                    run.chat = chat
-                    events.manager.dispatch("run_update", run)
-                    run.result = self.func(*args, **kwargs)
-                    if not self.result_type.check_value(run.result):
-                        logger.warning(
-                            f"Wrong return type {type(run.result)}. Expected {self.result_type._type}. This may need to lead to unexpected task behavior."
-                        )
-                # Always make AssertionError non-blocking.
-                # This allows users to write/track native Python asserts within a task.
-                except AssertionError as e:
-                    run.handle_assertion_exception(e)
-                # Let KeyboardInterrupt propagate to stop execution.
-                except (NonRecoverableError, KeyboardInterrupt):
-                    raise
-                # Handle all other exceptions.
-                # Always re-raise the exception because it will be handled in contexts.enter.
-                except Exception as e:
-                    run.handle_general_exception(e)
-
-        run.end_time = datetime.datetime.now(datetime.timezone.utc)
-
-        if ctx.parent and ctx.parent.run:
-            ctx.parent.run.subruns.append(run)
-
-        if self.store_run:
-            client.store_run(run)
+                with chats.new(self.name, orphan=True) as chat:
+                    try:
+                        run.chat = chat
+                        events.manager.dispatch("run_update", run)
+                        run.result = self.func(*args, **kwargs)
+                        if not self.result_type.check_value(run.result):
+                            logger.warning(
+                                f"Wrong return type {type(run.result)}. Expected {self.result_type._type}. This may need to lead to unexpected task behavior."
+                            )
+                    # Always make AssertionError non-blocking.
+                    # This allows users to write/track native Python asserts within a task.
+                    except AssertionError as e:
+                        run.handle_assertion_exception(e)
+                    # Let KeyboardInterrupt propagate to stop execution.
+                    except (NonRecoverableError, KeyboardInterrupt):
+                        raise
+                    # Handle all other exceptions.
+                    # Always re-raise — the outer except below decides
+                    # whether to propagate further.
+                    except Exception as e:
+                        run.handle_general_exception(e)
+        except (NonRecoverableError, KeyboardInterrupt):
+            # Fatal — propagate without persisting (prevents cache pollution).
+            raise
+        except Exception:
+            # The exception escaped contexts.enter (which has already set
+            # run.status=FAILED). This happens in dev mode, or for nested
+            # runs in batch mode. Persist the failed run, then optionally
+            # suppress the exception (for on_failure="continue").
+            self._finalize_and_persist(run, ctx)
+            if not _suppress_raise:
+                raise
+        else:
+            # No exception escaped contexts.enter. Two sub-cases:
+            #  (a) Task succeeded → status=SUCCESS
+            #  (b) Task failed but contexts.enter swallowed the exception
+            #      at root (batch mode, continue_with_exceptions) → status=FAILED
+            # Either way, persist with the final status.
+            self._finalize_and_persist(run, ctx)
 
         return run
 
@@ -161,6 +216,7 @@ class Task(Generic[T]):
         max_attempts: int = 1,
         retry_delay: int = 1,
         remove_run_files: bool = False,
+        on_failure: Literal["raise", "continue"] = "raise",
         **kwargs: Iterable[Any],
     ) -> "runs.Runs[T]":
         """Evaluates the function over a grid of parameters, with optional retries.
@@ -190,20 +246,47 @@ class Task(Generic[T]):
                             If provided, the evaluation will stop when this
                             condition is met.
             max_attempts: The maximum number of evaluation attempts.
-                          Defaults to 1 (no retries).
+                          Defaults to 1 (no retries). When combined with
+                          `on_failure="continue"` and `enable_cache()`,
+                          subsequent attempts re-run only the previously
+                          failed samples (cached successes are skipped);
+                          results from all attempts are merged into the
+                          returned `Runs`. The loop also exits early when
+                          no failed runs remain.
                           Note: Nested task evaluations always run with
                           `max_attempts=1` regardless of the value passed;
                           a warning is logged if a different value is provided.
             retry_delay: The delay in seconds between retry attempts.
             remove_run_files: Remove generated run files when done.
+            on_failure: How to handle per-sample task failures.
+                - `"raise"` (default): if any sample fails, raise after the
+                  current attempt finishes. In dev mode (no
+                  `continue_with_exceptions`), a failure raises immediately
+                  via the joblib worker. In Kaggle batch mode, the eval
+                  finishes all parallel workers and then raises a summary —
+                  so you still get a hard failure instead of a silent drop.
+                - `"continue"`: catch per-sample failures, include the
+                  failed runs in the returned `Runs`, and keep going.
+                  Use `results.completed_runs` / `results.errored_runs` to
+                  split them. Pair with `enable_cache()` + `max_attempts > 1`
+                  to retry only the failures.
             **kwargs: Alternative way to specify the parameter grid.
 
         Returns:
-            A `runs.Runs` object containing the results of all successful
-            evaluations.
+            A `runs.Runs` object. With `on_failure="raise"` (default) it
+            contains only successful runs. With `on_failure="continue"` it
+            contains both successful and failed runs.
         """
         from kaggle_benchmarks import contexts, orchestration, runs
         from kaggle_benchmarks.kaggle import serialization
+
+        # Literal[] is a static hint only; validate at runtime so a typo
+        # like on_failure="continue" fails loudly instead of silently
+        # falling through both branches.
+        if on_failure not in ("raise", "continue"):
+            raise ValueError(
+                f"on_failure must be 'raise' or 'continue', got {on_failure!r}"
+            )
 
         ctx = contexts.get_current()
         if ctx.parent and ctx.parent.run and max_attempts > 1:
@@ -222,20 +305,66 @@ class Task(Generic[T]):
             evaluation_data = evaluation_data.reset_index(names=["_id"])
 
         def _evaluate_once():
-            return runs.Runs(
+            # In "continue" mode, tell Task.run() not to re-raise so the
+            # failed Run object comes back to us instead of crashing the
+            # joblib worker. In "raise" mode, leave Task.run()'s behavior
+            # untouched (it raises in dev, returns the failed Run in batch).
+            runner = functools.partial(
+                self.run, _suppress_raise=(on_failure == "continue")
+            )
+            all_runs = runs.Runs(
                 [
                     run
                     for _, _, run in orchestration.evaluate_function(
-                        self.run,
+                        runner,
                         grid=grid,
                         evaluation_data=evaluation_data,
                         n_jobs=n_jobs,
                         timeout=timeout,
                     )
-                    if run is not None and run.status == utils.Status.SUCCESS
+                    if run is not None
                 ]
             )
 
+            # In "raise" mode, surface any failed runs that slipped through
+            # because contexts.enter swallowed them (Kaggle batch). In dev
+            # mode, the worker already raised and we never reach here.
+            if on_failure == "raise":
+                failures = [r for r in all_runs if r.status == utils.Status.FAILED]
+                if failures:
+                    first = failures[0]
+                    summary = (
+                        f"1 of {len(all_runs)} runs failed."
+                        if len(failures) == 1
+                        else f"{len(failures)} of {len(all_runs)} runs failed."
+                    )
+                    msg = (
+                        f"Task {self.name!r} run {first.id} failed:\n"
+                        f"{first.error_message}\n\n"
+                        f"({summary} Pass on_failure='continue' to collect "
+                        "failures into results.errored_runs instead of "
+                        "raising. For large evals with transient errors, "
+                        "pair with max_attempts > 1 and enable_cache() to "
+                        "retry only the failed samples.)"
+                    )
+                    raise RuntimeError(msg)
+
+            return all_runs
+
+        # Accumulator across attempts, keyed by positional index within the
+        # attempt. Position is stable across attempts because joblib returns
+        # results in input order regardless of n_jobs or cache hits, and
+        # because the grid/evaluation_data don't change between attempts.
+        #
+        # We use position rather than run.cache_id because cache_id falls
+        # back to the per-run sequential `id` when param_id is None
+        # (no evaluation_data), which would generate a fresh key on every
+        # attempt and prevent the merge from ever overwriting.
+        #
+        # Python dicts preserve insertion order, and reassigning an existing
+        # key updates the value without moving its iteration position — so
+        # output order matches the original attempt-1 order.
+        runs_by_position: dict[int, "runs.Run[T]"] = {}
         all_runs = runs.Runs()
         attempt = 0
         try:
@@ -245,7 +374,7 @@ class Task(Generic[T]):
                     logging.info(f"Attempt {attempt}/{max_attempts}.")
 
                 try:
-                    all_runs = _evaluate_once()
+                    attempt_runs = _evaluate_once()
                 except Exception as e:
                     logging.warning(
                         f"An error occurred during evaluation attempt {attempt}: {e}"
@@ -253,6 +382,16 @@ class Task(Generic[T]):
                     # Always re-raise exception because the `continue_with_exceptions``
                     # setting should only apply to the subruns level.
                     raise e
+
+                # Merge: new successes append at their position; retried
+                # failures overwrite in place at the same position.
+                for position, run in enumerate(attempt_runs):
+                    runs_by_position[position] = run
+                all_runs = runs.Runs(list(runs_by_position.values()))
+
+                # Nothing failed — no point trying again.
+                if not any(r.status == utils.Status.FAILED for r in all_runs):
+                    break
 
                 if stop_condition and stop_condition(all_runs):
                     logging.info("Stop condition met.")

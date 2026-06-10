@@ -55,7 +55,6 @@ from kaggle_benchmarks.content_types import (
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
-    "google/gemini-2.0-flash",
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
@@ -78,7 +77,6 @@ JUDGE_LLM_NAMES = {
 
 # Models that support audio input.
 AUDIO_LLM_NAMES = {
-    "google/gemini-2.0-flash",
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-3-flash-preview",
@@ -178,10 +176,15 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 
 
 # We fix the test LLM to one reliable model to focus on testing the judges.
-@pytest.mark.parametrize("llm_name", ["google/gemini-2.5-flash"])
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
+    ]
+)
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
-def test_assess_with_judge(llm_name, judge_llm_name):
-    llm = kbench.kaggle.load_model(llm_name)
+def test_assess_with_judge(llm, api, judge_llm_name):
     judge_llm = kbench.kaggle.load_model(judge_llm_name)
     run = assess_with_judge_task.run(llm, judge_llm)
     assert run.passed
@@ -391,6 +394,53 @@ def test_dataset_eval(llm, df) -> tuple[float, float]:
 
 
 # %%
+# --- Test Case: Dataset evaluation with intentional failure ---
+# Exercises the on_failure="continue" path with an actual failure: one sample
+# raises after the LLM call. Verifies that completed_runs and errored_runs
+# split correctly end-to-end with real API calls.
+
+
+def assert_resilient_with_failure_result(run):
+    completed, errored = run.result
+    # One of two samples intentionally fails → 1 completed, 1 errored.
+    assert completed == 1
+    assert errored == 1
+
+
+@kbench.task()
+def dataset_eval_with_failure(llm, df) -> tuple[int, int]:
+    @kbench.task(name="qa_with_failure", store_task=False)
+    def qa_with_failure(llm, question, answer) -> dict:
+        response = llm.prompt(question)
+        # Intentionally fail the first sample to exercise the failure path.
+        if "Singapore" in answer:
+            raise ValueError(f"Intentional failure for sample: {answer}")
+        return {"question": question, "predicted_answer": response}
+
+    results = qa_with_failure.evaluate(
+        llm=[llm],
+        evaluation_data=df,
+        n_jobs=1,
+        on_failure="continue",
+    )
+
+    return len(results.completed_runs), len(results.errored_runs)
+
+
+@pytest.mark.parametrize(
+    "llm, api",
+    [
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
+        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
+    ]
+)
+def test_dataset_eval_with_failure_run(llm, api):
+    run = dataset_eval_with_failure.run(llm, df=df)
+    assert run.status == kbench.utils.Status.SUCCESS
+    assert_resilient_with_failure_result(run)
+
+
+# %%
 # --- Test Case: Image inputs (URL) ---
 
 
@@ -594,7 +644,7 @@ def test_audio_url(llm):
 # support it (not all models return traces).
 
 
-# Known failures: gemini-2.0-flash, gemma-4-31b — do not support reasoning.
+# Known failures: gemma-4-31b — does not support reasoning.
 @benchmark_test()
 @kbench.task()
 def test_reasoning_param(llm):
@@ -913,7 +963,7 @@ def get_user_profile(user_id: str) -> dict:
     return {"name": "Unknown", "role": "User", "skills": []}
 
 
-# Known failures: gemini-2.0-flash returns incorrect role on both APIs.
+# Known failures: (none currently).
 @benchmark_test(
     exclude={
         "deepseek-ai/deepseek-r1-0528",
