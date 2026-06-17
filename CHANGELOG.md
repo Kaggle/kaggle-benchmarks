@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.1 (Jun 17th, 2026)
+
+* **Large dataset evaluation:** Enhanced large dataset evaluation. (#170)
+
 ## v0.6.0 (Jun 2nd, 2026)
 
 * **Chatroom:** Added `ChatRoom` for multi-LLM conversation orchestration with participant roles and turn-taking. (#162)
