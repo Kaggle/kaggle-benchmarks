@@ -17,14 +17,25 @@ import base64
 import dataclasses
 import re
 
-import nest_asyncio
-from playwright.async_api import async_playwright
-
 from kaggle_benchmarks import actors, chats
 from kaggle_benchmarks.envs import InternalUnsafeLocalEnvironment
 
-# required as jupyter runs its own asyncio loop
-nest_asyncio.apply()
+_MISSING_DEPS_MESSAGE = (
+    "The web browser tool requires additional dependencies. Install them with:\n"
+    "    pip install kaggle-benchmarks[web-tools]"
+)
+
+
+def _require_playwright():
+    try:
+        import nest_asyncio
+        from playwright.async_api import async_playwright
+    except ImportError as e:
+        raise ImportError(_MISSING_DEPS_MESSAGE) from e
+
+    # required as jupyter runs its own asyncio loop
+    nest_asyncio.apply()
+    return async_playwright
 
 
 def extract_html(html_string: str) -> str:
@@ -70,6 +81,7 @@ async def async_take_snapshot(
     width: int = 400,
     height: int = 600,
 ) -> Snapshot:
+    async_playwright = _require_playwright()
     logs = []
     async with async_playwright() as p:
         browser = await p.chromium.launch()
@@ -95,6 +107,7 @@ async def async_take_snapshot(
 
 class Browser(actors.Actor):
     def __init__(self):
+        _require_playwright()
         super().__init__(role="tool", avatar="🌐", name="Browser")
         self.env = InternalUnsafeLocalEnvironment(_internal=True)
 
