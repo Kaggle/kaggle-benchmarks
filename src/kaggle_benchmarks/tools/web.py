@@ -22,7 +22,7 @@ from kaggle_benchmarks.envs import InternalUnsafeLocalEnvironment
 
 _MISSING_DEPS_MESSAGE = (
     "The web browser tool requires additional dependencies. Install them with:\n"
-    "    pip install kaggle-benchmarks[web-tools]"
+    "    uv pip install kaggle-benchmarks[web-tools]"
 )
 
 
