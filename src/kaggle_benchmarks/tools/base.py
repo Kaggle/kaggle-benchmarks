@@ -31,8 +31,17 @@ class ToolInvocation:
     """Represents a tool invocation requested by the LLM."""
 
     name: str
-    arguments: dict[str, Any]
+    # Widened from dict[str, Any] to accommodate from_api_dict's
+    # JSONDecodeError fallback, which keeps malformed JSON as a string
+    # (e.g., truncated streaming output).
+    arguments: dict[str, Any] | str
     call_id: str | None = None
+    # Gemini 3.x round-trip carriers (SDK-internal, required by the API
+    # for multi-turn tool conversations). Absent for non-Gemini models.
+    # Types mirror google.genai types.Part: thought_signature is bytes,
+    # thought is a bool flag (True iff this part contains thinking).
+    thought_signature: bytes | None = None
+    thought: bool | None = None
 
     @classmethod
     def from_api_dict(cls, call_data: dict) -> Self:
@@ -50,15 +59,35 @@ class ToolInvocation:
         Handles edge cases from various backends:
         - ``arguments`` may be a JSON string (OpenAI) or a dict (GenAI).
         - ``arguments`` may be ``None`` for parameterless tools.
+        - Malformed JSON in ``arguments`` is kept as a string rather than
+          raising, so a single bad tool call doesn't crash an entire stream.
         """
         func = call_data["function"]
         arguments = func.get("arguments") or {}
         if isinstance(arguments, str):
-            arguments = json.loads(arguments)
+            raw_str = arguments
+            try:
+                parsed = json.loads(raw_str)
+            except json.JSONDecodeError:
+                # Unparseable (e.g., truncated streaming JSON). Keep the
+                # original string; downstream (invoke_tool, serializers)
+                # must handle both dict and str.
+                pass
+            else:
+                if isinstance(parsed, dict):
+                    arguments = parsed
+                elif parsed is None:
+                    # "null" → treat as no-args, matching the missing-key default.
+                    arguments = {}
+                # else (list, scalar, ...) — keep raw_str so invoke_tool
+                # surfaces a clean parse error rather than crashing with
+                # AttributeError on `(list).items()` etc.
         return cls(
             name=func["name"],
             arguments=arguments,
             call_id=call_data.get("id"),
+            thought_signature=call_data.get("_thought_signature"),
+            thought=call_data.get("_thought"),
         )
 
 
@@ -67,7 +96,9 @@ class ToolInvocationResult:
     """Represents the result of a tool invocation."""
 
     name: str
-    arguments: dict[str, Any]
+    # Mirrors ToolInvocation.arguments: may be a str when the original tool
+    # call arrived with unparseable JSON arguments (see invoke_tool).
+    arguments: dict[str, Any] | str
     call_id: str | None = None
     output: Any = None
     error: str | None = None
@@ -146,6 +177,18 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
             name=call.name,
             arguments=call.arguments,
             error=error_message,
+            call_id=call.call_id,
+        )
+    if isinstance(call.arguments, str):
+        # from_api_dict couldn't parse the arguments JSON (e.g., truncated
+        # streaming output). Surface a clear error instead of crashing.
+        return ToolInvocationResult(
+            name=call.name,
+            arguments=call.arguments,
+            error=(
+                f"Error: Tool '{call.name}' arguments could not be parsed as JSON: "
+                f"{call.arguments!r}"
+            ),
             call_id=call.call_id,
         )
     try:

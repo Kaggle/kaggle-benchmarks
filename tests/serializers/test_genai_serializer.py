@@ -230,6 +230,95 @@ MESSAGE_FORMATS = [
 ]
 
 
+# Mirrors GoogleGenAI's roles_mapping. The bare parametrized batch above uses
+# the default mapping (passthrough); these tests need assistant→model so the
+# `dump_text_message` tool_calls branch fires (it checks for role == "model").
+_GENAI_ROLES = {"assistant": "model", "system": "user", "tool": "user"}
+_assistant_actor = actors.Actor(name="LLM", role="assistant", avatar="🤖")
+
+
+def test_dump_text_message_with_meta_tool_invocation():
+    """Plain Message with normalized ToolInvocation in _meta — the path
+    taken by built-in LLM responses after respond()'s normalization."""
+    serializer = genai_serializer.GenAISerializer(roles_mapping=_GENAI_ROLES)
+    msg = messages.Message(
+        content="",
+        sender=_assistant_actor,
+        _meta={
+            "tool_calls": [
+                ToolInvocation(name="test_tool", call_id="123", arguments={"x": 1})
+            ]
+        },
+    )
+    expected = [
+        types.Content(
+            role="model",
+            parts=[_make_function_call_part("test_tool", {"x": 1}, "123")],
+        )
+    ]
+    actual = [c.model_dump() for c in serializer.dump_message(msg)]
+    assert actual == [c.model_dump() for c in expected]
+
+
+def test_dump_text_message_carries_thought_signature():
+    """thought_signature (bytes) / thought (bool) round-trip from
+    ToolInvocation into the GenAI Part — required by Gemini 3.x multi-turn
+    tool conversations. Types mirror google.genai types.Part."""
+    serializer = genai_serializer.GenAISerializer(roles_mapping=_GENAI_ROLES)
+    msg = messages.Message(
+        content="",
+        sender=_assistant_actor,
+        _meta={
+            "tool_calls": [
+                ToolInvocation(
+                    name="test_tool",
+                    call_id="123",
+                    arguments={},
+                    thought_signature=b"sig-bytes",
+                    thought=True,
+                )
+            ]
+        },
+    )
+    actual = [c.model_dump() for c in serializer.dump_message(msg)]
+    # Inspect the single Part we expect to see.
+    [content] = actual
+    assert content["role"] == "model"
+    [part] = content["parts"]
+    assert part["function_call"]["name"] == "test_tool"
+    assert part["function_call"]["id"] == "123"
+    assert part["thought_signature"] == b"sig-bytes"
+    assert part["thought"] is True
+
+
+def test_dump_text_message_with_string_arguments_logs_warning(caplog):
+    """If arguments is a string (JSONDecodeError fallback from streaming),
+    the serializer logs a warning and emits empty args rather than crashing."""
+    import logging
+
+    serializer = genai_serializer.GenAISerializer(roles_mapping=_GENAI_ROLES)
+    msg = messages.Message(
+        content="",
+        sender=_assistant_actor,
+        _meta={
+            "tool_calls": [
+                ToolInvocation(
+                    name="test_tool", call_id="123", arguments='{"a":'
+                )
+            ]
+        },
+    )
+    with caplog.at_level(logging.WARNING):
+        actual = [c.model_dump() for c in serializer.dump_message(msg)]
+
+    assert any("non-dict arguments" in rec.message for rec in caplog.records)
+    [content] = actual
+    [part] = content["parts"]
+    assert part["function_call"]["name"] == "test_tool"
+    # Empty args fallback.
+    assert part["function_call"]["args"] in (None, {})
+
+
 @pytest.mark.parametrize("message, expected_raw_messages", MESSAGE_FORMATS)
 def test_dump_message(message, expected_raw_messages):
     serializer = genai_serializer.GenAISerializer()

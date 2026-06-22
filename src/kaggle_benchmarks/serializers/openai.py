@@ -94,14 +94,29 @@ class OpenAICompletionSerializer(BaseSerializer):
             "content": message.content or None,
         }
 
-        # TODO: Remove once respond() returns LLMMessage for assistant
-        # messages. Today, assistant messages with tool calls arrive here as
-        # plain Message (not LLMMessage), so we must attach tool_calls
-        # manually. After the migration, they'll route to dump_llm_message
-        # instead and these lines become unnecessary.
+        # Assistant messages may carry normalized ToolInvocation objects in
+        # _meta["tool_calls"] (populated by respond()). Convert them back to
+        # the Chat Completions wire format.
         tool_calls = message.tool_calls
         if tool_calls and self.get_role(message.sender) == "assistant":
-            msg["tool_calls"] = tool_calls
+            msg["tool_calls"] = [
+                {
+                    # `id` is required by the OpenAI spec. tc.call_id is
+                    # populated by both backends in practice; the `or ""`
+                    # is defensive for test fixtures / custom code.
+                    "id": tc.call_id or "",
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": (
+                            json.dumps(tc.arguments)
+                            if isinstance(tc.arguments, dict)
+                            else tc.arguments
+                        ),
+                    },
+                }
+                for tc in tool_calls
+            ]
 
         yield msg
 

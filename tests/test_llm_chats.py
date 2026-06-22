@@ -21,6 +21,7 @@ from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.prompting import handler
+from kaggle_benchmarks.tools.base import ToolInvocation
 from tests.mocks import MockedChat
 
 
@@ -68,6 +69,98 @@ def test_respond():
         r = llm.respond()
         assert len(t.messages) == 2
         assert {"messages": [["user", "A"]], "system": None} == json.loads(r.text)
+
+
+class _ToolCallingLLM(actors.LLMChat):
+    """Returns an LLMResponse with raw OpenAI-format tool_calls dicts —
+    exercises the normalization path in respond()."""
+
+    def __init__(self, tool_calls, **kwargs):
+        super().__init__(name="ToolCaller", **kwargs)
+        self._tool_calls = tool_calls
+
+    def invoke(self, messages, system=None, **kwargs):
+        return LLMResponse(content="", tool_calls=self._tool_calls)
+
+
+def test_respond_normalizes_tool_calls_to_typed_invocations():
+    """respond() converts raw provider dicts in LLMResponse.tool_calls into
+    typed ToolInvocation objects in _meta["tool_calls"]."""
+    raw_tool_calls = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "add", "arguments": '{"a": 1, "b": 2}'},
+        },
+        {
+            "id": "call_2",
+            "type": "function",
+            "function": {"name": "mul", "arguments": {"a": 3, "b": 4}},
+        },
+    ]
+    llm = _ToolCallingLLM(tool_calls=raw_tool_calls)
+
+    with chats.new("Tool normalization"):
+        actors.user.send("compute")
+        response = llm.respond()
+
+    normalized = response._meta["tool_calls"]
+    assert len(normalized) == 2
+    assert all(isinstance(tc, ToolInvocation) for tc in normalized)
+    assert normalized[0].name == "add"
+    assert normalized[0].arguments == {"a": 1, "b": 2}
+    assert normalized[0].call_id == "call_1"
+    assert normalized[1].name == "mul"
+    assert normalized[1].arguments == {"a": 3, "b": 4}
+    assert normalized[1].call_id == "call_2"
+
+
+def test_respond_preserves_thought_signature_for_gemini():
+    """respond() carries _thought_signature (bytes) / _thought (bool) through
+    normalization into typed ToolInvocation fields (Gemini 3.x round-trip)."""
+    raw_tool_calls = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "add", "arguments": {"a": 1}},
+            "_thought_signature": b"sig-bytes",
+            "_thought": True,
+        },
+    ]
+    llm = _ToolCallingLLM(tool_calls=raw_tool_calls)
+
+    with chats.new("Gemini thought round-trip"):
+        actors.user.send("compute")
+        response = llm.respond()
+
+    [normalized] = response._meta["tool_calls"]
+    assert normalized.thought_signature == b"sig-bytes"
+    assert normalized.thought is True
+
+
+def test_respond_with_no_tool_calls_sets_meta_to_none():
+    """When LLMResponse.tool_calls is None, _meta['tool_calls'] is None."""
+    llm = _ToolCallingLLM(tool_calls=None)
+
+    with chats.new("No tool calls"):
+        actors.user.send("hi")
+        response = llm.respond()
+
+    assert response._meta["tool_calls"] is None
+
+
+def test_respond_with_empty_tool_calls_list_sets_meta_to_none():
+    """An empty `tool_calls` list and `None` are treated the same — both yield
+    `_meta['tool_calls'] is None`. Pins the boundary so a refactor that flips
+    the falsy check to `is not None` (which would store `[]`) gets caught,
+    since downstream consumers do `is None` checks rather than truthiness."""
+    llm = _ToolCallingLLM(tool_calls=[])
+
+    with chats.new("Empty tool calls list"):
+        actors.user.send("hi")
+        response = llm.respond()
+
+    assert response._meta["tool_calls"] is None
 
 
 def test_chat_context():

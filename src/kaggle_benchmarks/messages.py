@@ -173,4 +173,33 @@ class Message(Generic[T]):
                     self._update_from_tool_call_chunk(tool_call_chunk)
             events.manager.dispatch("new_chunk", self, chunk)
 
+        # Convert accumulated dicts in _meta["tool_calls"] to typed
+        # ToolInvocation objects now that all argument chunks have arrived
+        # and the JSON can be parsed.
+        self._finalize_tool_calls()
         events.manager.dispatch("end_content", self)
+
+    def _finalize_tool_calls(self):
+        """Converts accumulated _meta['tool_calls'] dicts to ToolInvocation.
+
+        Streaming accumulates tool call arguments as string concatenation
+        across many chunks — a partial JSON like '{"city": "Bei' is not
+        parseable. This pass runs once after all chunks have arrived, so the
+        argument JSON is complete by the time `from_api_dict` calls
+        `json.loads` on it.
+
+        Defined on `Message` rather than `LLMMessage` because the stream()
+        loop lives here. In practice only LLM responses produce tool-call
+        chunks during streaming.
+        """
+        from kaggle_benchmarks.tools import base as tool_utils
+
+        raw_calls = self._meta.get("tool_calls")
+        if not raw_calls:
+            return
+        # Only convert if values are still dicts; guards against
+        # double-conversion if called more than once.
+        if isinstance(raw_calls[0], dict):
+            self._meta["tool_calls"] = [
+                tool_utils.ToolInvocation.from_api_dict(tc) for tc in raw_calls
+            ]

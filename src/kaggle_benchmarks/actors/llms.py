@@ -103,6 +103,7 @@ from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
+from kaggle_benchmarks.tools import base as tool_utils
 from kaggle_benchmarks.tools import functions, native
 
 if TYPE_CHECKING:
@@ -331,7 +332,16 @@ class LLMChat(actors.Actor):
         if isinstance(invoke_response, LLMResponse):
             # A response can have either content, tool_calls, or both in some cases.
             response.content = invoke_response.content or ""
-            response._meta["tool_calls"] = invoke_response.tool_calls
+            # Normalize provider-format dicts to typed ToolInvocation objects
+            # so downstream consumers (serializers, native_tool_agent, cookbook
+            # examples) see a single canonical shape regardless of backend.
+            if invoke_response.tool_calls:
+                response._meta["tool_calls"] = [
+                    tool_utils.ToolInvocation.from_api_dict(tc)
+                    for tc in invoke_response.tool_calls
+                ]
+            else:
+                response._meta["tool_calls"] = None
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
             response.status = utils.Status.SUCCESS
@@ -562,6 +572,9 @@ class GoogleGenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
+    # "medium" exists for OpenAI's `reasoning_effort`; GenAI's ThinkingLevel
+    # enum only has LOW/HIGH, so "MEDIUM" triggers a UserWarning from the
+    # SDK. Left as-is to surface the asymmetry rather than silently round.
     _REASONING_LEVEL_MAP = {
         "none": None,
         "low": "LOW",

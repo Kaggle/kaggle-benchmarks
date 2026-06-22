@@ -89,11 +89,22 @@ class MockedOpenAIWithToolCall(OpenAI):
         super().__init__(client=None, model="mock-tool-caller", **kwargs)
 
     def _call_api(self, messages, **kwargs):
-        tool_call = MockToolCall(
-            id="call_123",
-            function=MockFunction(name="calculator", arguments='{"a": 1, "b": 2}'),
+        # Real OpenAI._call_api wraps tool calls with `t.model_dump()` (see
+        # llms.py:551), producing OpenAI-style dicts. The mock mirrors that
+        # shape so respond()'s normalization sees the same input as production.
+        return LLMResponse(
+            content="",
+            tool_calls=[
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {
+                        "name": "calculator",
+                        "arguments": '{"a": 1, "b": 2}',
+                    },
+                }
+            ],
         )
-        return LLMResponse(content="", tool_calls=[tool_call])
 
 
 class MockedOpenAIWithStreamingToolCall(OpenAI):
@@ -480,10 +491,13 @@ def test_llm_extracts_tool_calls():
         actors.user.send("call a tool")
         response_msg = llm.respond()
 
+    # respond() normalizes raw OpenAI dicts → typed ToolInvocation.
     assert response_msg.tool_calls is not None
     assert len(response_msg.tool_calls) == 1
-    assert response_msg.tool_calls[0].function.name == "calculator"
-    assert response_msg.tool_calls[0].function.arguments == '{"a": 1, "b": 2}'
+    [tc] = response_msg.tool_calls
+    assert tc.name == "calculator"
+    assert tc.arguments == {"a": 1, "b": 2}
+    assert tc.call_id == "call_123"
 
 
 def test_streaming_accumulates_tool_calls():
@@ -496,16 +510,15 @@ def test_streaming_accumulates_tool_calls():
 
     assert response_msg.content == "Okay, calculating..."
 
+    # _update_from_tool_call_chunk accumulates dicts as chunks stream in;
+    # stream()'s finalize pass converts them to ToolInvocation at end.
     final_tool_calls = response_msg.tool_calls
     assert final_tool_calls is not None
     assert len(final_tool_calls) == 1
-
-    final_call_obj = MockToolCallDelta(index=0, **final_tool_calls[0])
-    final_call_obj.function = MockFunctionDelta(**final_call_obj.function)
-
-    assert final_call_obj.id == "call_123"
-    assert final_call_obj.function.name == "calculator"
-    assert final_call_obj.function.arguments == '{"a": 5, "b": 10}'
+    [tc] = final_tool_calls
+    assert tc.call_id == "call_123"
+    assert tc.name == "calculator"
+    assert tc.arguments == {"a": 5, "b": 10}
 
 
 def test_streaming_accumulates_multiple_tool_calls():
@@ -519,16 +532,14 @@ def test_streaming_accumulates_multiple_tool_calls():
     assert response_msg.content == "Okay, processing requests..."
 
     final_tool_calls = response_msg.tool_calls
-
     assert final_tool_calls is not None
     assert len(final_tool_calls) == 2
 
-    calculator_call = final_tool_calls[0]
-    assert calculator_call["id"] == "call_calc_123"
-    assert calculator_call["function"]["name"] == "calculator"
-    assert calculator_call["function"]["arguments"] == '{"a": 100, "b": 200}'
+    calculator_call, weather_call = final_tool_calls
+    assert calculator_call.call_id == "call_calc_123"
+    assert calculator_call.name == "calculator"
+    assert calculator_call.arguments == {"a": 100, "b": 200}
 
-    weather_call = final_tool_calls[1]
-    assert weather_call["id"] == "call_weather_456"
-    assert weather_call["function"]["name"] == "get_weather"
-    assert weather_call["function"]["arguments"] == '{"city": "NYC"}'
+    assert weather_call.call_id == "call_weather_456"
+    assert weather_call.name == "get_weather"
+    assert weather_call.arguments == {"city": "NYC"}
