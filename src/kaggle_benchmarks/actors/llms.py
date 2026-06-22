@@ -332,9 +332,7 @@ class LLMChat(actors.Actor):
         if isinstance(invoke_response, LLMResponse):
             # A response can have either content, tool_calls, or both in some cases.
             response.content = invoke_response.content or ""
-            # Normalize provider-format dicts to typed ToolInvocation objects
-            # so downstream consumers (serializers, native_tool_agent, cookbook
-            # examples) see a single canonical shape regardless of backend.
+            # Normalize provider dicts → typed ToolInvocation for downstream.
             if invoke_response.tool_calls:
                 response._meta["tool_calls"] = [
                     tool_utils.ToolInvocation.from_api_dict(tc)
@@ -614,12 +612,36 @@ class GoogleGenAI(LLMChat):
         # TODO: Streaming does not capture reasoning_traces. Thought parts
         # are filtered out by _extract_text, so last_reasoning_traces() will
         # return None when streaming is enabled.
-        # We currently only support text outputs
+        from types import SimpleNamespace
+
         for chunk in response_stream:
+            tool_calls = None
+            if chunk.candidates and chunk.candidates[0].content:
+                parts = chunk.candidates[0].content.parts or []
+                fn_parts = [p for p in parts if p.function_call]
+                if fn_parts:
+                    tool_calls = []
+                    # Per-chunk enumerate assumes GenAI emits each call atomically.
+                    # If calls ever span chunks, switch to a per-stream counter.
+                    for i, part in enumerate(fn_parts):
+                        fc = part.function_call
+                        tc_chunk = SimpleNamespace(
+                            index=i,
+                            id=fc.id or f"call_{uuid.uuid4().hex[:8]}",
+                            function=SimpleNamespace(
+                                name=fc.name,
+                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                            ),
+                            thought_signature=getattr(part, "thought_signature", None),
+                            thought=getattr(part, "thought", None),
+                        )
+                        tool_calls.append(tc_chunk)
+
             yield LLMResponse(
                 content=self._extract_text(chunk)
                 if chunk.candidates
                 else (chunk.text or ""),
+                tool_calls=tool_calls,
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
 

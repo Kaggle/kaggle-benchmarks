@@ -895,6 +895,39 @@ def test_simple_tool_use(llm):
 
 
 # %%
+# --- Test Case: Tool Use (Streaming) ---
+# Mirrors test_simple_tool_use with stream_responses=True. Exercises the
+# streaming path that other tool tests skip: stream() chunk accumulation +
+# _finalize_tool_calls converting accumulated dicts to typed ToolInvocation.
+# Real-world chunk shapes vary by backend (byte-by-byte vs. chunked-by-segment
+# vs. full-args-in-final-chunk) and unit tests can only fake one shape; this
+# test surfaces SDK-quirk regressions that mocks can't catch.
+
+STREAMING_TOOL_LLM_NAMES = {
+    "google/gemini-3.5-flash",
+    "anthropic/claude-sonnet-4-6@default",
+}
+
+
+@benchmark_test(include=STREAMING_TOOL_LLM_NAMES)
+@kbench.task()
+def test_streaming_tool_use(llm):
+    """Same as test_simple_tool_use but with streaming enabled."""
+    llm.stream_responses = True
+
+    problem = "What is 50 plus 25?"
+    expected_answer = 75.0
+
+    final_answer = llm.prompt(problem, tools=[run_simple_calculator])
+    kbench.assertions.assert_tool_was_invoked(run_simple_calculator)
+
+    kbench.assertions.assert_true(
+        str(int(expected_answer)) in final_answer,
+        f"Expected '{expected_answer}' to be in the final answer, got '{final_answer}'.",
+    )
+
+
+# %%
 def increment_counter() -> int:
     """Increments a counter and returns the value."""
     increment_counter.count += 1

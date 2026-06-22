@@ -75,25 +75,20 @@ class GenAISerializer(BaseSerializer):
                     args = tc.arguments
                 else:
                     logging.warning(
-                        "ToolInvocation %s has non-dict arguments (likely "
-                        "malformed JSON from streaming): %r — using empty args",
+                        "ToolInvocation %s has non-dict arguments: %r — using {}",
                         tc.name,
                         tc.arguments,
                     )
                     args = {}
                 part = types.Part.from_function_call(name=tc.name, args=args)
-                # Matches prior unconditional behavior; FunctionCall.id is
-                # Optional[str] so writing None is equivalent to the default,
-                # except under model_dump(exclude_unset=True) — keep the
-                # explicit write to avoid any wire-serialization drift.
+                # Explicit write (vs. leaving default) avoids drift under
+                # model_dump(exclude_unset=True).
                 part.function_call.id = tc.call_id
-                # Round-trip thought_signature/thought back onto the Part.
-                # Gemini 3.x requires these on function_call Parts in
-                # multi-turn conversations; without them the API rejects
-                # the follow-up request.
-                if tc.thought_signature:
+                # Required by Gemini 3.x for multi-turn tool calls.
+                # `is not None` keeps the round-trip symmetric with the accumulator.
+                if tc.thought_signature is not None:
                     part.thought_signature = tc.thought_signature
-                if tc.thought:
+                if tc.thought is not None:
                     part.thought = tc.thought
                 parts.append(part)
 

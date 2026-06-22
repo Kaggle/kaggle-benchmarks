@@ -94,16 +94,12 @@ class OpenAICompletionSerializer(BaseSerializer):
             "content": message.content or None,
         }
 
-        # Assistant messages may carry normalized ToolInvocation objects in
-        # _meta["tool_calls"] (populated by respond()). Convert them back to
-        # the Chat Completions wire format.
+        # Convert normalized ToolInvocation back to Chat Completions wire format.
         tool_calls = message.tool_calls
         if tool_calls and self.get_role(message.sender) == "assistant":
             msg["tool_calls"] = [
                 {
-                    # `id` is required by the OpenAI spec. tc.call_id is
-                    # populated by both backends in practice; the `or ""`
-                    # is defensive for test fixtures / custom code.
+                    # `id` is required by the spec; `or ""` defends against test fixtures.
                     "id": tc.call_id or "",
                     "type": "function",
                     "function": {
