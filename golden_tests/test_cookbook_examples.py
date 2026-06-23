@@ -912,12 +912,7 @@ def test_simple_tool_use(llm):
 
 # %%
 # --- Test Case: Tool Use (Streaming) ---
-# Mirrors test_simple_tool_use with stream_responses=True. Exercises the
-# streaming path that other tool tests skip: stream() chunk accumulation +
-# _finalize_tool_calls converting accumulated dicts to typed ToolInvocation.
-# Real-world chunk shapes vary by backend (byte-by-byte vs. chunked-by-segment
-# vs. full-args-in-final-chunk) and unit tests can only fake one shape; this
-# test surfaces SDK-quirk regressions that mocks can't catch.
+# Real-world chunk shapes vary by backend; unit tests can only fake one shape.
 
 STREAMING_TOOL_LLM_NAMES = {
     "google/gemini-3.5-flash",

@@ -72,8 +72,7 @@ def test_respond():
 
 
 class _ToolCallingLLM(actors.LLMChat):
-    """Returns an LLMResponse with raw OpenAI-format tool_calls dicts —
-    exercises the normalization path in respond()."""
+    """Returns LLMResponse with raw OpenAI-format tool_calls dicts."""
 
     def __init__(self, tool_calls, **kwargs):
         super().__init__(name="ToolCaller", **kwargs)
@@ -84,8 +83,6 @@ class _ToolCallingLLM(actors.LLMChat):
 
 
 def test_respond_normalizes_tool_calls_to_typed_invocations():
-    """respond() converts raw provider dicts in LLMResponse.tool_calls into
-    typed ToolInvocation objects in _meta["tool_calls"]."""
     raw_tool_calls = [
         {
             "id": "call_1",
@@ -116,8 +113,7 @@ def test_respond_normalizes_tool_calls_to_typed_invocations():
 
 
 def test_respond_preserves_thought_signature_for_gemini():
-    """respond() carries _thought_signature (bytes) / _thought (bool) through
-    normalization into typed ToolInvocation fields (Gemini 3.x round-trip)."""
+    """Gemini 3.x carriers round-trip via _thought_signature/_thought keys."""
     raw_tool_calls = [
         {
             "id": "call_1",
@@ -143,9 +139,7 @@ def test_respond_preserves_thought_signature_for_gemini():
     [pytest.param(None, id="none"), pytest.param([], id="empty_list")],
 )
 def test_respond_with_falsy_tool_calls_sets_meta_to_none(tool_calls):
-    """Both `None` and `[]` yield `_meta['tool_calls'] is None`. Pins the
-    boundary so a refactor that flips the falsy check to `is not None` (which
-    would store `[]`) gets caught — downstream consumers do `is None` checks."""
+    """Both None and [] yield _meta['tool_calls'] is None."""
     llm = _ToolCallingLLM(tool_calls=tool_calls)
 
     with chats.new("Falsy tool calls"):

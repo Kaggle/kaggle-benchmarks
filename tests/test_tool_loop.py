@@ -60,13 +60,8 @@ def _make_tool_call_response(
     arguments: dict | None = None,
     call_id: str = "call_1",
 ) -> LLMMessage[str]:
-    """Creates an LLMMessage that simulates a tool call from the LLM.
-
-    Populates the typed `tool_calls` field with a ToolInvocation. We can't
-    use _meta["tool_calls"] here: MockedChat hits respond()'s LLMMessage
-    branch which does not normalize _meta, and LLMMessage's typed
-    tool_calls field shadows the Message.tool_calls property shim.
-    """
+    """Simulates an LLM tool call via LLMMessage's typed tool_calls field
+    (the LLMMessage branch of respond() doesn't normalize _meta)."""
     return LLMMessage(
         sender=None,
         content="",
@@ -84,7 +79,6 @@ def _make_tool_call_response(
 @pytest.mark.parametrize(
     "api_dict, expected_name, expected_args, expected_id",
     [
-        # Happy paths: dict and string-encoded dict arguments.
         pytest.param(
             {"id": "c1", "function": {"name": "add", "arguments": {"a": 1, "b": 2}}},
             "add",
@@ -99,7 +93,6 @@ def _make_tool_call_response(
             "c2",
             id="string_arguments",
         ),
-        # Missing / null inputs → empty-args default.
         pytest.param(
             {"id": "c3", "function": {"name": "noop", "arguments": None}},
             "noop",
@@ -121,7 +114,6 @@ def _make_tool_call_response(
             None,
             id="missing_id",
         ),
-        # JSON "null" treated as no-args (parity with the missing-key default).
         pytest.param(
             {"id": "c5", "function": {"name": "f", "arguments": "null"}},
             "f",
@@ -129,8 +121,7 @@ def _make_tool_call_response(
             "c5",
             id="json_null_treated_as_no_args",
         ),
-        # Malformed / non-dict JSON: kept as the raw string so invoke_tool
-        # can surface a clear error instead of crashing.
+        # Non-dict JSON kept as raw string; invoke_tool surfaces the error.
         pytest.param(
             {"id": "c6", "function": {"name": "f", "arguments": '{"a":'}},
             "f",
@@ -155,7 +146,6 @@ def _make_tool_call_response(
     ],
 )
 def test_from_api_dict(api_dict, expected_name, expected_args, expected_id):
-    """ToolInvocation.from_api_dict handles various argument formats."""
     invocation = ToolInvocation.from_api_dict(api_dict)
     assert invocation.name == expected_name
     assert invocation.arguments == expected_args
@@ -185,7 +175,6 @@ def test_from_api_dict(api_dict, expected_name, expected_args, expected_id):
     ],
 )
 def test_from_api_dict_thought_fields(api_dict, expected_signature, expected_thought):
-    """Gemini 3.x carriers round-trip through _thought_signature / _thought keys."""
     invocation = ToolInvocation.from_api_dict(api_dict)
     assert invocation.thought_signature == expected_signature
     assert invocation.thought is expected_thought
@@ -260,8 +249,6 @@ def test_invoke_tool_success_sets_output():
 
 
 def test_invoke_tool_string_arguments_set_error():
-    """When arguments is a string (from from_api_dict's JSONDecodeError
-    fallback), invoke_tool surfaces an error rather than crashing."""
     invocation = ToolInvocation(name="_add", arguments='{"a": 1, "b":')
     result = invoke_tool(invocation, [_add])
 
@@ -430,9 +417,7 @@ def test_tool_not_found_through_loop():
 
 
 class _StreamingTruncatedToolLLM(actors.LLMChat):
-    """Streams a single tool-call chunk whose arguments JSON is truncated —
-    exercises the full defensive chain: stream() → _finalize_tool_calls →
-    from_api_dict's JSONDecodeError fallback → invoke_tool's str-arg branch."""
+    """Streams a tool-call chunk with truncated arguments JSON."""
 
     def __init__(self):
         super().__init__(name="StreamingTruncated")
@@ -447,8 +432,7 @@ class _StreamingTruncatedToolLLM(actors.LLMChat):
                         index=0,
                         id="call_1",
                         function=SimpleNamespace(
-                            name="_add",
-                            arguments='{"a": 1, "b":',  # truncated
+                            name="_add", arguments='{"a": 1, "b":'
                         ),
                     )
                 ],
@@ -458,19 +442,10 @@ class _StreamingTruncatedToolLLM(actors.LLMChat):
 
 
 def test_truncated_streaming_json_surfaces_clean_error_end_to_end():
-    """End-to-end: a model that streams malformed tool-call JSON does not
-    crash the tool loop. The truncated string is preserved through
-    _finalize_tool_calls, invoke_tool produces a ToolInvocationResult with
-    `error` set, and that error message lands in the chat history.
-
-    Guards against regressions across three layers — from_api_dict,
-    invoke_tool, and the streaming finalize — by exercising the full chain
-    in one assertion."""
+    """End-to-end chain: stream → finalize → invoke_tool surfaces error."""
     llm = _StreamingTruncatedToolLLM()
 
     with chats.new("Truncated JSON loop") as chat:
-        # max_tool_rounds=1 keeps the test tight; the model keeps returning
-        # the same broken call so the loop exhausts after one round.
         with pytest.raises(ToolInvocationLimitExhausted):
             llm.prompt(
                 "Compute 1+2",
@@ -478,8 +453,6 @@ def test_truncated_streaming_json_surfaces_clean_error_end_to_end():
                 extra_api_params={"max_tool_rounds": 1},
             )
 
-        # The forked tool-loop chat hangs off the parent chat. Walk into it
-        # to find the tool-result message with the parse error.
         tool_loop = next(item for item in chat.history if isinstance(item, chats.Chat))
         tool_results = [
             m for m in tool_loop.history if isinstance(m.content, ToolInvocationResult)
@@ -488,8 +461,6 @@ def test_truncated_streaming_json_surfaces_clean_error_end_to_end():
         result = tool_results[0].content
         assert result.error is not None
         assert "could not be parsed as JSON" in result.error
-        # The raw truncated string must round-trip through the error, so an
-        # operator can see exactly what the model emitted.
         assert '{"a": 1, "b":' in result.error
 
 

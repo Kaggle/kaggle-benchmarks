@@ -216,18 +216,11 @@ def test_dump_image_message_with_extra_api_params():
     ]
 
 
-# Mirrors how built-in OpenAI/ModelProxy LLMChat clients map sender roles.
-# Standalone tests (below) need an assistant-role sender so the
-# `dump_text_message` tool_calls branch fires (it checks for role ==
-# "assistant"). The default parametrized batch uses roles_mapping={}, which
-# would prevent the branch from running for an actor with a different role.
+# Assistant-role sender is required to exercise the dump_text_message tool_calls branch.
 _assistant_actor = actors.Actor(name="LLM", role="assistant", avatar="🤖")
 
 
 def test_dump_text_message_with_meta_tool_invocation():
-    """Plain Message with normalized ToolInvocation in _meta — the path
-    taken by built-in LLM responses after respond()'s normalization. The
-    serializer converts back to OpenAI Chat Completions wire format."""
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     msg = messages.Message(
         content="here you go",
@@ -254,8 +247,7 @@ def test_dump_text_message_with_meta_tool_invocation():
 
 
 def test_dump_text_message_with_string_arguments_passthrough():
-    """When arguments is a string (JSONDecodeError fallback from streaming),
-    it's passed through verbatim — the wire format accepts a JSON string."""
+    """String args (from JSONDecodeError fallback) pass through verbatim."""
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     msg = messages.Message(
         content="",
@@ -271,8 +263,7 @@ def test_dump_text_message_with_string_arguments_passthrough():
 
 
 def test_dump_text_message_missing_call_id_defaults_to_empty_string():
-    """`id` is required on OpenAI tool_calls; if call_id is None, defensively
-    emit an empty string rather than `None`."""
+    """None call_id → "" (OpenAI spec requires id)."""
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     msg = messages.Message(
         content="",

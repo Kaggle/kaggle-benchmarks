@@ -92,6 +92,7 @@ import json
 import re
 import typing
 import uuid
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, TypeVar
 
 import openai
@@ -612,8 +613,6 @@ class GoogleGenAI(LLMChat):
         # TODO: Streaming does not capture reasoning_traces. Thought parts
         # are filtered out by _extract_text, so last_reasoning_traces() will
         # return None when streaming is enabled.
-        from types import SimpleNamespace
-
         for chunk in response_stream:
             tool_calls = None
             if chunk.candidates and chunk.candidates[0].content:

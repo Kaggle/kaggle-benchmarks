@@ -102,12 +102,7 @@ def test_streaming_with_token_counts():
 
 
 def test_tool_calls_property():
-    """Tests that the tool_calls property correctly retrieves data from _meta.
-
-    Intentionally uses raw dicts — verifies the property shim is agnostic to
-    value type. Post-`_meta` normalization, real LLM responses store
-    ToolInvocation objects here, but the property itself makes no assumptions.
-    """
+    """The property shim is value-type agnostic — raw dicts work too."""
     mock_tool_calls = [{"id": "call_abc", "type": "function"}]
 
     # Message with tool calls
@@ -124,9 +119,7 @@ def test_tool_calls_property():
 def _make_tool_call_chunk(
     index, id_=None, name=None, arguments=None, thought_signature=None, thought=None
 ):
-    """Builds an OpenAI-style streaming tool-call chunk delta. The thought
-    fields mirror what GenAI streaming chunks carry (synthesized via
-    SimpleNamespace in GoogleGenAI._get_stream_response)."""
+    """OpenAI-style streaming delta; thought fields mirror GenAI's synthesis."""
     return SimpleNamespace(
         index=index,
         id=id_,
@@ -137,9 +130,6 @@ def _make_tool_call_chunk(
 
 
 def test_streaming_no_tool_calls_leaves_meta_unset():
-    """When the stream contains no tool-call chunks, _meta['tool_calls']
-    is not touched (stays absent)."""
-
     def chunk_generator():
         yield LLMResponse(content="Hello ", meta={"input_tokens": 5})
         yield LLMResponse(content="world", meta={"input_tokens": 5, "output_tokens": 2})
@@ -152,14 +142,10 @@ def test_streaming_no_tool_calls_leaves_meta_unset():
 
 
 def test_streaming_content_and_tool_calls_finalized():
-    """Realistic shape: chunks interleave delta.content and delta.tool_calls
-    (OpenAI's actual streaming format) and may carry Gemini 3.x thought
-    fields. The finalize pass converts accumulated dicts to typed
-    ToolInvocation. Second _finalize call is a no-op (idempotency guard)."""
+    """Interleaved content + tool_calls chunks → typed ToolInvocation post-finalize.
+    Also asserts idempotency of _finalize_tool_calls."""
 
     def chunk_generator():
-        # First chunk announces the call + opens args + carries thought fields
-        # (mirrors how GenAI _get_stream_response synthesizes its delta).
         yield LLMResponse(
             content="Let me ",
             tool_calls=[
@@ -188,11 +174,10 @@ def test_streaming_content_and_tool_calls_finalized():
     assert tc.name == "add"
     assert tc.arguments == {"a": 1, "b": 2}
     assert tc.call_id == "call_1"
-    # Thought fields captured during accumulation, preserved through finalize.
     assert tc.thought_signature == b"sig-bytes"
     assert tc.thought is True
 
-    # Idempotency: re-running finalize must not re-wrap or replace the object.
+    # Second finalize is a no-op.
     msg._finalize_tool_calls()
     [second] = msg._meta["tool_calls"]
     assert second is tc

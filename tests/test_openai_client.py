@@ -23,19 +23,6 @@ from kaggle_benchmarks.actors.llms import LLMResponse, OpenAI, _parse_think_tags
 from kaggle_benchmarks.prompting import handler
 
 
-@dataclass
-class MockFunction:
-    name: str
-    arguments: str
-
-
-@dataclass
-class MockToolCall:
-    id: str
-    function: MockFunction
-    type: str = "function"
-
-
 class MockedOpenAI(OpenAI):
     def __init__(self, model: str, **kwargs):
         super().__init__(client=None, model=model, **kwargs)
@@ -89,9 +76,7 @@ class MockedOpenAIWithToolCall(OpenAI):
         super().__init__(client=None, model="mock-tool-caller", **kwargs)
 
     def _call_api(self, messages, **kwargs):
-        # Real OpenAI._call_api wraps tool calls with `t.model_dump()` (see
-        # llms.py:551), producing OpenAI-style dicts. The mock mirrors that
-        # shape so respond()'s normalization sees the same input as production.
+        # Mirrors real _call_api shape: dicts (post-model_dump), not SDK objects.
         return LLMResponse(
             content="",
             tool_calls=[
@@ -491,7 +476,6 @@ def test_llm_extracts_tool_calls():
         actors.user.send("call a tool")
         response_msg = llm.respond()
 
-    # respond() normalizes raw OpenAI dicts → typed ToolInvocation.
     assert response_msg.tool_calls is not None
     assert len(response_msg.tool_calls) == 1
     [tc] = response_msg.tool_calls
@@ -510,8 +494,6 @@ def test_streaming_accumulates_tool_calls():
 
     assert response_msg.content == "Okay, calculating..."
 
-    # _update_from_tool_call_chunk accumulates dicts as chunks stream in;
-    # stream()'s finalize pass converts them to ToolInvocation at end.
     final_tool_calls = response_msg.tool_calls
     assert final_tool_calls is not None
     assert len(final_tool_calls) == 1
