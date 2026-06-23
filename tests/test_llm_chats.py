@@ -138,25 +138,17 @@ def test_respond_preserves_thought_signature_for_gemini():
     assert normalized.thought is True
 
 
-def test_respond_with_no_tool_calls_sets_meta_to_none():
-    """When LLMResponse.tool_calls is None, _meta['tool_calls'] is None."""
-    llm = _ToolCallingLLM(tool_calls=None)
+@pytest.mark.parametrize(
+    "tool_calls",
+    [pytest.param(None, id="none"), pytest.param([], id="empty_list")],
+)
+def test_respond_with_falsy_tool_calls_sets_meta_to_none(tool_calls):
+    """Both `None` and `[]` yield `_meta['tool_calls'] is None`. Pins the
+    boundary so a refactor that flips the falsy check to `is not None` (which
+    would store `[]`) gets caught — downstream consumers do `is None` checks."""
+    llm = _ToolCallingLLM(tool_calls=tool_calls)
 
-    with chats.new("No tool calls"):
-        actors.user.send("hi")
-        response = llm.respond()
-
-    assert response._meta["tool_calls"] is None
-
-
-def test_respond_with_empty_tool_calls_list_sets_meta_to_none():
-    """An empty `tool_calls` list and `None` are treated the same — both yield
-    `_meta['tool_calls'] is None`. Pins the boundary so a refactor that flips
-    the falsy check to `is not None` (which would store `[]`) gets caught,
-    since downstream consumers do `is None` checks rather than truthiness."""
-    llm = _ToolCallingLLM(tool_calls=[])
-
-    with chats.new("Empty tool calls list"):
+    with chats.new("Falsy tool calls"):
         actors.user.send("hi")
         response = llm.respond()
 

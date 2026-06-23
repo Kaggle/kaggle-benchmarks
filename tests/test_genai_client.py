@@ -193,6 +193,84 @@ def test_streaming_thought_output_matches_non_streaming():
     assert streaming_text == non_streaming_text
 
 
+def test_get_stream_response_synthesizes_tool_call_chunks():
+    """_get_stream_response converts function_call Parts in the GenAI stream
+    into OpenAI-style delta chunks (SimpleNamespace) that the Message stream
+    loop can accumulate. Covers the streaming-tool path that the golden test
+    hits against real APIs."""
+    llm = MockedGoogleGenAI()
+
+    fn_part = types.Part.from_function_call(
+        name="calculator", args={"a": 5, "b": 10}
+    )
+    fn_part.function_call.id = "call_123"
+    fn_part.thought_signature = b"sig"
+    fn_part.thought = True
+
+    stream = iter(
+        [
+            types.GenerateContentResponse(
+                candidates=[
+                    types.Candidate(content=types.Content(parts=[fn_part]))
+                ]
+            )
+        ]
+    )
+
+    [llm_response] = list(llm._get_stream_response(stream))
+    assert llm_response.tool_calls is not None
+    [chunk] = llm_response.tool_calls
+    # Shape duck-types the OpenAI delta consumed by _update_from_tool_call_chunk.
+    assert chunk.index == 0
+    assert chunk.id == "call_123"
+    assert chunk.function.name == "calculator"
+    assert chunk.function.arguments == '{"a": 5, "b": 10}'
+    assert chunk.thought_signature == b"sig"
+    assert chunk.thought is True
+
+
+def test_get_stream_response_text_only_produces_no_tool_calls():
+    """Streams without function_call Parts must yield LLMResponse with
+    tool_calls=None (no false-positive synthesis)."""
+    llm = MockedGoogleGenAI()
+    stream = iter(
+        [
+            types.GenerateContentResponse(
+                candidates=[
+                    types.Candidate(
+                        content=types.Content(parts=[types.Part(text="hello")])
+                    )
+                ]
+            )
+        ]
+    )
+    [chunk] = list(llm._get_stream_response(stream))
+    assert chunk.tool_calls is None
+    assert chunk.content == "hello"
+
+
+def test_get_stream_response_synthesizes_fallback_id_when_missing():
+    """When function_call.id is missing, _get_stream_response generates a
+    `call_<hex>` fallback so the accumulator has a unique identifier."""
+    llm = MockedGoogleGenAI()
+
+    fn_part = types.Part.from_function_call(name="f", args={})
+    # Leave fn_part.function_call.id unset.
+
+    stream = iter(
+        [
+            types.GenerateContentResponse(
+                candidates=[
+                    types.Candidate(content=types.Content(parts=[fn_part]))
+                ]
+            )
+        ]
+    )
+    [llm_response] = list(llm._get_stream_response(stream))
+    [chunk] = llm_response.tool_calls
+    assert chunk.id and chunk.id.startswith("call_")
+
+
 def test_thinking_captured_in_response(mocker):
     """Tests that thought parts from GenAI response are captured as reasoning traces."""
     mock_client = mocker.MagicMock()

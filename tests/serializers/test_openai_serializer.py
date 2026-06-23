@@ -278,9 +278,7 @@ def test_dump_text_message_missing_call_id_defaults_to_empty_string():
         content="",
         sender=_assistant_actor,
         _meta={
-            "tool_calls": [
-                ToolInvocation(name="add", call_id=None, arguments={"a": 1})
-            ]
+            "tool_calls": [ToolInvocation(name="add", call_id=None, arguments={"a": 1})]
         },
     )
     [out] = list(serializer.dump_message(msg))

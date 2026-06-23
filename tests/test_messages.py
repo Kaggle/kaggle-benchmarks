@@ -121,48 +121,19 @@ def test_tool_calls_property():
     assert msg_without_tools.tool_calls is None
 
 
-def _make_tool_call_chunk(index, id_=None, name=None, arguments=None):
-    """Builds an OpenAI-style streaming tool-call chunk delta."""
+def _make_tool_call_chunk(
+    index, id_=None, name=None, arguments=None, thought_signature=None, thought=None
+):
+    """Builds an OpenAI-style streaming tool-call chunk delta. The thought
+    fields mirror what GenAI streaming chunks carry (synthesized via
+    SimpleNamespace in GoogleGenAI._get_stream_response)."""
     return SimpleNamespace(
         index=index,
         id=id_,
         function=SimpleNamespace(name=name, arguments=arguments),
+        thought_signature=thought_signature,
+        thought=thought,
     )
-
-
-def test_streaming_tool_calls_finalized_to_typed_invocations():
-    """After stream() completes with tool-call chunks, _meta['tool_calls']
-    contains typed ToolInvocation objects (not raw dicts).
-
-    Tool-call arguments arrive as partial JSON string chunks that must be
-    concatenated and parsed once at the end of the stream — the finalize pass
-    in stream() does this conversion.
-    """
-
-    def chunk_generator():
-        # First chunk announces the call with the name + opening of arguments.
-        yield LLMResponse(
-            content="",
-            tool_calls=[
-                _make_tool_call_chunk(
-                    index=0, id_="call_1", name="add", arguments='{"a":'
-                )
-            ],
-        )
-        # Second chunk appends the rest of the arguments JSON.
-        yield LLMResponse(
-            content="",
-            tool_calls=[_make_tool_call_chunk(index=0, arguments=' 1, "b": 2}')],
-        )
-
-    msg = messages.Message(content="", sender=None)
-    msg.stream(chunk_generator())
-
-    [tc] = msg._meta["tool_calls"]
-    assert isinstance(tc, ToolInvocation)
-    assert tc.name == "add"
-    assert tc.arguments == {"a": 1, "b": 2}
-    assert tc.call_id == "call_1"
 
 
 def test_streaming_no_tool_calls_leaves_meta_unset():
@@ -180,54 +151,32 @@ def test_streaming_no_tool_calls_leaves_meta_unset():
     assert "tool_calls" not in msg._meta
 
 
-def test_finalize_tool_calls_is_idempotent():
-    """Calling _finalize_tool_calls() twice must not re-wrap or lose the
-    already-typed ToolInvocation objects. The `isinstance(raw_calls[0], dict)`
-    guard inside _finalize is the safety net — this test pins it."""
+def test_streaming_content_and_tool_calls_finalized():
+    """Realistic shape: chunks interleave delta.content and delta.tool_calls
+    (OpenAI's actual streaming format) and may carry Gemini 3.x thought
+    fields. The finalize pass converts accumulated dicts to typed
+    ToolInvocation. Second _finalize call is a no-op (idempotency guard)."""
 
     def chunk_generator():
-        yield LLMResponse(
-            content="",
-            tool_calls=[
-                _make_tool_call_chunk(
-                    index=0, id_="call_1", name="add", arguments='{"a": 1}'
-                )
-            ],
-        )
-
-    msg = messages.Message(content="", sender=None)
-    msg.stream(chunk_generator())  # runs finalize once internally
-    [first] = msg._meta["tool_calls"]
-    assert isinstance(first, ToolInvocation)
-
-    # Second finalize must be a no-op.
-    msg._finalize_tool_calls()
-    [second] = msg._meta["tool_calls"]
-    assert second is first  # exact same object, not re-wrapped
-    assert second.arguments == {"a": 1}
-
-
-def test_streaming_content_and_tool_calls_in_same_chunk():
-    """Real OpenAI streams interleave delta.content and delta.tool_calls in
-    the same chunk. The stream() loop must accumulate both, and the finalize
-    pass must still produce a typed ToolInvocation at the end."""
-
-    def chunk_generator():
-        # First chunk has the call announcement AND some text.
+        # First chunk announces the call + opens args + carries thought fields
+        # (mirrors how GenAI _get_stream_response synthesizes its delta).
         yield LLMResponse(
             content="Let me ",
             tool_calls=[
                 _make_tool_call_chunk(
-                    index=0, id_="call_1", name="add", arguments='{"a":'
+                    index=0,
+                    id_="call_1",
+                    name="add",
+                    arguments='{"a":',
+                    thought_signature=b"sig-bytes",
+                    thought=True,
                 )
             ],
         )
-        # Second chunk continues both text and arguments.
         yield LLMResponse(
             content="compute. ",
             tool_calls=[_make_tool_call_chunk(index=0, arguments=' 1, "b": 2}')],
         )
-        # Final chunk is text-only — typical OpenAI pattern.
         yield LLMResponse(content="Done.")
 
     msg = messages.Message(content="", sender=None)
@@ -239,3 +188,11 @@ def test_streaming_content_and_tool_calls_in_same_chunk():
     assert tc.name == "add"
     assert tc.arguments == {"a": 1, "b": 2}
     assert tc.call_id == "call_1"
+    # Thought fields captured during accumulation, preserved through finalize.
+    assert tc.thought_signature == b"sig-bytes"
+    assert tc.thought is True
+
+    # Idempotency: re-running finalize must not re-wrap or replace the object.
+    msg._finalize_tool_calls()
+    [second] = msg._meta["tool_calls"]
+    assert second is tc

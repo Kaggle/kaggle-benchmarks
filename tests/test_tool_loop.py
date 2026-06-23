@@ -84,6 +84,7 @@ def _make_tool_call_response(
 @pytest.mark.parametrize(
     "api_dict, expected_name, expected_args, expected_id",
     [
+        # Happy paths: dict and string-encoded dict arguments.
         pytest.param(
             {"id": "c1", "function": {"name": "add", "arguments": {"a": 1, "b": 2}}},
             "add",
@@ -98,6 +99,7 @@ def _make_tool_call_response(
             "c2",
             id="string_arguments",
         ),
+        # Missing / null inputs → empty-args default.
         pytest.param(
             {"id": "c3", "function": {"name": "noop", "arguments": None}},
             "noop",
@@ -119,6 +121,37 @@ def _make_tool_call_response(
             None,
             id="missing_id",
         ),
+        # JSON "null" treated as no-args (parity with the missing-key default).
+        pytest.param(
+            {"id": "c5", "function": {"name": "f", "arguments": "null"}},
+            "f",
+            {},
+            "c5",
+            id="json_null_treated_as_no_args",
+        ),
+        # Malformed / non-dict JSON: kept as the raw string so invoke_tool
+        # can surface a clear error instead of crashing.
+        pytest.param(
+            {"id": "c6", "function": {"name": "f", "arguments": '{"a":'}},
+            "f",
+            '{"a":',
+            "c6",
+            id="malformed_json_kept_as_string",
+        ),
+        pytest.param(
+            {"id": "c7", "function": {"name": "f", "arguments": "[1, 2, 3]"}},
+            "f",
+            "[1, 2, 3]",
+            "c7",
+            id="json_list_kept_as_string",
+        ),
+        pytest.param(
+            {"id": "c8", "function": {"name": "f", "arguments": "42"}},
+            "f",
+            "42",
+            "c8",
+            id="json_scalar_kept_as_string",
+        ),
     ],
 )
 def test_from_api_dict(api_dict, expected_name, expected_args, expected_id):
@@ -129,75 +162,33 @@ def test_from_api_dict(api_dict, expected_name, expected_args, expected_id):
     assert invocation.call_id == expected_id
 
 
-def test_from_api_dict_captures_thought_fields():
-    """from_api_dict reads _thought_signature (bytes) and _thought (bool)
-    when present — these mirror google.genai types.Part for Gemini 3.x
-    multi-turn round-tripping."""
-    api_dict = {
-        "id": "c1",
-        "function": {"name": "add", "arguments": {"a": 1}},
-        "_thought_signature": b"sig-bytes",
-        "_thought": True,
-    }
-    invocation = ToolInvocation.from_api_dict(api_dict)
-    assert invocation.thought_signature == b"sig-bytes"
-    assert invocation.thought is True
-
-
-def test_from_api_dict_thought_fields_default_to_none():
-    """When _thought_signature / _thought are absent, fields default to None."""
-    api_dict = {"id": "c1", "function": {"name": "add", "arguments": {}}}
-    invocation = ToolInvocation.from_api_dict(api_dict)
-    assert invocation.thought_signature is None
-    assert invocation.thought is None
-
-
-def test_from_api_dict_malformed_json_kept_as_string():
-    """When `arguments` is a malformed JSON string (e.g., truncated streaming
-    output), from_api_dict keeps it as a string rather than raising."""
-    api_dict = {
-        "id": "c1",
-        "function": {"name": "add", "arguments": '{"a": 1, "b":'},  # truncated
-    }
-    invocation = ToolInvocation.from_api_dict(api_dict)
-    assert invocation.arguments == '{"a": 1, "b":'
-    assert isinstance(invocation.arguments, str)
-
-
 @pytest.mark.parametrize(
-    "args_str, expected_args",
+    "api_dict, expected_signature, expected_thought",
     [
-        pytest.param("[1, 2, 3]", "[1, 2, 3]", id="json_list_kept_as_string"),
-        pytest.param("42", "42", id="json_int_kept_as_string"),
-        pytest.param("false", "false", id="json_bool_kept_as_string"),
-        pytest.param('"hello"', '"hello"', id="json_string_kept_as_string"),
+        pytest.param(
+            {
+                "id": "c1",
+                "function": {"name": "f", "arguments": {}},
+                "_thought_signature": b"sig-bytes",
+                "_thought": True,
+            },
+            b"sig-bytes",
+            True,
+            id="present",
+        ),
+        pytest.param(
+            {"id": "c2", "function": {"name": "f", "arguments": {}}},
+            None,
+            None,
+            id="absent_defaults_to_none",
+        ),
     ],
 )
-def test_from_api_dict_non_dict_parse_kept_as_string(args_str, expected_args):
-    """When `arguments` parses as valid JSON but not to a dict (list, scalar,
-    nested string), from_api_dict keeps the raw string so invoke_tool can
-    surface a clear error instead of crashing downstream with AttributeError
-    when something tries to splat the arguments."""
-    api_dict = {"id": "c1", "function": {"name": "f", "arguments": args_str}}
+def test_from_api_dict_thought_fields(api_dict, expected_signature, expected_thought):
+    """Gemini 3.x carriers round-trip through _thought_signature / _thought keys."""
     invocation = ToolInvocation.from_api_dict(api_dict)
-    assert invocation.arguments == expected_args
-    assert isinstance(invocation.arguments, str)
-
-
-def test_from_api_dict_json_null_treated_as_no_args():
-    """`arguments: "null"` is JSON-valid but encodes a no-args call. Treat it
-    the same as a missing arguments key (default `{}`) rather than letting
-    None propagate into ToolInvocation."""
-    api_dict = {"id": "c1", "function": {"name": "f", "arguments": "null"}}
-    invocation = ToolInvocation.from_api_dict(api_dict)
-    assert invocation.arguments == {}
-
-
-def test_tool_invocation_accepts_string_arguments():
-    """ToolInvocation.arguments is widened to dict | str to accommodate the
-    JSONDecodeError fallback in from_api_dict."""
-    invocation = ToolInvocation(name="add", arguments='{"a": 1}', call_id="c1")
-    assert invocation.arguments == '{"a": 1}'
+    assert invocation.thought_signature == expected_signature
+    assert invocation.thought is expected_thought
 
 
 # ---------------------------------------------------------------------------
@@ -456,7 +447,8 @@ class _StreamingTruncatedToolLLM(actors.LLMChat):
                         index=0,
                         id="call_1",
                         function=SimpleNamespace(
-                            name="_add", arguments='{"a": 1, "b":'  # truncated
+                            name="_add",
+                            arguments='{"a": 1, "b":',  # truncated
                         ),
                     )
                 ],
@@ -488,13 +480,9 @@ def test_truncated_streaming_json_surfaces_clean_error_end_to_end():
 
         # The forked tool-loop chat hangs off the parent chat. Walk into it
         # to find the tool-result message with the parse error.
-        tool_loop = next(
-            item for item in chat.history if isinstance(item, chats.Chat)
-        )
+        tool_loop = next(item for item in chat.history if isinstance(item, chats.Chat))
         tool_results = [
-            m
-            for m in tool_loop.history
-            if isinstance(m.content, ToolInvocationResult)
+            m for m in tool_loop.history if isinstance(m.content, ToolInvocationResult)
         ]
         assert len(tool_results) == 1
         result = tool_results[0].content

@@ -302,9 +302,7 @@ def test_dump_text_message_with_string_arguments_logs_warning(caplog):
         sender=_assistant_actor,
         _meta={
             "tool_calls": [
-                ToolInvocation(
-                    name="test_tool", call_id="123", arguments='{"a":'
-                )
+                ToolInvocation(name="test_tool", call_id="123", arguments='{"a":')
             ]
         },
     )

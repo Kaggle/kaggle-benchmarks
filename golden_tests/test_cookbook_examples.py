@@ -179,9 +179,17 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 @pytest.mark.parametrize(
     "llm, api",
     [
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
-    ]
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"),
+            "genai",
+            id="genai-google/gemini-2.5-flash",
+        ),
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"),
+            "openai",
+            id="openai-google/gemini-2.5-flash",
+        ),
+    ],
 )
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
 def test_assess_with_judge(llm, api, judge_llm_name):
@@ -430,9 +438,17 @@ def dataset_eval_with_failure(llm, df) -> tuple[int, int]:
 @pytest.mark.parametrize(
     "llm, api",
     [
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
-    ]
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"),
+            "genai",
+            id="genai-google/gemini-2.5-flash",
+        ),
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"),
+            "openai",
+            id="openai-google/gemini-2.5-flash",
+        ),
+    ],
 )
 def test_dataset_eval_with_failure_run(llm, api):
     run = dataset_eval_with_failure.run(llm, df=df)

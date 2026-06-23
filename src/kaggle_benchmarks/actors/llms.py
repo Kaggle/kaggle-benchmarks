@@ -630,7 +630,9 @@ class GoogleGenAI(LLMChat):
                             id=fc.id or f"call_{uuid.uuid4().hex[:8]}",
                             function=SimpleNamespace(
                                 name=fc.name,
-                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                                arguments=json.dumps(dict(fc.args))
+                                if fc.args
+                                else "{}",
                             ),
                             thought_signature=getattr(part, "thought_signature", None),
                             thought=getattr(part, "thought", None),
