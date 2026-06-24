@@ -135,6 +135,7 @@ def test_remove_participant_excludes_from_roster():
     room.remove_participant(bob)
 
     with room:
+        room.post("kickoff")
         alice.reply()
     _, kwargs = alice_mock.invocations[0]
     system = kwargs["system"]
@@ -152,6 +153,7 @@ def test_remove_participant_preserves_historical_messages():
     bob = room.add_participant(bob_mock)
 
     with room:
+        room.post("kickoff")
         bob.reply()
     room.remove_participant(bob)
 
@@ -226,13 +228,14 @@ def test_remove_then_readd_same_name_creates_distinct_identity():
 
     p1 = room.add_participant(alice_mock, name="Alice", avatar="👩")
     with room:
+        room.post("kickoff")
         p1.reply()  # "before"
     room.remove_participant(p1)
 
     # Same name allowed again
     p2 = room.add_participant(alice_mock, name="Alice", avatar="🧙")
     with room:
-        p2.reply()  # "after"
+        p2.reply()  # "after" — room already has history from above
 
     # Distinct objects with different avatars
     assert p1 is not p2
@@ -240,9 +243,9 @@ def test_remove_then_readd_same_name_creates_distinct_identity():
     assert p2.avatar == "🧙"
 
     # Both messages stay in the transcript, attributed to their respective
-    # Participant identities
-    assert room.messages[0].sender is p1
-    assert room.messages[1].sender is p2
+    # Participant identities. messages[0] is the kickoff post.
+    assert room.messages[1].sender is p1
+    assert room.messages[2].sender is p2
 
     # p1 can no longer reply (was removed); p2 can
     with room:
@@ -268,6 +271,23 @@ def test_llmchat_reply_appends_to_room():
     assert len(room.messages) == 2
     assert room.messages[1].sender.name == "Alice"
     assert room.messages[1].content == "I agree!"
+
+
+def test_participant_reply_in_empty_room_raises():
+    """Calling reply() before anything has been posted is a usage bug.
+
+    Some providers (e.g. Gemini via Vertex AI) reject requests whose
+    message list contains only a system prompt with
+    "at least one contents field is required". We fail fast at the room
+    layer with an actionable error pointing the user at room.post(...).
+    """
+    alice_mock = MockedChat.from_contents(["should-not-be-called"], name="Alice")
+    room = ChatRoom()
+    alice = room.add_participant(alice_mock)
+
+    with room:
+        with pytest.raises(RuntimeError, match=r"room\.post"):
+            alice.reply()
 
 
 def test_participant_reply_outside_room_raises():
@@ -369,6 +389,7 @@ def test_system_prompt_composition():
     room.add_participant(bob_mock, system_prompt="SECRET: You are a villager")
 
     with room:
+        room.post("kickoff")
         alice.reply()
 
     _, kwargs = alice_mock.invocations[0]
@@ -580,8 +601,10 @@ def test_meta_chat_points_to_room():
     room = ChatRoom()
     alice = room.add_participant(alice_mock)
     with room:
+        room.post("kickoff")
         alice.reply()
-    assert room.messages[0]._meta.get("chat") is room
+    # messages[0] is the kickoff post; messages[1] is alice's reply.
+    assert room.messages[1]._meta.get("chat") is room
 
 
 class MockedLLMResponseChat(actors.LLMChat):
@@ -626,9 +649,11 @@ def test_meta_llm_response_path():
     alice = room.add_participant(alice_mock)
 
     with room:
+        room.post("kickoff")
         alice.reply()
 
-    room_msg = room.messages[0]
+    # messages[0] is the kickoff post; messages[1] is alice's reply.
+    room_msg = room.messages[1]
     assert "input_tokens" in room_msg._meta
     assert room_msg._meta["input_tokens"] == 10
     assert room_msg._meta.get("chat") is room

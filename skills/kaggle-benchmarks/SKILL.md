@@ -815,6 +815,10 @@ Key behaviors to remember:
   - `participant.reply(schema=..., **kwargs)` — that participant's LLM generates
     a response. Must be called inside `with room:`. Supports `schema=` for
     structured output, same as `llm.prompt()`.
+  - **Always seed the room with `room.post(...)` before the first `reply()`.**
+    A participant cannot speak into a void: some providers (e.g. Gemini)
+    reject requests with no user message, and the framework raises
+    `RuntimeError` if you call `reply()` on an empty room.
 - **Perspective projection is automatic.** Each `reply()` rebuilds the system
   prompt and re-projects history so the calling participant sees its own
   messages as `assistant` and peers' messages as `user` with `[Name]:` prefixes.
