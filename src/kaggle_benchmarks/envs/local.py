@@ -53,12 +53,20 @@ class InternalUnsafeLocalEnvironment(mixins.TemporalDirectoryMixin):
             )
 
     def run(
-        self, command: list[str], input: str | None = None
+        self, command: str | list[str], input: str | None = None
     ) -> environment.RunResult:
         """Runs a command in the temporary directory.
 
-        ``command`` must be a list of argument strings (``argv`` form). String
-        commands are rejected to avoid a shell-injection foot-gun when callers
+        The goal of the ``list[str]`` runtime requirement is to enhance
+        security by eliminating the shell-injection attack surface that
+        ``shell=True`` string commands expose.
+
+        The signature accepts ``str | list[str]`` to match the
+        :class:`~kaggle_benchmarks.envs.environment.Environment` protocol, but
+        this implementation requires ``command`` to be a ``list[str]`` (argv
+        form) at runtime. Anything else — including strings and other
+        iterables like tuples or generators — raises ``TypeError``. The list
+        requirement prevents a shell-injection foot-gun when callers
         interpolate untrusted input. To intentionally invoke a shell, pass
         ``["bash", "-c", "<script>"]`` explicitly.
 
@@ -66,9 +74,9 @@ class InternalUnsafeLocalEnvironment(mixins.TemporalDirectoryMixin):
             No sandboxing is applied. The command has full access to the host
             filesystem and network.
         """
-        if isinstance(command, str):
+        if not isinstance(command, list):
             raise TypeError(
-                "command must be a list[str], not str. "
+                f"command must be a list[str], got {type(command).__name__}. "
                 "Pass arguments as a list (e.g. ['echo', 'hi']). "
                 "To run a shell pipeline, use ['bash', '-c', '<script>']."
             )

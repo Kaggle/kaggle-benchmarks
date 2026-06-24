@@ -59,6 +59,25 @@ class TestInternalUnsafeLocalEnvironmentWarning:
                 with pytest.raises(TypeError, match="list"):
                     env.run("echo hello; touch /tmp/should_not_exist")
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            ("echo", "hi"),
+            (x for x in ["echo", "hi"]),
+        ],
+        ids=["tuple", "generator"],
+    )
+    def test_run_rejects_non_list_command(self, command):
+        """Non-list command containers (tuple, generator, etc.) must be rejected
+        even though subprocess.run would accept them. The list[str] requirement
+        is the contract — narrowing it to "any iterable" would let callers
+        forget the security rationale and start passing whatever they have."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with InternalUnsafeLocalEnvironment(_internal=True) as env:
+                with pytest.raises(TypeError, match="list"):
+                    env.run(command)
+
     def test_run_list_args_neutralize_shell_metacharacters(self, tmp_path):
         """Shell metacharacters interpolated into a list argument must be
         treated as literal text, not interpreted by a shell.
