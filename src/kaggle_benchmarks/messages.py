@@ -192,8 +192,7 @@ class Message(Generic[T]):
         raw_calls = self._meta.get("tool_calls")
         if not raw_calls:
             return
-        # Guard against double-conversion on repeat calls.
-        if isinstance(raw_calls[0], dict):
-            self._meta["tool_calls"] = [
-                tool_utils.ToolInvocation.from_api_dict(tc) for tc in raw_calls
-            ]
+        self._meta["tool_calls"] = [
+            tool_utils.ToolInvocation.from_api_dict(tc) if isinstance(tc, dict) else tc
+            for tc in raw_calls
+        ]

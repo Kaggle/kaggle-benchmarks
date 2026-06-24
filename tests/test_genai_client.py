@@ -197,9 +197,7 @@ def test_get_stream_response_synthesizes_tool_call_chunks():
     """GenAI function_call Parts → OpenAI-style delta chunks the accumulator can consume."""
     llm = MockedGoogleGenAI()
 
-    fn_part = types.Part.from_function_call(
-        name="calculator", args={"a": 5, "b": 10}
-    )
+    fn_part = types.Part.from_function_call(name="calculator", args={"a": 5, "b": 10})
     fn_part.function_call.id = "call_123"
     fn_part.thought_signature = b"sig"
     fn_part.thought = True
@@ -207,9 +205,7 @@ def test_get_stream_response_synthesizes_tool_call_chunks():
     stream = iter(
         [
             types.GenerateContentResponse(
-                candidates=[
-                    types.Candidate(content=types.Content(parts=[fn_part]))
-                ]
+                candidates=[types.Candidate(content=types.Content(parts=[fn_part]))]
             )
         ]
     )
@@ -251,9 +247,7 @@ def test_get_stream_response_synthesizes_fallback_id_when_missing():
     stream = iter(
         [
             types.GenerateContentResponse(
-                candidates=[
-                    types.Candidate(content=types.Content(parts=[fn_part]))
-                ]
+                candidates=[types.Candidate(content=types.Content(parts=[fn_part]))]
             )
         ]
     )
