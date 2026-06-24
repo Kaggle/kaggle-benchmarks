@@ -125,6 +125,17 @@ class Run(Generic[T]):
 
     @property
     def passed(self):
+        # Reject known-bad first: a run whose task body raised an exception.
+        # Without this guard, result_type.passed() would return True for most
+        # result types regardless of the value, masking the failure.
+        if self.status == utils.Status.FAILED:
+            return False
+        # TODO: cached runs always report passed=True here because
+        # _handle_cached_run restores self.result but not assertion_results
+        # or subruns. This is fine for dataset eval (the primary use case),
+        # where correctness lives in the result value, not assertions.
+        # To fix for assertion-heavy tasks: restore assertions + subruns
+        # from disk on cache load, then remove this short-circuit.
         if self.cached:
             return True
         return (
@@ -183,6 +194,26 @@ class Runs(Generic[T], abc.MutableSequence):
 
     def __len__(self):
         return len(self.runs)
+
+    @property
+    def completed_runs(self) -> "Runs[T]":
+        """Runs whose execution completed (status=SUCCESS).
+
+        Note: "completed" is not the same as "passed". A completed run
+        may still have failed assertions or scored 0. Use `run.passed`
+        to check that.
+        """
+        return Runs([r for r in self.runs if r.status == utils.Status.SUCCESS])
+
+    @property
+    def errored_runs(self) -> "Runs[T]":
+        """Runs that hit an infrastructure error (status=FAILED).
+
+        These appear when `evaluate(..., on_failure="continue")` is used.
+        They're the candidates that `max_attempts > 1` will retry on the
+        next attempt (with `enable_cache()` enabled).
+        """
+        return Runs([r for r in self.runs if r.status == utils.Status.FAILED])
 
     def as_dataframe(self) -> pd.DataFrame:
         return pd.DataFrame(

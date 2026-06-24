@@ -95,4 +95,39 @@ with kbench.client.enable_cache():
 
 eval_df = runs.as_dataframe()
 eval_df
+
+# %%
+# Resilient evaluation pattern for large/flaky datasets.
+#
+# For production-scale evals where transient per-sample failures (API
+# timeouts, rate limits, 5xx) are expected, pair `on_failure="continue"`
+# with `max_attempts > 1` and `enable_cache()`. Behavior:
+#   - Successful samples persist to disk (state=COMPLETED).
+#   - Failed samples persist to disk (state=ERRORED).
+#   - Retries skip cached successes and re-run only the errored samples.
+#   - Results from all attempts merge into one Runs in row order.
+with kbench.client.enable_cache():
+    results = single_qa_task.evaluate(
+        llm=[kbench.llm],
+        evaluation_data=df,
+        on_failure="continue",  # collect failures instead of raising
+        max_attempts=3,  # retry transient failures up to twice
+        retry_delay=5,
+        n_jobs=2,
+        timeout=120,
+    )
+
+# Split the merged result by status.
+print(f"Completed: {len(results.completed_runs)} / {len(results)}")
+print(f"Errored:   {len(results.errored_runs)}")
+for run in results.errored_runs:
+    print(f"  {run.params}: {run.error_message[:200]}")
+
+# Aggregate over completed runs ONLY. Failed runs carry the
+# `results.FAILED` sentinel which would break .mean() / .sum().
+completed_df = results.completed_runs.as_dataframe()
+if len(completed_df) > 0:
+    accuracy = float(completed_df.result.str.get("is_correct").mean())
+    print(f"Accuracy over completed samples: {accuracy:.4f}")
+
 # %%

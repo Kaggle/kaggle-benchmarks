@@ -18,7 +18,7 @@ import pandas as pd
 import panel as pn
 import pytest
 
-from kaggle_benchmarks import chats, config, runs, tasks, utils
+from kaggle_benchmarks import chats, clients, config, runs, tasks, utils
 
 
 @tasks.task()
@@ -109,33 +109,35 @@ def test_evaluate_with_retries_succeeds_on_retry(monkeypatch):
     def fallible_task():
         return failer()
 
-    # Stop after 2 attempts if the task is still failing.
-    runs = fallible_task.evaluate(
-        stop_condition=lambda runs: len(runs.runs) == 1,
+    # Stop when all runs succeed.
+    result = fallible_task.evaluate(
+        stop_condition=lambda runs: all(r.status == utils.Status.SUCCESS for r in runs),
         max_attempts=5,
+        on_failure="continue",
     )
 
-    assert len(runs.runs) == 1
-    run = runs.runs[0]
-    assert run.passed
     assert failer.attempts == 2
+    successes = [r for r in result if r.status == utils.Status.SUCCESS]
+    assert len(successes) >= 1
+    assert successes[0].passed
 
 
 def test_evaluate_with_retries_fails_after_retries(monkeypatch):
     monkeypatch.setattr(config, "continue_with_exceptions", True)
     failer = Failer(fail_times=10)
 
-    # With 2 retries, it will attempt 3 times (1 initial + 2 retries) and fail each time.
+    # With 2 retries, it will attempt 2 times and fail each time.
     @tasks.task()
     def fallible_task():
         return failer()
 
-    runs = fallible_task.evaluate(
-        stop_condition=lambda runs: len(runs.runs) == 1,
+    result = fallible_task.evaluate(
+        stop_condition=lambda runs: all(r.status == utils.Status.SUCCESS for r in runs),
         max_attempts=2,
+        on_failure="continue",
     )
 
-    assert len(runs.runs) == 0
+    assert any(r.status == utils.Status.FAILED for r in result)
     assert failer.attempts == 2
 
 
@@ -223,19 +225,23 @@ def test_evaluate_on_exception(monkeypatch, continue_with_exceptions):
         failer()
 
     if continue_with_exceptions:
-        # It will eventually succeed with enough attempts.
-        runs = fallible_task.evaluate(
-            stop_condition=lambda runs: len(runs.runs) == 1,
+        # With on_failure="continue", it will eventually succeed.
+        result = fallible_task.evaluate(
+            stop_condition=lambda runs: all(
+                r.status == utils.Status.SUCCESS for r in runs
+            ),
             max_attempts=3,
+            on_failure="continue",
         )
-        assert len(runs.runs) == 1
+        successes = [r for r in result if r.status == utils.Status.SUCCESS]
+        assert len(successes) == 1
         assert failer.attempts == 3
-        assert runs.runs[0].passed
-        assert runs.runs[0].status == utils.Status.SUCCESS
-        assert runs.runs[0].error_message is None
+        assert successes[0].passed
+        assert successes[0].status == utils.Status.SUCCESS
+        assert successes[0].error_message is None
     else:
         with pytest.raises(ValueError, match="Intentional failure on attempt 1"):
-            runs = fallible_task.evaluate(
+            fallible_task.evaluate(
                 stop_condition=lambda runs: len(runs.runs) == 1,
                 max_attempts=3,
             )
@@ -253,15 +259,74 @@ def test_evaluate_with_retries_parallel(monkeypatch):
         index=[f"run{i}" for i in range(4)],
     )
 
-    runs = fallible_task.evaluate(
+    result = fallible_task.evaluate(
         evaluation_data=evaluation_data,
         n_jobs=2,
-        stop_condition=lambda runs: len(runs.runs) == 4,
+        stop_condition=lambda runs: all(r.status == utils.Status.SUCCESS for r in runs),
         max_attempts=5,
+        on_failure="continue",
     )
 
-    assert len(runs) == 4
-    assert all(run.passed for run in runs)
+    assert len(result) == 4
+    assert all(run.passed for run in result)
+
+
+def test_runs_completed_and_errored_partition(monkeypatch):
+    """Runs.completed_runs and .errored_runs cleanly split a mixed Runs.
+
+    Demonstrates the Change 3 API surface: when `on_failure="continue"` lets
+    failed runs into the returned Runs, users can split successes and
+    failures with two convenience properties.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task()
+    def per_sample_task(x: str) -> bool:
+        if x == "fail":
+            raise ValueError(f"intentional failure for {x}")
+        return True
+
+    df = pd.DataFrame({"x": ["ok_a", "fail", "ok_b"]})
+
+    results = per_sample_task.evaluate(
+        evaluation_data=df,
+        on_failure="continue",
+        max_attempts=1,
+    )
+
+    assert len(results) == 3
+    assert len(results.completed_runs) == 2
+    assert len(results.errored_runs) == 1
+
+    completed_ids = {r.id for r in results.completed_runs}
+    errored_ids = {r.id for r in results.errored_runs}
+    assert completed_ids.isdisjoint(errored_ids)
+
+    # The errored run is the one for x="fail"; its params reflect that.
+    [errored] = list(results.errored_runs)
+    assert errored.params["x"] == "fail"
+    assert errored.status == utils.Status.FAILED
+
+
+def test_run_passed_false_when_status_failed(monkeypatch):
+    """Run.passed reports False when the run hit a general exception, regardless
+    of result type's default `passed(value)` behavior.
+
+    Demonstrates the Change 4 guard: most Result subclasses' `passed()`
+    returns True by default for any value; without an explicit
+    `status == FAILED -> False` check, a failed run with no failing
+    assertions would incorrectly report passed=True.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task()
+    def fails_with_score() -> float:
+        raise ValueError("boom")
+
+    run = fails_with_score.run()
+
+    assert run.status == utils.Status.FAILED
+    assert not run.passed
 
 
 def test_subruns(duck):
@@ -402,3 +467,203 @@ def test_nested_task_evaluate_with_retries_coerces_to_one(duck, caplog):
     nested_runs = run.result
     assert isinstance(nested_runs, runs.Runs)
     assert len(nested_runs) == df.shape[0]
+
+
+class RecordingClient(clients.InMemoryClient):
+    """InMemoryClient that records store_run calls for inspection."""
+
+    def __init__(self):
+        super().__init__()
+        self.stored_runs: list[runs.Run] = []
+
+    def store_run(self, run: runs.Run):
+        self.stored_runs.append(run)
+
+
+@pytest.fixture()
+def recording_client(monkeypatch):
+    rc = RecordingClient()
+    monkeypatch.setattr("kaggle_benchmarks.client", rc)
+    return rc
+
+
+def test_failed_run_persisted_with_correct_status(monkeypatch, recording_client):
+    """Change 1: failed runs are always persisted, even in dev mode."""
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+
+    @tasks.task(name="Persist Fail")
+    def bad():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError, match="boom"):
+        bad.run()
+
+    assert len(recording_client.stored_runs) == 1
+    stored = recording_client.stored_runs[0]
+    assert stored.status == utils.Status.FAILED
+    assert "boom" in stored.error_message
+    assert stored.end_time is not None
+
+
+def test_successful_run_stored_with_success_status(recording_client):
+    """Change 1: successful runs are stored with SUCCESS (not RUNNING)."""
+
+    @tasks.task(name="Persist OK")
+    def ok():
+        return True
+
+    ok.run()
+    assert recording_client.stored_runs[0].status == utils.Status.SUCCESS
+
+
+def test_store_run_error_doesnt_mask_task_error(monkeypatch):
+    """Change 1: if store_run raises, the original task error surfaces."""
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+    monkeypatch.setattr(
+        "kaggle_benchmarks.client.store_run",
+        lambda run: (_ for _ in ()).throw(IOError("disk full")),
+    )
+
+    @tasks.task(name="IO Mask")
+    def bad():
+        raise ValueError("original")
+
+    with pytest.raises(ValueError, match="original"):
+        bad.run()
+
+
+def test_store_run_error_swallowed_for_successful_run(monkeypatch, caplog):
+    """A store_run failure on a SUCCESSFUL task is logged, not raised.
+
+    Pre-PR behavior was to propagate the IO error (store_run was unguarded).
+    This PR wraps the call in `_finalize_and_persist` with a try/except so
+    persistence failures never mask the task outcome — true for failed runs
+    (see test_store_run_error_doesnt_mask_task_error) and also for successful
+    ones (this test). Guard against silently regressing back to raising.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+    monkeypatch.setattr(
+        "kaggle_benchmarks.client.store_run",
+        lambda run: (_ for _ in ()).throw(IOError("disk full")),
+    )
+
+    @tasks.task(name="IO OK")
+    def ok():
+        return True
+
+    with caplog.at_level("WARNING", logger="kaggle_benchmarks.tasks"):
+        run = ok.run()  # must not raise
+
+    assert run.status == utils.Status.SUCCESS
+    assert run.result is True
+    assert any("Failed to store run" in r.message for r in caplog.records)
+
+
+def test_nonrecoverable_propagates_despite_suppress():
+    """Change 1: NonRecoverableError always propagates, even with _suppress_raise."""
+
+    @tasks.task(name="Fatal")
+    def fatal():
+        raise tasks.NonRecoverableError("fatal")
+
+    with pytest.raises(tasks.NonRecoverableError):
+        fatal.run(_suppress_raise=True)
+
+
+def test_on_failure_continue_returns_failed_runs():
+    """Change 2: on_failure='continue' includes failures in returned Runs."""
+
+    @tasks.task(name="Mixed")
+    def mixed(x):
+        if x == 2:
+            raise ValueError("fail")
+
+    result = mixed.evaluate(
+        evaluation_data=pd.DataFrame({"x": [1, 2, 3]}),
+        on_failure="continue",
+    )
+    assert len(result) == 3
+    assert len([r for r in result if r.status == utils.Status.SUCCESS]) == 2
+    assert len([r for r in result if r.status == utils.Status.FAILED]) == 1
+
+
+def test_on_failure_rejects_invalid_value():
+    """Typos like on_failure='contiune' must fail loudly, not silently
+    flow through as a falsy comparison against both 'raise' and 'continue'."""
+
+    @tasks.task(name="Validate OnFailure")
+    def ok(x):
+        return True
+
+    with pytest.raises(ValueError, match="on_failure must be 'raise' or 'continue'"):
+        ok.evaluate(
+            evaluation_data=pd.DataFrame({"x": [1]}),
+            on_failure="contiune",  # typo
+        )
+
+
+def test_on_failure_raise_in_batch_mode(monkeypatch):
+    """Change 2: on_failure='raise' (default) raises even in batch mode."""
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task(name="Batch Raise")
+    def bad():
+        raise ValueError("batch boom")
+
+    with pytest.raises(RuntimeError, match="batch boom"):
+        bad.evaluate(on_failure="raise")
+
+
+def test_retry_merge_overwrites_failures():
+    """Change 5: retried successes overwrite earlier failures at the same
+    position, so len(result) == sample count, not accumulated across attempts."""
+    call_counts = [0, 0, 0]
+
+    @tasks.task(name="Merge Retry")
+    def flaky(x):
+        call_counts[x] += 1
+        if x == 1 and call_counts[x] <= 1:
+            raise ValueError("transient")
+
+    result = flaky.evaluate(
+        evaluation_data=pd.DataFrame({"x": [0, 1, 2]}),
+        max_attempts=3,
+        on_failure="continue",
+    )
+
+    assert len(result) == 3  # merged, not 6
+    assert all(r.passed for r in result)
+
+
+def test_on_failure_raise_in_dev_mode(monkeypatch):
+    """Gap 1: on_failure='raise' in dev mode propagates the original exception
+    type (ValueError), not RuntimeError — because in dev mode the exception
+    escapes the joblib worker directly, never reaching the RuntimeError wrapper."""
+    monkeypatch.setattr(config, "continue_with_exceptions", False)
+
+    @tasks.task(name="Dev Raise")
+    def bad():
+        raise ValueError("dev boom")
+
+    with pytest.raises(ValueError, match="dev boom"):
+        bad.evaluate(on_failure="raise")
+
+
+def test_swallowed_failure_persisted_in_batch_mode(monkeypatch):
+    """Gap 3: when contexts.enter swallows a root-level exception in batch mode,
+    the run still gets persisted with status=FAILED via the else branch."""
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    recording_client = RecordingClient()
+    monkeypatch.setattr("kaggle_benchmarks.client", recording_client)
+
+    @tasks.task(name="Swallowed")
+    def bad():
+        raise ValueError("swallowed")
+
+    run = bad.run()
+    # The exception was swallowed — we get a Run back, not an exception.
+    assert run.status == utils.Status.FAILED
+    # The run was persisted via the else branch (no exception escaped).
+    assert len(recording_client.stored_runs) == 1
+    assert recording_client.stored_runs[0].status == utils.Status.FAILED
