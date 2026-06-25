@@ -303,8 +303,19 @@ class ChatRoom(Chat):
                 f"intend to bring them back (which creates a new identity)."
             )
 
-        system = self._build_system_prompt(participant)
         perspective = self._build_perspective(participant)
+
+        if not perspective:
+            raise RuntimeError(
+                f"Cannot generate a reply for {participant.name!r}: the room "
+                f"has no messages visible to this participant yet. Post an "
+                f'opening message with room.post("...") before calling '
+                f"participant.reply(), or have another participant speak "
+                f"first. (Some providers, e.g. Gemini, reject requests that "
+                f"contain no user message.)"
+            )
+
+        system = self._build_system_prompt(participant)
 
         response = participant.llm.respond(
             system=system,

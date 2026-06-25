@@ -521,6 +521,14 @@ Inside `with room:` you only ever do two things:
   response is automatically added to the room transcript and attributed
   to the participant.
 
+> **The room must contain at least one visible message before any
+> `participant.reply()`.** Always open the room with `room.post(...)` so
+> the first speaking LLM has something to react to. A participant cannot
+> speak into a void: some providers (e.g. Gemini via Vertex AI) reject
+> requests that contain only a system prompt and no user message. If
+> you call `reply()` on an empty room, the framework raises
+> `RuntimeError` with a pointer to this rule.
+
 ``` python
 import kaggle_benchmarks as kbench
 
