@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from kaggle_benchmarks.tools.base import (
-    ToolInvocation,
     ToolInvocationLimitExhausted,
     invoke_tool,
 )
@@ -82,14 +81,17 @@ def native_tool_agent(
         for _ in range(max_tool_rounds):
             response = llm.respond(tools=tools, **respond_kwargs)
 
-            # TODO: Use response.tool_calls once respond() returns LLMMessage.
-            tool_calls = response._meta.get("tool_calls")
+            # tool_calls is a list[ToolInvocation] post-normalization:
+            #  - plain Message responses: normalized in respond()'s LLMResponse
+            #    branch (Step 2) or in stream()'s finalize pass (Step 3)
+            #  - LLMMessage responses (e.g., MockedChat): typed field set
+            #    directly by the producer
+            tool_calls = response.tool_calls
             if not tool_calls:
                 exhausted = False
                 break
 
-            for call_data in tool_calls:
-                invocation = ToolInvocation.from_api_dict(call_data)
+            for invocation in tool_calls:
                 result = invoke_tool(invocation, tools)
                 actors.Tool(name=invocation.name).send(result)
 

@@ -17,8 +17,6 @@
 # title: Manual Calculator Tool Calling
 # ---
 # %%
-import json
-
 from kaggle_benchmarks import actors, assertions, llm, messages, task
 
 tool = actors.Actor(name="Tool", role="tool", avatar="🛠️")
@@ -70,7 +68,7 @@ def use_calculator(
     )
 
     tool_call = tool_calls[0]
-    function_args = json.loads(tool_call["function"]["arguments"])
+    function_args = tool_call.arguments
     # Removes 'signature' parameter in thinking mode.
     function_args.pop("signature", None)
     tool_result = ""
@@ -83,7 +81,7 @@ def use_calculator(
         messages.Message(
             sender=tool,
             content=str(tool_result),
-            _meta={"tool_call_id": tool_call["id"]},
+            _meta={"tool_call_id": tool_call.call_id},
         )
     )
 

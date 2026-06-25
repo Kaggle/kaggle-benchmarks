@@ -21,6 +21,7 @@ from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.content_types import images, videos
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.prompting import handler
+from kaggle_benchmarks.tools.base import ToolInvocation
 from tests.mocks import MockedChat
 
 
@@ -68,6 +69,84 @@ def test_respond():
         r = llm.respond()
         assert len(t.messages) == 2
         assert {"messages": [["user", "A"]], "system": None} == json.loads(r.text)
+
+
+class _ToolCallingLLM(actors.LLMChat):
+    """Returns LLMResponse with raw OpenAI-format tool_calls dicts."""
+
+    def __init__(self, tool_calls, **kwargs):
+        super().__init__(name="ToolCaller", **kwargs)
+        self._tool_calls = tool_calls
+
+    def invoke(self, messages, system=None, **kwargs):
+        return LLMResponse(content="", tool_calls=self._tool_calls)
+
+
+def test_respond_normalizes_tool_calls_to_typed_invocations():
+    raw_tool_calls = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "add", "arguments": '{"a": 1, "b": 2}'},
+        },
+        {
+            "id": "call_2",
+            "type": "function",
+            "function": {"name": "mul", "arguments": {"a": 3, "b": 4}},
+        },
+    ]
+    llm = _ToolCallingLLM(tool_calls=raw_tool_calls)
+
+    with chats.new("Tool normalization"):
+        actors.user.send("compute")
+        response = llm.respond()
+
+    normalized = response._meta["tool_calls"]
+    assert len(normalized) == 2
+    assert all(isinstance(tc, ToolInvocation) for tc in normalized)
+    assert normalized[0].name == "add"
+    assert normalized[0].arguments == {"a": 1, "b": 2}
+    assert normalized[0].call_id == "call_1"
+    assert normalized[1].name == "mul"
+    assert normalized[1].arguments == {"a": 3, "b": 4}
+    assert normalized[1].call_id == "call_2"
+
+
+def test_respond_preserves_thought_signature_for_gemini():
+    """Gemini 3.x carriers round-trip via _thought_signature/_thought keys."""
+    raw_tool_calls = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "add", "arguments": {"a": 1}},
+            "_thought_signature": b"sig-bytes",
+            "_thought": True,
+        },
+    ]
+    llm = _ToolCallingLLM(tool_calls=raw_tool_calls)
+
+    with chats.new("Gemini thought round-trip"):
+        actors.user.send("compute")
+        response = llm.respond()
+
+    [normalized] = response._meta["tool_calls"]
+    assert normalized.thought_signature == b"sig-bytes"
+    assert normalized.thought is True
+
+
+@pytest.mark.parametrize(
+    "tool_calls",
+    [pytest.param(None, id="none"), pytest.param([], id="empty_list")],
+)
+def test_respond_with_falsy_tool_calls_sets_meta_to_none(tool_calls):
+    """Both None and [] yield _meta['tool_calls'] is None."""
+    llm = _ToolCallingLLM(tool_calls=tool_calls)
+
+    with chats.new("Falsy tool calls"):
+        actors.user.send("hi")
+        response = llm.respond()
+
+    assert response._meta["tool_calls"] is None
 
 
 def test_chat_context():

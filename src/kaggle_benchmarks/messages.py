@@ -149,6 +149,10 @@ class Message(Generic[T]):
             current_call["function"]["arguments"] = ""
         if args := getattr(tc_chunk.function, "arguments", None):
             current_call["function"]["arguments"] += args
+        if getattr(tc_chunk, "thought_signature", None) is not None:
+            current_call["_thought_signature"] = tc_chunk.thought_signature
+        if getattr(tc_chunk, "thought", None) is not None:
+            current_call["_thought"] = tc_chunk.thought
 
     def stream(self, content: Iterable[Chunk]):
         """Streams content into the message, updating its content and metadata.
@@ -173,4 +177,22 @@ class Message(Generic[T]):
                     self._update_from_tool_call_chunk(tool_call_chunk)
             events.manager.dispatch("new_chunk", self, chunk)
 
+        # Now that all argument chunks have arrived, the JSON is parseable.
+        self._finalize_tool_calls()
         events.manager.dispatch("end_content", self)
+
+    def _finalize_tool_calls(self):
+        """Converts accumulated _meta['tool_calls'] dicts to ToolInvocation.
+
+        Must run after the stream loop completes — partial JSON can't be
+        parsed mid-stream.
+        """
+        from kaggle_benchmarks.tools import base as tool_utils
+
+        raw_calls = self._meta.get("tool_calls")
+        if not raw_calls:
+            return
+        self._meta["tool_calls"] = [
+            tool_utils.ToolInvocation.from_api_dict(tc) if isinstance(tc, dict) else tc
+            for tc in raw_calls
+        ]

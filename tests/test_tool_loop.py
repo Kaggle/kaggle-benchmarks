@@ -14,10 +14,13 @@
 
 """Tests for the tool invocation loop in LLMChat.prompt()."""
 
+from types import SimpleNamespace
+
 import pydantic
 import pytest
 
-from kaggle_benchmarks import assertions, chats
+from kaggle_benchmarks import actors, assertions, chats
+from kaggle_benchmarks.actors.llms import LLMResponse
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.tools.base import (
     ToolInvocation,
@@ -57,20 +60,15 @@ def _make_tool_call_response(
     arguments: dict | None = None,
     call_id: str = "call_1",
 ) -> LLMMessage[str]:
-    """Creates an LLMMessage that simulates a tool call from the LLM.
-
-    Populates _meta["tool_calls"] with the OpenAI-style dict format that
-    native_tool_agent expects.
-    """
-    msg = LLMMessage(sender=None, content="")
-    msg._meta["tool_calls"] = [
-        {
-            "id": call_id,
-            "type": "function",
-            "function": {"name": name, "arguments": arguments},
-        }
-    ]
-    return msg
+    """Simulates an LLM tool call via LLMMessage's typed tool_calls field
+    (the LLMMessage branch of respond() doesn't normalize _meta)."""
+    return LLMMessage(
+        sender=None,
+        content="",
+        tool_calls=[
+            ToolInvocation(name=name, arguments=arguments or {}, call_id=call_id)
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -116,14 +114,70 @@ def _make_tool_call_response(
             None,
             id="missing_id",
         ),
+        pytest.param(
+            {"id": "c5", "function": {"name": "f", "arguments": "null"}},
+            "f",
+            {},
+            "c5",
+            id="json_null_treated_as_no_args",
+        ),
+        # Non-dict JSON kept as raw string; invoke_tool surfaces the error.
+        pytest.param(
+            {"id": "c6", "function": {"name": "f", "arguments": '{"a":'}},
+            "f",
+            '{"a":',
+            "c6",
+            id="malformed_json_kept_as_string",
+        ),
+        pytest.param(
+            {"id": "c7", "function": {"name": "f", "arguments": "[1, 2, 3]"}},
+            "f",
+            "[1, 2, 3]",
+            "c7",
+            id="json_list_kept_as_string",
+        ),
+        pytest.param(
+            {"id": "c8", "function": {"name": "f", "arguments": "42"}},
+            "f",
+            "42",
+            "c8",
+            id="json_scalar_kept_as_string",
+        ),
     ],
 )
 def test_from_api_dict(api_dict, expected_name, expected_args, expected_id):
-    """ToolInvocation.from_api_dict handles various argument formats."""
     invocation = ToolInvocation.from_api_dict(api_dict)
     assert invocation.name == expected_name
     assert invocation.arguments == expected_args
     assert invocation.call_id == expected_id
+
+
+@pytest.mark.parametrize(
+    "api_dict, expected_signature, expected_thought",
+    [
+        pytest.param(
+            {
+                "id": "c1",
+                "function": {"name": "f", "arguments": {}},
+                "_thought_signature": b"sig-bytes",
+                "_thought": True,
+            },
+            b"sig-bytes",
+            True,
+            id="present",
+        ),
+        pytest.param(
+            {"id": "c2", "function": {"name": "f", "arguments": {}}},
+            None,
+            None,
+            id="absent_defaults_to_none",
+        ),
+    ],
+)
+def test_from_api_dict_thought_fields(api_dict, expected_signature, expected_thought):
+    invocation = ToolInvocation.from_api_dict(api_dict)
+    assert invocation.thought_signature == expected_signature
+    assert invocation.thought is expected_thought
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +246,15 @@ def test_invoke_tool_success_sets_output():
 
     assert result.output == 7.0
     assert result.error is None
+
+
+def test_invoke_tool_string_arguments_set_error():
+    invocation = ToolInvocation(name="_add", arguments='{"a": 1, "b":')
+    result = invoke_tool(invocation, [_add])
+
+    assert result.error is not None
+    assert "arguments" in result.error.lower()
+    assert result.output is None
 
 
 # ---------------------------------------------------------------------------
@@ -322,22 +385,16 @@ def test_none_arguments_handled():
 
 def test_multiple_tool_calls_in_single_response():
     """When the LLM requests multiple tools at once, all are invoked."""
-    msg = LLMMessage(sender=None, content="")
-    msg._meta["tool_calls"] = [
-        {
-            "id": "call_1",
-            "type": "function",
-            "function": {"name": "_add", "arguments": {"a": 1, "b": 2}},
-        },
-        {
-            "id": "call_2",
-            "type": "function",
-            "function": {
-                "name": "_multiply",
-                "arguments": {"a": 3, "b": 4},
-            },
-        },
-    ]
+    msg = LLMMessage(
+        sender=None,
+        content="",
+        tool_calls=[
+            ToolInvocation(name="_add", arguments={"a": 1, "b": 2}, call_id="call_1"),
+            ToolInvocation(
+                name="_multiply", arguments={"a": 3, "b": 4}, call_id="call_2"
+            ),
+        ],
+    )
     final_response = LLMMessage(sender=None, content="1+2=3, 3*4=12")
 
     llm = MockedChat(responses=[msg, final_response])
@@ -357,6 +414,54 @@ def test_tool_not_found_through_loop():
     result = llm.prompt("Call the tool.", tools=[_add])
 
     assert result == "That tool doesn't exist."
+
+
+class _StreamingTruncatedToolLLM(actors.LLMChat):
+    """Streams a tool-call chunk with truncated arguments JSON."""
+
+    def __init__(self):
+        super().__init__(name="StreamingTruncated")
+        self.stream_responses = True
+
+    def invoke(self, messages, system=None, **kwargs):
+        def chunks():
+            yield LLMResponse(
+                content="",
+                tool_calls=[
+                    SimpleNamespace(
+                        index=0,
+                        id="call_1",
+                        function=SimpleNamespace(
+                            name="_add", arguments='{"a": 1, "b":'
+                        ),
+                    )
+                ],
+            )
+
+        return chunks()
+
+
+def test_truncated_streaming_json_surfaces_clean_error_end_to_end():
+    """End-to-end chain: stream → finalize → invoke_tool surfaces error."""
+    llm = _StreamingTruncatedToolLLM()
+
+    with chats.new("Truncated JSON loop") as chat:
+        with pytest.raises(ToolInvocationLimitExhausted):
+            llm.prompt(
+                "Compute 1+2",
+                tools=[_add],
+                extra_api_params={"max_tool_rounds": 1},
+            )
+
+        tool_loop = next(item for item in chat.history if isinstance(item, chats.Chat))
+        tool_results = [
+            m for m in tool_loop.history if isinstance(m.content, ToolInvocationResult)
+        ]
+        assert len(tool_results) == 1
+        result = tool_results[0].content
+        assert result.error is not None
+        assert "could not be parsed as JSON" in result.error
+        assert '{"a": 1, "b":' in result.error
 
 
 # ---------------------------------------------------------------------------

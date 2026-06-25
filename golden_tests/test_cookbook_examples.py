@@ -179,9 +179,17 @@ def assess_with_judge_task(llm, judge_llm) -> None:
 @pytest.mark.parametrize(
     "llm, api",
     [
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
-    ]
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"),
+            "genai",
+            id="genai-google/gemini-2.5-flash",
+        ),
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"),
+            "openai",
+            id="openai-google/gemini-2.5-flash",
+        ),
+    ],
 )
 @pytest.mark.parametrize("judge_llm_name", JUDGE_LLM_NAMES)
 def test_assess_with_judge(llm, api, judge_llm_name):
@@ -430,9 +438,17 @@ def dataset_eval_with_failure(llm, df) -> tuple[int, int]:
 @pytest.mark.parametrize(
     "llm, api",
     [
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"), "genai", id="genai-google/gemini-2.5-flash"),
-        pytest.param(kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"), "openai", id="openai-google/gemini-2.5-flash"),
-    ]
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"),
+            "genai",
+            id="genai-google/gemini-2.5-flash",
+        ),
+        pytest.param(
+            kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"),
+            "openai",
+            id="openai-google/gemini-2.5-flash",
+        ),
+    ],
 )
 def test_dataset_eval_with_failure_run(llm, api):
     run = dataset_eval_with_failure.run(llm, df=df)
@@ -882,6 +898,34 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
 )
 @kbench.task()
 def test_simple_tool_use(llm):
+    problem = "What is 50 plus 25?"
+    expected_answer = 75.0
+
+    final_answer = llm.prompt(problem, tools=[run_simple_calculator])
+    kbench.assertions.assert_tool_was_invoked(run_simple_calculator)
+
+    kbench.assertions.assert_true(
+        str(int(expected_answer)) in final_answer,
+        f"Expected '{expected_answer}' to be in the final answer, got '{final_answer}'.",
+    )
+
+
+# %%
+# --- Test Case: Tool Use (Streaming) ---
+# Real-world chunk shapes vary by backend; unit tests can only fake one shape.
+
+STREAMING_TOOL_LLM_NAMES = {
+    "google/gemini-3.5-flash",
+    "anthropic/claude-sonnet-4-6@default",
+}
+
+
+@benchmark_test(include=STREAMING_TOOL_LLM_NAMES)
+@kbench.task()
+def test_streaming_tool_use(llm):
+    """Same as test_simple_tool_use but with streaming enabled."""
+    llm.stream_responses = True
+
     problem = "What is 50 plus 25?"
     expected_answer = 75.0
 

@@ -14,12 +14,14 @@
 
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pydantic
 import pytest
 
 from kaggle_benchmarks import chats, messages, user
 from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks.tools.base import ToolInvocation
 from tests.mocks import MockedChat
 
 
@@ -100,7 +102,7 @@ def test_streaming_with_token_counts():
 
 
 def test_tool_calls_property():
-    """Tests that the tool_calls property correctly retrieves data from _meta."""
+    """The property shim is value-type agnostic — raw dicts work too."""
     mock_tool_calls = [{"id": "call_abc", "type": "function"}]
 
     # Message with tool calls
@@ -112,3 +114,70 @@ def test_tool_calls_property():
 
     assert msg_with_tools.tool_calls == mock_tool_calls
     assert msg_without_tools.tool_calls is None
+
+
+def _make_tool_call_chunk(
+    index, id_=None, name=None, arguments=None, thought_signature=None, thought=None
+):
+    """OpenAI-style streaming delta; thought fields mirror GenAI's synthesis."""
+    return SimpleNamespace(
+        index=index,
+        id=id_,
+        function=SimpleNamespace(name=name, arguments=arguments),
+        thought_signature=thought_signature,
+        thought=thought,
+    )
+
+
+def test_streaming_no_tool_calls_leaves_meta_unset():
+    def chunk_generator():
+        yield LLMResponse(content="Hello ", meta={"input_tokens": 5})
+        yield LLMResponse(content="world", meta={"input_tokens": 5, "output_tokens": 2})
+
+    msg = messages.Message(content="", sender=None)
+    msg.stream(chunk_generator())
+
+    assert msg.content == "Hello world"
+    assert "tool_calls" not in msg._meta
+
+
+def test_streaming_content_and_tool_calls_finalized():
+    """Interleaved content + tool_calls chunks → typed ToolInvocation post-finalize.
+    Also asserts idempotency of _finalize_tool_calls."""
+
+    def chunk_generator():
+        yield LLMResponse(
+            content="Let me ",
+            tool_calls=[
+                _make_tool_call_chunk(
+                    index=0,
+                    id_="call_1",
+                    name="add",
+                    arguments='{"a":',
+                    thought_signature=b"sig-bytes",
+                    thought=True,
+                )
+            ],
+        )
+        yield LLMResponse(
+            content="compute. ",
+            tool_calls=[_make_tool_call_chunk(index=0, arguments=' 1, "b": 2}')],
+        )
+        yield LLMResponse(content="Done.")
+
+    msg = messages.Message(content="", sender=None)
+    msg.stream(chunk_generator())
+
+    assert msg.content == "Let me compute. Done."
+    [tc] = msg._meta["tool_calls"]
+    assert isinstance(tc, ToolInvocation)
+    assert tc.name == "add"
+    assert tc.arguments == {"a": 1, "b": 2}
+    assert tc.call_id == "call_1"
+    assert tc.thought_signature == b"sig-bytes"
+    assert tc.thought is True
+
+    # Second finalize is a no-op.
+    msg._finalize_tool_calls()
+    [second] = msg._meta["tool_calls"]
+    assert second is tc

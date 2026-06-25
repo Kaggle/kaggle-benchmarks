@@ -216,6 +216,66 @@ def test_dump_image_message_with_extra_api_params():
     ]
 
 
+# Assistant-role sender is required to exercise the dump_text_message tool_calls branch.
+_assistant_actor = actors.Actor(name="LLM", role="assistant", avatar="🤖")
+
+
+def test_dump_text_message_with_meta_tool_invocation():
+    serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
+    msg = messages.Message(
+        content="here you go",
+        sender=_assistant_actor,
+        _meta={
+            "tool_calls": [
+                ToolInvocation(name="add", call_id="call_1", arguments={"a": 1, "b": 2})
+            ]
+        },
+    )
+    [out] = list(serializer.dump_message(msg))
+    assert out["role"] == "assistant"
+    assert out["content"] == "here you go"
+    assert out["tool_calls"] == [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "add",
+                "arguments": '{"a": 1, "b": 2}',
+            },
+        }
+    ]
+
+
+def test_dump_text_message_with_string_arguments_passthrough():
+    """String args (from JSONDecodeError fallback) pass through verbatim."""
+    serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
+    msg = messages.Message(
+        content="",
+        sender=_assistant_actor,
+        _meta={
+            "tool_calls": [
+                ToolInvocation(name="add", call_id="call_1", arguments='{"a":')
+            ]
+        },
+    )
+    [out] = list(serializer.dump_message(msg))
+    assert out["tool_calls"][0]["function"]["arguments"] == '{"a":'
+
+
+def test_dump_text_message_missing_call_id_defaults_to_empty_string():
+    """None call_id → "" (OpenAI spec requires id)."""
+    serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
+    msg = messages.Message(
+        content="",
+        sender=_assistant_actor,
+        _meta={
+            "tool_calls": [ToolInvocation(name="add", call_id=None, arguments={"a": 1})]
+        },
+    )
+    [out] = list(serializer.dump_message(msg))
+    assert out["tool_calls"][0]["id"] == ""
+
+
 def test_dump_chat():
     serializer = openai_serializer.OpenAICompletionSerializer(roles_mapping={})
     msgs = [

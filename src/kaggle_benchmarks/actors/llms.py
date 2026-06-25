@@ -92,6 +92,7 @@ import json
 import re
 import typing
 import uuid
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, TypeVar
 
 import openai
@@ -103,6 +104,7 @@ from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
+from kaggle_benchmarks.tools import base as tool_utils
 from kaggle_benchmarks.tools import functions, native
 
 if TYPE_CHECKING:
@@ -331,7 +333,14 @@ class LLMChat(actors.Actor):
         if isinstance(invoke_response, LLMResponse):
             # A response can have either content, tool_calls, or both in some cases.
             response.content = invoke_response.content or ""
-            response._meta["tool_calls"] = invoke_response.tool_calls
+            # Normalize provider dicts → typed ToolInvocation for downstream.
+            if invoke_response.tool_calls:
+                response._meta["tool_calls"] = [
+                    tool_utils.ToolInvocation.from_api_dict(tc)
+                    for tc in invoke_response.tool_calls
+                ]
+            else:
+                response._meta["tool_calls"] = None
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
             response.status = utils.Status.SUCCESS
@@ -562,6 +571,9 @@ class GoogleGenAI(LLMChat):
             **_extract_extra_usage_metadata(usage),
         }
 
+    # "medium" exists for OpenAI's `reasoning_effort`; GenAI's ThinkingLevel
+    # enum only has LOW/HIGH, so "MEDIUM" triggers a UserWarning from the
+    # SDK. Left as-is to surface the asymmetry rather than silently round.
     _REASONING_LEVEL_MAP = {
         "none": None,
         "low": "LOW",
@@ -601,12 +613,36 @@ class GoogleGenAI(LLMChat):
         # TODO: Streaming does not capture reasoning_traces. Thought parts
         # are filtered out by _extract_text, so last_reasoning_traces() will
         # return None when streaming is enabled.
-        # We currently only support text outputs
         for chunk in response_stream:
+            tool_calls = None
+            if chunk.candidates and chunk.candidates[0].content:
+                parts = chunk.candidates[0].content.parts or []
+                fn_parts = [p for p in parts if p.function_call]
+                if fn_parts:
+                    tool_calls = []
+                    # Per-chunk enumerate assumes GenAI emits each call atomically.
+                    # If calls ever span chunks, switch to a per-stream counter.
+                    for i, part in enumerate(fn_parts):
+                        fc = part.function_call
+                        tc_chunk = SimpleNamespace(
+                            index=i,
+                            id=fc.id or f"call_{uuid.uuid4().hex[:8]}",
+                            function=SimpleNamespace(
+                                name=fc.name,
+                                arguments=json.dumps(dict(fc.args))
+                                if fc.args
+                                else "{}",
+                            ),
+                            thought_signature=getattr(part, "thought_signature", None),
+                            thought=getattr(part, "thought", None),
+                        )
+                        tool_calls.append(tc_chunk)
+
             yield LLMResponse(
                 content=self._extract_text(chunk)
                 if chunk.candidates
                 else (chunk.text or ""),
+                tool_calls=tool_calls,
                 meta=self._get_usage_meta(chunk.usage_metadata),
             )
 
