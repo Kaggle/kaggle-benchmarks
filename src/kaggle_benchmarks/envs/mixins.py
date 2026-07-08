@@ -22,9 +22,23 @@ class TemporalDirectoryMixin:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.directory = Path(self.temp_dir.name)
 
-    def _check_path(self, path: str | Path):
+    def _resolve_checked_path(self, path: str | Path) -> Path:
+        """Resolve ``path`` relative to :attr:`directory` and verify it stays inside.
+
+        Rejects absolute paths and any relative path that escapes the
+        temporary directory via ``..`` traversal (see
+        Kaggle/kaggle-benchmarks#159).
+        """
         if os.path.isabs(path):
             raise ValueError(f"Absolute paths are not supported: {path}")
+
+        base = self.directory.resolve()
+        candidate = (base / path).resolve()
+
+        if candidate != base and base not in candidate.parents:
+            raise ValueError(f"Path escapes temporary directory: {path}")
+
+        return candidate
 
     def __getitem__(self, path: str | Path) -> str:
         """Read the content of a file in the temporary directory."""
@@ -32,17 +46,13 @@ class TemporalDirectoryMixin:
             return file.read()
 
     def __setitem__(self, path: str | Path, content: str):
-        """Read the content of a file in the temporary directory."""
-        self._check_path(path)
-
-        full_path = self.directory / path
+        """Write ``content`` to a file in the temporary directory."""
+        full_path = self._resolve_checked_path(path)
         full_path.parent.mkdir(exist_ok=True)
 
-        with self.open(path, "w") as file:
+        with open(full_path, "w") as file:
             file.write(content)
 
     def open(self, path: str | Path, mode: str = "r"):
-        self._check_path(path)
-
-        full_path = self.directory / path
+        full_path = self._resolve_checked_path(path)
         return open(full_path, mode=mode)
