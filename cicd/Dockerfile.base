@@ -1,6 +1,6 @@
 # Create an image that will run personal benchmarks on Kaggle
 # BASE LAYER: Contains OS, system deps, and third-party libraries.
-FROM python:3.11-slim
+FROM python:3.11
 
 COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /uvx /bin/
 
