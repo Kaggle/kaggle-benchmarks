@@ -417,7 +417,7 @@ class OpenAI(LLMChat):
         }
 
     def _should_remove_seed(self) -> bool:
-        unsupported_prefixes = ("google/", "openai/gpt-5.4-pro")
+        unsupported_prefixes = ("google/", "openai/gpt-5.4-pro", "openai/gpt-5.6", "xai/grok-4.5")
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
 
     def invoke(
