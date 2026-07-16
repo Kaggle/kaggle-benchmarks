@@ -315,7 +315,7 @@ def score_game(x_player, o_player, round):
             x_move = llm.prompt(
                 f"""I am playing tic-tac-toe.
                 It's my turn as player {game.current_player}.
-                What is the best next move (0-indexed)? Only give your answer in terms of of `col` and `row` and nothing else:\n```\n{game}\n```
+                What is the best next move (0-indexed)? Only give your answer in terms of `col` and `row` and nothing else:\n```\n{game}\n```
                 """,
                 schema=TicTacToeMove,
             )

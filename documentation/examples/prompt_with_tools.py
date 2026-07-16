@@ -17,7 +17,7 @@
 # title: Example of using `prompt` with `tools` parameter.
 # ---
 # - **Automatic tool calling is currently only supported via the `Gemini`` API**
-# - **For manual tool calling with with `OpenAI` API, please refer to the example in `use_calculator_tool.py`.**
+# - **For manual tool calling with `OpenAI` API, please refer to the example in `use_calculator_tool.py`.**
 
 # %%
 import kaggle_benchmarks as kbench

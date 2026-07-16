@@ -17,8 +17,8 @@
 # ## How to Send Images to LLM
 #
 # You can send images using a direct URL or a Base64 string. We also provide helper function to load a local image to base64.
-# - When using URL, the image image format is automatically guessed.
-# - When using Base64, you need specify the image format if it's different from default jpeg.
+# - When using URL, the image format is automatically guessed.
+# - When using Base64, you need to specify the image format if it's different from default jpeg.
 # - Use `from_path`` to load from local images.
 # %%
 import httpx
