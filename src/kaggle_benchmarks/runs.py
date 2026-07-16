@@ -216,6 +216,8 @@ class Runs(Generic[T], abc.MutableSequence):
         return Runs([r for r in self.runs if r.status == utils.Status.FAILED])
 
     def as_dataframe(self) -> pd.DataFrame:
+        if not self.runs:
+            return pd.DataFrame().rename_axis("run_id")
         return pd.DataFrame(
             [
                 t.params
