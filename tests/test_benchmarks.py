@@ -308,6 +308,29 @@ def test_runs_completed_and_errored_partition(monkeypatch):
     assert errored.status == utils.Status.FAILED
 
 
+def test_as_dataframe_returns_empty_when_no_runs(monkeypatch):
+    """Runs.as_dataframe() returns an empty DataFrame when there are no runs,
+    rather than raising KeyError trying to set the non-existent 'run_id' index.
+    """
+    monkeypatch.setattr(config, "continue_with_exceptions", True)
+
+    @tasks.task()
+    def always_fails(x: str) -> bool:
+        raise ValueError(f"intentional failure for {x}")
+
+    df = pd.DataFrame({"x": ["a", "b"]})
+    results = always_fails.evaluate(
+        evaluation_data=df,
+        on_failure="continue",
+        max_attempts=1,
+    )
+
+    assert len(results.completed_runs) == 0
+    empty_df = results.completed_runs.as_dataframe()
+    assert empty_df.empty
+    assert len(empty_df) == 0
+
+
 def test_run_passed_false_when_status_failed(monkeypatch):
     """Run.passed reports False when the run hit a general exception, regardless
     of result type's default `passed(value)` behavior.
