@@ -227,6 +227,38 @@ class Runs(Generic[T], abc.MutableSequence):
             ]
         ).set_index("run_id")
 
+    def leaderboard_data(self, model_by: str = "llm", benchmark_name: str = "Benchmark"):
+        """Aggregate these runs into chart-ready ``LeaderboardData``.
+
+        This is the entry point to the native visualization library: it
+        computes per-model scalar metrics (score, cost, latency, tokens) and a
+        per-task success matrix that every chart type can consume.
+        """
+        from kaggle_benchmarks.ui.viz.data import LeaderboardData
+
+        return LeaderboardData.from_runs(
+            self, model_by=model_by, benchmark_name=benchmark_name
+        )
+
+    def visualize(
+        self,
+        model_by: str = "llm",
+        benchmark_name: str = "Benchmark",
+        **kwargs,
+    ):
+        """Return an interactive benchmark visualization dashboard.
+
+        Convenience wrapper around ``leaderboard_data`` + ``viz.dashboard`` so a
+        set of runs can be explored (Pareto scatter, bar leaderboard, heatmap,
+        win-rate matrix, Elo plot) with one call.
+        """
+        from kaggle_benchmarks.ui.viz.dashboard import dashboard
+
+        data = self.leaderboard_data(
+            model_by=model_by, benchmark_name=benchmark_name
+        )
+        return dashboard(data, **kwargs)
+
     def group_by(self, by="llm"):
         from kaggle_benchmarks.ui import panel
 
