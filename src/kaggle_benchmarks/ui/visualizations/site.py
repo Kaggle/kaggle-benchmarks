@@ -37,7 +37,7 @@ import base64
 import json
 
 from bokeh.embed import json_item
-from bokeh.resources import CDN
+from bokeh.resources import CDN, INLINE
 
 from kaggle_benchmarks.ui.visualizations import charts, theme
 from kaggle_benchmarks.ui.visualizations.config import VIEW_TYPES, ChartConfig
@@ -108,12 +108,21 @@ def generate_site(
     data: LeaderboardData,
     *,
     title: str = "Kaggle Benchmarks",
+    inline: bool = True,
 ) -> str:
     """Return a complete, self-contained HTML document for ``data``.
 
-    The result has no external dependency except the Bokeh CDN JS (needed to
-    paint the charts). Everything else -- data, every chart state, the chip and
-    dropdown logic, the CSV download -- is inlined.
+    Args:
+        data: The benchmark to render.
+        title: Browser tab / page title.
+        inline: When ``True`` (default) the Bokeh runtime JS is embedded
+            directly in the page, so it renders with NO network access at all
+            (needed for offline / locked-down web previews such as VS Code's
+            Live Server). When ``False`` the smaller CDN ``<script>`` tags are
+            used instead, producing a much smaller file that requires internet.
+
+    Everything else -- data, every chart state, the chip and dropdown logic,
+    the CSV download -- is always inlined.
     """
     views = _available_views(data)
     palette = theme.get_palette()
@@ -123,9 +132,14 @@ def generate_site(
 
     plots = _render_all(data, views)
     plots_json = _safe_json(plots)
-    bokeh_scripts = "\n".join(
-        f'<script src="{src}" crossorigin="anonymous"></script>' for src in CDN.js_files
-    )
+    if inline:
+        # Embed the runtime so the page works with zero network access.
+        bokeh_scripts = INLINE.render_js()
+    else:
+        bokeh_scripts = "\n".join(
+            f'<script src="{src}" crossorigin="anonymous"></script>'
+            for src in CDN.js_files
+        )
 
     metric_labels = {k: data.metric(k).label for k in keys}
     view_labels = {v: VIEW_TYPES[v] for v in views}
@@ -172,9 +186,10 @@ def write_site(
     path: str,
     *,
     title: str = "Kaggle Benchmarks",
+    inline: bool = True,
 ) -> str:
     """Write the static site to ``path`` and return the path."""
-    html = generate_site(data, title=title)
+    html = generate_site(data, title=title, inline=inline)
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)
     return path

@@ -337,12 +337,26 @@ class TestSite:
         assert html.startswith("<!DOCTYPE html>")
         # The Bokeh runtime is loaded and charts are embedded client-side.
         assert "Bokeh.embed.embed_item" in html
-        assert "cdn.bokeh.org" in html
         # Chips, axis dropdowns, and CSV download are all present.
         assert 'id="chips"' in html
         assert 'id="sel-x"' in html and 'id="sel-y"' in html
         assert "Download data (CSV)" in html
         assert data.name in html
+
+    def test_default_inlines_bokeh_no_network(self, data):
+        # Default must work offline (VS Code Live Server / locked-down preview):
+        # the Bokeh runtime is embedded, with no external CDN <script src>.
+        html = viz.generate_site(data)
+        assert "cdn.bokeh.org" not in html
+        assert "BokehJS" in html or "Bokeh.set_log_level" in html
+        # Sanity: an inline runtime makes the doc large.
+        assert len(html) > 1_000_000
+
+    def test_cdn_mode_uses_external_scripts(self, data):
+        html = viz.generate_site(data, inline=False)
+        assert "cdn.bokeh.org" in html
+        # CDN mode is dramatically smaller than the inlined runtime.
+        assert len(html) < len(viz.generate_site(data))
 
     def test_site_embeds_every_view(self, data):
         import json

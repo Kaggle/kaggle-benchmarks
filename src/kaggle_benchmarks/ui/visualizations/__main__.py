@@ -14,8 +14,11 @@
 
 """See the benchmark visualizations, two ways.
 
-Default -- write a self-contained web page you can just open in a browser
-(chips, axis dropdowns, and Pareto toggle all work client-side, no server)::
+Default -- write a self-contained ``index.html`` at the repo root you can just
+open in a browser (chips, axis dropdowns, and Pareto toggle all work
+client-side, no server). Writing ``index.html`` is what lets the VS Code
+"Live Server" / web-preview button pick it up automatically; the Bokeh runtime
+is inlined so it renders even with no network access::
 
     python -m kaggle_benchmarks.ui.visualizations
     python -m kaggle_benchmarks.ui.visualizations -o /tmp/frontier.html
@@ -36,6 +39,19 @@ from kaggle_benchmarks.ui.visualizations.demo import demo_data
 from kaggle_benchmarks.ui.visualizations.site import write_site
 
 
+def _default_output() -> str:
+    """Repo-root ``index.html`` so the Live Server preview serves it by default.
+
+    Walk up from this file to the project root (the dir holding pyproject.toml)
+    and target ``index.html`` there. Fall back to the CWD if not found.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").exists():
+            return str(parent / "index.html")
+    return "index.html"
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="kaggle_benchmarks.ui.visualizations",
@@ -49,8 +65,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="benchmark.html",
-        help="Static page output path (default: benchmark.html).",
+        default=None,
+        help="Static page output path (default: <repo-root>/index.html).",
+    )
+    parser.add_argument(
+        "--cdn",
+        action="store_true",
+        help="Load Bokeh from CDN (smaller file, needs internet) instead of "
+        "inlining the runtime.",
     )
     parser.add_argument(
         "--port", type=int, default=5006, help="Port for --serve (default 5006)."
@@ -75,9 +97,11 @@ def main(argv: list[str] | None = None) -> None:
         app.serve(port=args.port, address=args.address, show=not args.no_open)
         return
 
-    path = Path(write_site(data, args.output)).resolve()
+    output = args.output or _default_output()
+    path = Path(write_site(data, output, inline=not args.cdn)).resolve()
     print(f"Wrote interactive benchmark page to {path}")
-    print(f"Open it in a browser:  file://{path}")
+    print("Open it in the VS Code web preview (Live Server), or in a browser:")
+    print(f"  file://{path}")
     if not args.no_open:
         try:
             webbrowser.open(f"file://{path}")
