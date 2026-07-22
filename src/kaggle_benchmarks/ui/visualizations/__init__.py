@@ -19,14 +19,23 @@ visualization type from data so a single component serves any metric pairing,
 auto-highlights Pareto frontiers, and serializes view state into shareable deep
 links.
 
-Quick start::
+Quick start (in a notebook)::
 
     from kaggle_benchmarks.ui import visualizations as viz
 
     data = viz.demo_data()            # or viz.from_runs(my_runs)
-    viz.dashboard(data)               # renders in a notebook
+    viz.dashboard(data)               # renders inline in a notebook
 
-    # Or build a single static chart for export:
+Launch as a standalone web app (outside a notebook)::
+
+    # From the shell -- opens http://localhost:5006
+    python -m kaggle_benchmarks.ui.visualizations
+
+    # Or programmatically
+    viz.dashboard(viz.demo_data()).serve()
+
+Build a single static chart for export::
+
     fig = viz.build_chart(data, viz.ChartConfig(view="scatter"))
     viz.export.to_svg(fig)
 """

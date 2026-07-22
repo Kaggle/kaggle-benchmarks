@@ -33,7 +33,7 @@ import io
 
 import panel as pn
 
-from kaggle_benchmarks.ui.visualizations import charts, export
+from kaggle_benchmarks.ui.visualizations import charts, export, theme
 from kaggle_benchmarks.ui.visualizations.config import VIEW_TYPES, ChartConfig
 from kaggle_benchmarks.ui.visualizations.data import LeaderboardData
 
@@ -192,6 +192,47 @@ class BenchmarkDashboard:
     def _html_callback(self) -> io.BytesIO:
         fig = charts.build_chart(self.data, self.config)
         return io.BytesIO(export.to_html(fig).encode("utf-8"))
+
+    # --- standalone app ----------------------------------------------------
+
+    def template(self) -> pn.template.BootstrapTemplate:
+        """Wrap the dashboard in a full-page, Kaggle-branded app template.
+
+        This is what turns the notebook component into a standalone web page:
+        a titled header bar plus the dashboard in the main area, ready to be
+        marked ``.servable()`` and served over HTTP by ``panel serve``.
+        """
+        template = pn.template.BootstrapTemplate(
+            title="Kaggle Benchmarks",
+            header_background=theme.KAGGLE_BLUE,
+            theme="dark" if theme.get_palette().name == "dark" else "default",
+        )
+        template.main.append(self.__panel__())
+        return template
+
+    def servable(self) -> pn.viewable.Viewable:
+        """Mark the app servable so ``panel serve`` picks it up.
+
+        Usage::
+
+            panel serve app.py            # where app.py calls dashboard(...).servable()
+        """
+        return self.template().servable()
+
+    def serve(self, *, port: int = 5006, show: bool = False, **kwargs):
+        """Launch a standalone web server for this dashboard and block.
+
+        This is the "open the app" entry point when you are NOT in a notebook::
+
+            from kaggle_benchmarks.ui import visualizations as viz
+            viz.dashboard(viz.demo_data()).serve()   # -> http://localhost:5006
+
+        Args:
+            port: TCP port to bind.
+            show: Open a browser tab automatically.
+            **kwargs: Forwarded to :func:`panel.serve`.
+        """
+        return pn.serve(self.template(), port=port, show=show, **kwargs)
 
     # --- layout ------------------------------------------------------------
 

@@ -367,3 +367,17 @@ class TestDashboard:
         dash = viz.dashboard(d)
         # Single scalar metric => no scatter/heatmap/etc, just the bar table.
         assert list(dash._view_chips.options.values()) == ["bars"]
+
+    def test_template_is_full_page_app(self, data):
+        # The standalone app path: a servable full-page template that
+        # `panel serve` / `.serve()` can host over HTTP.
+        import panel as pn
+
+        pn.extension()
+        template = viz.dashboard(data).template()
+        with io.StringIO() as f:
+            template.save(f)
+            f.seek(0)
+            html = f.read()
+        assert "Kaggle Benchmarks" in html
+        assert len(html) > 1000
