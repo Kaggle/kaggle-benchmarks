@@ -38,6 +38,17 @@ data = viz.demo_data()
 viz.dashboard(data)
 
 # %% [markdown]
+# ## A shareable, no-server web page
+#
+# `write_site` bundles every view, the chips, the axis dropdowns, and the CSV
+# download into a single self-contained HTML file whose controls run entirely
+# in the browser. Open it with a double-click — no Python server needed — which
+# makes it easy to hand to a PM or designer, or to run from the shell with
+# `python -m kaggle_benchmarks.ui.visualizations`.
+# %%
+viz.write_site(data, "benchmark.html")
+
+# %% [markdown]
 # ## A single static chart
 #
 # Every chart is a plain Bokeh figure, so you can build one directly for export

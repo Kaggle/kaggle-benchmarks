@@ -327,6 +327,57 @@ class TestExport:
 
 
 # ---------------------------------------------------------------------------
+# Static client-side site (FR1.2 / FR4.1)
+# ---------------------------------------------------------------------------
+
+
+class TestSite:
+    def test_generate_site_is_self_contained(self, data):
+        html = viz.generate_site(data)
+        assert html.startswith("<!DOCTYPE html>")
+        # The Bokeh runtime is loaded and charts are embedded client-side.
+        assert "Bokeh.embed.embed_item" in html
+        assert "cdn.bokeh.org" in html
+        # Chips, axis dropdowns, and CSV download are all present.
+        assert 'id="chips"' in html
+        assert 'id="sel-x"' in html and 'id="sel-y"' in html
+        assert "Download data (CSV)" in html
+        assert data.name in html
+
+    def test_site_embeds_every_view(self, data):
+        import json
+        import re
+
+        html = viz.generate_site(data)
+        payload = re.search(r'id="plots-data">(.*?)</script>', html, re.S).group(1)
+        plots = json.loads(payload)
+        # Non-scatter views each contribute one plot keyed by the view token.
+        for view in ("bars", "heatmap", "winrate", "elo", "passk"):
+            assert any(k == view or k.startswith(view + "|") for k in plots)
+        # Scatter contributes several axis-pair states.
+        assert any(k.startswith("scatter|") for k in plots)
+
+    def test_write_site_roundtrips(self, data, tmp_path):
+        out = tmp_path / "bench.html"
+        path = viz.write_site(data, str(out))
+        assert out.exists()
+        assert out.read_text(encoding="utf-8").startswith("<!DOCTYPE html>")
+        assert path == str(out)
+
+    def test_site_escapes_benchmark_name(self):
+        d = LeaderboardData(
+            name="<script>Evil & Co</script>",
+            models=["a", "b"],
+            metrics={"score": Metric("score", "Score", fmt="percent")},
+            scores={"a": {"score": 0.5}, "b": {"score": 0.7}},
+        )
+        html = viz.generate_site(d)
+        # The raw name must not appear unescaped in the HTML shell.
+        assert "<script>Evil" not in html
+        assert "&lt;script&gt;Evil" in html
+
+
+# ---------------------------------------------------------------------------
 # Dashboard (FR1.2, FR3.1)
 # ---------------------------------------------------------------------------
 

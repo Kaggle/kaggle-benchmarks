@@ -26,13 +26,18 @@ Quick start (in a notebook)::
     data = viz.demo_data()            # or viz.from_runs(my_runs)
     viz.dashboard(data)               # renders inline in a notebook
 
-Launch as a standalone web app (outside a notebook)::
+See it as a clickable web page (no server, just open the file)::
 
-    # From the shell -- opens http://localhost:5006
+    # Writes benchmark.html -- double-click it; chips/axes work in the browser
     python -m kaggle_benchmarks.ui.visualizations
 
     # Or programmatically
-    viz.dashboard(viz.demo_data()).serve()
+    viz.write_site(viz.demo_data(), "benchmark.html")
+
+Launch as a live web app (needs a running Python server)::
+
+    python -m kaggle_benchmarks.ui.visualizations --serve
+    viz.dashboard(viz.demo_data()).serve()   # -> http://localhost:5006
 
 Build a single static chart for export::
 
@@ -62,6 +67,7 @@ from kaggle_benchmarks.ui.visualizations.pareto import (
     PointND,
     pareto_frontier,
 )
+from kaggle_benchmarks.ui.visualizations.site import generate_site, write_site
 
 __all__ = [
     "BenchmarkDashboard",
@@ -78,6 +84,8 @@ __all__ = [
     "demo_data",
     "export",
     "from_runs",
+    "generate_site",
     "pareto_frontier",
     "theme",
+    "write_site",
 ]

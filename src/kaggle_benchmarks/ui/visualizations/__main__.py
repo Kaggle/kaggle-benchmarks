@@ -12,46 +12,77 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Launch the benchmark visualization dashboard as a standalone web app.
+"""See the benchmark visualizations, two ways.
 
-    python -m kaggle_benchmarks.ui.visualizations            # demo data
-    python -m kaggle_benchmarks.ui.visualizations --port 8080
+Default -- write a self-contained web page you can just open in a browser
+(chips, axis dropdowns, and Pareto toggle all work client-side, no server)::
 
-Then open the printed http://localhost:<port> URL in a browser. This is the
-"open the app" entry point for anyone not working inside a notebook.
+    python -m kaggle_benchmarks.ui.visualizations
+    python -m kaggle_benchmarks.ui.visualizations -o /tmp/frontier.html
+
+Live server -- run the interactive Panel app over HTTP::
+
+    python -m kaggle_benchmarks.ui.visualizations --serve --port 5006
 """
 
 from __future__ import annotations
 
 import argparse
+import webbrowser
+from pathlib import Path
 
 from kaggle_benchmarks.ui.visualizations.dashboard import dashboard
 from kaggle_benchmarks.ui.visualizations.demo import demo_data
+from kaggle_benchmarks.ui.visualizations.site import write_site
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="kaggle_benchmarks.ui.visualizations",
-        description="Serve the benchmark visualization dashboard.",
+        description="Generate or serve the benchmark visualization dashboard.",
     )
     parser.add_argument(
-        "--port", type=int, default=5006, help="Port to serve on (default 5006)."
+        "--serve",
+        action="store_true",
+        help="Run the live Panel web app instead of writing a static page.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="benchmark.html",
+        help="Static page output path (default: benchmark.html).",
+    )
+    parser.add_argument(
+        "--port", type=int, default=5006, help="Port for --serve (default 5006)."
     )
     parser.add_argument(
         "--address",
         default="localhost",
-        help="Address to bind (use 0.0.0.0 to expose externally).",
+        help="Bind address for --serve (use 0.0.0.0 to expose externally).",
     )
     parser.add_argument(
-        "--no-show",
+        "--no-open",
         action="store_true",
-        help="Do not try to open a browser tab automatically.",
+        help="Do not open a browser automatically.",
     )
     args = parser.parse_args(argv)
 
-    app = dashboard(demo_data())
-    print(f"Serving benchmark dashboard on http://{args.address}:{args.port}")
-    app.serve(port=args.port, address=args.address, show=not args.no_show)
+    data = demo_data()
+
+    if args.serve:
+        app = dashboard(data)
+        print(f"Serving benchmark dashboard on http://{args.address}:{args.port}")
+        app.serve(port=args.port, address=args.address, show=not args.no_open)
+        return
+
+    path = Path(write_site(data, args.output)).resolve()
+    print(f"Wrote interactive benchmark page to {path}")
+    print(f"Open it in a browser:  file://{path}")
+    if not args.no_open:
+        try:
+            webbrowser.open(f"file://{path}")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
