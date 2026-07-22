@@ -3,6 +3,10 @@ __pycache__
 .Trash-0
 .env
 .venv
+# Local-only uv override (e.g. to drop the exclude-newer pin on hosts whose
+# package index does not expose upload timestamps). Kept out of git so the
+# committed exclude-newer pin still applies in CI / clean checkouts.
+uv.toml
 .*cache
 **/*task.json
 **/*run.json
