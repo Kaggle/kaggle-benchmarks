@@ -39,6 +39,7 @@ from kaggle_benchmarks.ui.viz.charts import (
 from kaggle_benchmarks.ui.viz.dashboard import BenchmarkDashboard, dashboard
 from kaggle_benchmarks.ui.viz.data import LeaderboardData, metric_direction
 from kaggle_benchmarks.ui.viz.export import to_csv, to_html, to_png, to_svg
+from kaggle_benchmarks.ui.viz.page import benchmark_page, render_page_html
 from kaggle_benchmarks.ui.viz.pareto import pareto_indices
 from kaggle_benchmarks.ui.viz.theme import DARK, LIGHT, Theme, resolve_theme
 
@@ -50,11 +51,13 @@ __all__ = [
     "Theme",
     "available_charts",
     "bar_leaderboard",
+    "benchmark_page",
     "dashboard",
     "elo_plot",
     "export",
     "metric_direction",
     "pareto_indices",
+    "render_page_html",
     "pareto_scatter",
     "resolve_theme",
     "task_heatmap",

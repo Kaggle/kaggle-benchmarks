@@ -259,6 +259,24 @@ class Runs(Generic[T], abc.MutableSequence):
         )
         return dashboard(data, **kwargs)
 
+    def benchmark_page(
+        self,
+        model_by: str = "llm",
+        benchmark_name: str = "Benchmark",
+        **kwargs,
+    ):
+        """Return the full revamped benchmark page for these runs.
+
+        Composes the branded header, hero trade-off chart, bar leaderboard, and
+        the per-task heatmap / win-rate / Elo charts into one scrollable page.
+        """
+        from kaggle_benchmarks.ui.viz.page import benchmark_page
+
+        data = self.leaderboard_data(
+            model_by=model_by, benchmark_name=benchmark_name
+        )
+        return benchmark_page(data, **kwargs)
+
     def group_by(self, by="llm"):
         from kaggle_benchmarks.ui import panel
 
