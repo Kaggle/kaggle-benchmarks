@@ -342,6 +342,54 @@ result = simulate(
 > they pure functions over the scenario's ground truth? LLM-backed = more
 > realistic but nondeterministic (mitigate with caching + seed).
 
+#### 4.2.1 Progressive tool implementation (the "start with nothing" path)
+
+A core ergonomic goal: **you begin with only an agent idea and a tools idea —
+you don't have to implement the tools.** A tool starts as a *spec*
+(`name` / `arguments` / `description`), and an **environment-aware world model**
+(an LLM that sees the scenario's ground truth) generates its results. Then you
+*progressively* implement the tools that most need to be correct, cheaper, or
+deterministic — one at a time, not all at once.
+
+The ladder for any given tool:
+
+1. **Spec only → LLM-emulated.** `ToolSpec(name, arguments, description)`; results
+   come from the world model. Zero code, instantly evaluable.
+2. **Python implementation.** A plain callable over `scenario.environment` when
+   you want it exact/cheap/deterministic.
+3. **Python-actor tool.** For a *stateful* tool, a small Actor (role `"tool"`) —
+   e.g. a dealer holding a shuffled deck. A super-agent can write these for you.
+
+```python
+# start: everything emulated by the world model
+tools = build_toolset(specs, world=world_llm, env=scenario.environment)
+# later: implement just the ones that matter; the rest stay emulated
+tools = build_toolset(specs, world=world_llm, env=scenario.environment,
+                      impls={"draw_card": Dealer(seed=0).draw_card})
+```
+
+**Worked example — poker (the "golden", hard case).** See
+`examples/agentic_eval/07_poker_golden.py` +
+`kaggle_benchmarks/agentic/poker.py`.
+- The agent must play a pot-sized river shove where the correct play is to *fold*
+  ace-high — because this villain (a `Persona`/Actor with a hidden "never bluffs"
+  read) almost never bluffs. A naive agent "bluff-catches" and calls.
+- **Phase 1:** `get_table_state`, `estimate_equity`, `opponent_action`,
+  `draw_card` are all just specs — the world model emulates them. You can grade
+  agents immediately. But an emulated `draw_card` is untrustworthy (an LLM can
+  invent duplicate/impossible cards).
+- **Phase 2:** you implement the one tool that *must* be fair — the deck — as a
+  **`Dealer` Python actor** (seeded shuffle). Now the dealer is deterministic and
+  correct; the fuzzy tools (equity, opponent modeling) can stay LLM-emulated.
+
+> **Idea:** the world model reads the scenario's *hidden* environment, so an
+> emulated tool can encode the twist (e.g. the villain's true range) without the
+> agent seeing it — the same visibility trick as `rooms` (`visible_to`).
+> **Q:** cache invalidation — an emulated result is cached by args, but a stateful
+> tool (dealer) isn't idempotent. Python-actor tools opt out of caching.
+> **Q:** should the Examiner/super-agent *auto-implement* tools it detects are
+> flaky when emulated (like the deck), and hand you the code?
+
 ---
 
 ### 4.3 Evaluation

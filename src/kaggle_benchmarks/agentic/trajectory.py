@@ -22,7 +22,7 @@ with empty content and ``reasoning_traces`` set.
 ``Trajectory`` is a pydantic model (``arbitrary_types_allowed`` since steps hold
 the library dataclasses). Alternative constructors let you build one without a
 live model: ``from_chat`` (adopt an existing ``Chat``) and ``from_steps``
-(compact tuples, handy for tests/demos and for adapting a third-party harness).
+(compact tuples, handy for tests/demos and for adapting external agent traces).
 """
 
 from __future__ import annotations

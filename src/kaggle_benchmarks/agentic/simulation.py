@@ -27,7 +27,7 @@ The blocker for the fully-real version is tools inside ``ChatRoom``
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, Protocol
 
 import pydantic
 
@@ -76,6 +76,88 @@ def emulate(
     )
 
 
+class ToolSpec(pydantic.BaseModel):
+    """A tool the agent may call, defined *without* an implementation.
+
+    This is all a user needs to start a benchmark: a name, a description, the
+    arguments, and what it returns. Results can be produced by an env-aware LLM
+    (see :class:`LLMEmulatedTool`) until — and only if — a real implementation is
+    worth writing (design doc §4.2, "progressive tool implementation").
+    """
+
+    name: str
+    description: str = ""
+    arguments: dict[str, str] = pydantic.Field(
+        default_factory=dict
+    )  # arg -> description
+    returns: str = ""
+
+
+class WorldModel(Protocol):
+    """An environment-aware result generator (an LLM, in production).
+
+    Given a tool spec, the call args, and the scenario environment, it returns a
+    plausible, consistent result — so tools that aren't implemented yet still
+    "work". A real implementation prompts an LLM with the spec + environment; the
+    demos use a small deterministic stand-in.
+    """
+
+    def emulate(
+        self, spec: ToolSpec, args: dict[str, Any], env: dict[str, Any]
+    ) -> Any: ...
+
+
+class LLMEmulatedTool(pydantic.BaseModel):
+    """A tool backed only by its spec — results come from a :class:`WorldModel`.
+
+    Use this before you implement a tool for real. Cached by args, like a Python
+    ``EmulatedTool``.
+    """
+
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
+    spec: ToolSpec
+    world: Any  # a WorldModel
+    env: dict[str, Any] = pydantic.Field(default_factory=dict)
+    cache: dict[str, Any] = pydantic.Field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return self.spec.name
+
+    def __call__(self, **args: Any) -> Any:
+        key = json.dumps(args, sort_keys=True, default=str)
+        if key not in self.cache:
+            self.cache[key] = self.world.emulate(self.spec, args, self.env)
+        return self.cache[key]
+
+
+def build_toolset(
+    specs: list[ToolSpec],
+    *,
+    world: WorldModel,
+    env: dict[str, Any],
+    impls: Mapping[str, Callable[..., Any]] | None = None,
+) -> dict[str, Callable[..., Any]]:
+    """Turn tool *specs* into a callable toolset, using real impls where given.
+
+    Each spec becomes either a provided implementation (any Python callable —
+    including a bound method on a Python-actor tool such as a ``Dealer``) if it
+    appears in ``impls``, or an :class:`LLMEmulatedTool` that asks ``world`` to
+    generate results. This is the progressive path: start fully emulated, then
+    implement tools one at a time to make evaluation cheaper / more precise.
+    """
+    impls = impls or {}
+    toolset: dict[str, Callable[..., Any]] = {}
+    for spec in specs:
+        toolset[spec.name] = (
+            impls[spec.name]
+            if spec.name in impls
+            else LLMEmulatedTool(spec=spec, world=world, env=env)
+        )
+    return toolset
+
+
 class UserSimulator(pydantic.BaseModel):
     """A fake user that knows its persona/goal. Real: a ChatRoom participant."""
 
@@ -95,7 +177,7 @@ class UserSimulator(pydantic.BaseModel):
 def simulate(
     scenario: Scenario,
     agent: PlannedAgent,
-    tools: dict[str, EmulatedTool],
+    tools: Mapping[str, Callable[..., Any]],
     user: UserSimulator | None = None,
     max_tool_calls: int = 20,
 ) -> Trajectory:

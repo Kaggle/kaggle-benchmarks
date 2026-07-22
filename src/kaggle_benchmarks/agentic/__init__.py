@@ -53,7 +53,11 @@ from kaggle_benchmarks.agentic.fairness import dedup, diversity_report, pick
 from kaggle_benchmarks.agentic.scenario import Persona, Scenario, Suite
 from kaggle_benchmarks.agentic.simulation import (
     EmulatedTool,
+    LLMEmulatedTool,
+    ToolSpec,
     UserSimulator,
+    WorldModel,
+    build_toolset,
     emulate,
     simulate,
 )
@@ -87,9 +91,13 @@ __all__ = [
     "Persona",
     "Scenario",
     "Suite",
-    # simulation
+    # simulation / tools
     "EmulatedTool",
     "emulate",
+    "ToolSpec",
+    "LLMEmulatedTool",
+    "WorldModel",
+    "build_toolset",
     "UserSimulator",
     "simulate",
     # examiner / fairness
