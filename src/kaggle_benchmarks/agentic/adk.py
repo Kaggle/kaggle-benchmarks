@@ -57,16 +57,23 @@ def _require_adk():
 
 
 def _run_sync(coro):
-    """Run an async coroutine from sync code, including inside a notebook loop."""
+    """Run an async coroutine from sync code, including inside a notebook loop.
+
+    With no running loop we just ``asyncio.run``. Inside a running loop (e.g.
+    Jupyter) we run the coroutine in a **separate thread** with its own fresh
+    event loop. We deliberately avoid ``nest_asyncio``: its re-entrant loop
+    breaks sniffio/anyio async-library detection that ADK/httpx rely on, which
+    surfaces as ``AsyncLibraryNotFoundError`` ("not in async context").
+    """
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
-    # Already inside a running loop (e.g. Jupyter): allow a nested run.
-    import nest_asyncio
 
-    nest_asyncio.apply(loop)
-    return loop.run_until_complete(coro)
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 def _last_user_text(conversation: list[Message]) -> str:
