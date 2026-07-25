@@ -41,6 +41,7 @@ in a notebook.
 | `05_adk_adapter.py` | §9 | map a (fake) **ADK** event stream into a `Trajectory` via the `from_steps` constructor |
 | `06_llm_agent_and_mapping.py` | §7 | mock the LLM against the real `LLMChat`, drive `LLMAgent`; concept → primitive mapping |
 | `07_poker_golden.py` | §4.2.1 | **the "golden" hard example** — start with tool *specs* (LLM-emulated), then implement a fair `Dealer` Python-actor; a river fold spot vs a non-bluffing villain |
+| `08_adk_gemini.py` | §9 | **live** — a real Google **ADK** agent on the **Gemini API** via `ADKAgent`; maps ADK events → `Trajectory`. Needs `pip install google-adk` + `GOOGLE_API_KEY` |
 
 ## Where the code lives: `kaggle_benchmarks.agentic`
 
@@ -52,6 +53,7 @@ in a notebook.
 | `scenario.py` | `Scenario` + `Suite` (content-hash version, JSON save/load, `__panel__`); `Persona` is a subclass of `actors.Actor` (it's a first-class speaker with a profile + goal) |
 | `simulation.py` | `simulate()`, `EmulatedTool` (env-aware, cached), `UserSimulator`; `ToolSpec` + `LLMEmulatedTool` + `build_toolset` for **progressive tool implementation** (spec → LLM-emulated → real impl) |
 | `poker.py` | the golden poker example: tool specs, a `Dealer` Python-actor (fair deck), a mock env-aware world model, the hard river scenario + hero agents |
+| `adk.py` | `ADKAgent` — wraps a Google **ADK** agent (Gemini) as an eval Agent, mapping ADK events → `Trajectory`. Optional dep: `pip install google-adk`. Import via `kaggle_benchmarks.agentic.adk` |
 | `examiner.py` | `Examiner` (author + grade), `Report` (`__panel__`) |
 | `fairness.py` | model rotation (`pick`), `dedup`, `diversity_report` |
 | `demo.py` | travel scenario, emulated tools, thorough/lazy agents, keyword judge |
