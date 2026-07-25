@@ -23,16 +23,12 @@
 import pathlib
 import tempfile
 
-import panel as pn
-
 from kaggle_benchmarks import actors
 from kaggle_benchmarks.agentic import Persona, Report, Scenario, Suite, Trajectory
 from kaggle_benchmarks.assertions import AssertionResult
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.messages import Message
 from kaggle_benchmarks.tools.base import ToolInvocation, ToolInvocationResult
-
-pn.extension()
 
 # %% [markdown]
 # ## 1. A Trajectory from compact tuples

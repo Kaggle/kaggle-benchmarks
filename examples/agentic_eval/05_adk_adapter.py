@@ -25,12 +25,7 @@
 # %%
 import dataclasses
 
-import panel as pn
-
 from kaggle_benchmarks.agentic import Trajectory
-
-pn.extension()
-
 
 # %% [markdown]
 # ## Fake ADK event objects (shape mirrors `google.adk` types)

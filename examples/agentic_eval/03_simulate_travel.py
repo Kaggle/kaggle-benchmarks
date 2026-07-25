@@ -20,8 +20,6 @@
 # thorough one that discovers and flags the event, and a lazy one that misses it.
 
 # %%
-import panel as pn
-
 from kaggle_benchmarks.agentic import simulate
 from kaggle_benchmarks.agentic.demo import (
     TRAVEL,
@@ -29,8 +27,6 @@ from kaggle_benchmarks.agentic.demo import (
     thorough_agent,
     travel_tools,
 )
-
-pn.extension()
 
 # %% [markdown]
 # The scenario (its hidden nuance is collapsed in the rendered view).

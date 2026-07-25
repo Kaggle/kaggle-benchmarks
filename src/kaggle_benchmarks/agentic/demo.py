@@ -119,17 +119,21 @@ def thorough_agent() -> PlannedAgent:
             Reason(
                 text="I should check weather, price AND local events for candidate weekends."
             ),
-            Call("get_weather", {"date": "2025-10-18"}),
-            Call("get_prices", {"date": "2025-10-18"}),
-            Call("get_events", {"month": "2025-10"}),
-            Call("web_search", {"query": "Barcelona October events football"}),
+            Call(name="get_weather", args={"date": "2025-10-18"}),
+            Call(name="get_prices", args={"date": "2025-10-18"}),
+            Call(name="get_events", args={"month": "2025-10"}),
+            Call(
+                name="web_search", args={"query": "Barcelona October events football"}
+            ),
             Reason(
-                "There's El Clásico on 2025-10-18 — prices spike and crowds swell. Flag it."
+                text="There's El Clásico on 2025-10-18 — prices spike and crowds swell. Flag it."
             ),
             Say(
-                "I'd recommend the weekend of Oct 11 (sunny, ~$900). Heads-up: Oct 18 is "
-                "El Clásico (FC Barcelona vs Real Madrid) — great atmosphere but higher "
-                "prices and crowds; pick it only if you want the match."
+                text=(
+                    "I'd recommend the weekend of Oct 11 (sunny, ~$900). Heads-up: Oct 18 is "
+                    "El Clásico (FC Barcelona vs Real Madrid) — great atmosphere but higher "
+                    "prices and crowds; pick it only if you want the match."
+                )
             ),
         ],
     )
@@ -139,10 +143,10 @@ def lazy_agent() -> PlannedAgent:
     return PlannedAgent(
         name="lazy-agent",
         plan=[
-            Reason("Check the weather and price for the weekend."),
-            Call("get_weather", {"date": "2025-10-18"}),
-            Call("get_prices", {"date": "2025-10-18"}),
-            Say("Oct 18 looks sunny — go for it!"),
+            Reason(text="Check the weather and price for the weekend."),
+            Call(name="get_weather", args={"date": "2025-10-18"}),
+            Call(name="get_prices", args={"date": "2025-10-18"}),
+            Say(text="Oct 18 looks sunny — go for it!"),
         ],
     )
 

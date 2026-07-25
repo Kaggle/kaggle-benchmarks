@@ -22,7 +22,6 @@
 # `AssertionResult`).
 
 # %%
-import panel as pn
 
 from kaggle_benchmarks.agentic import (
     answer_mentions,
@@ -39,8 +38,6 @@ from kaggle_benchmarks.agentic.demo import (
     thorough_agent,
     travel_tools,
 )
-
-pn.extension()
 
 # %% [markdown]
 # ## Run the agent and inspect the trajectory

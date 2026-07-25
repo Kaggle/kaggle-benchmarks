@@ -31,8 +31,6 @@ import panel as pn
 
 from kaggle_benchmarks.agentic import Examiner, UserSimulator, poker, simulate
 
-pn.extension()
-
 scenario = poker.poker_scenario()
 scenario
 

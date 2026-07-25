@@ -38,9 +38,6 @@ from kaggle_benchmarks.agentic.demo import (
     travel_tools,
 )
 
-pn.extension()
-
-
 # %% [markdown]
 # The rubric-as-analyzers: a great agent discovers the event (a tool) AND
 # surfaces it (answer / judge).

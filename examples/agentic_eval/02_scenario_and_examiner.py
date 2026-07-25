@@ -23,12 +23,8 @@
 # %%
 import tempfile
 
-import panel as pn
-
 from kaggle_benchmarks.agentic import Examiner, Suite, diversity_report
 from kaggle_benchmarks.agentic.demo import author_one
-
-pn.extension()
 
 # %% [markdown]
 # ## Author a suite

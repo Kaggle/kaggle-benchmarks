@@ -186,21 +186,27 @@ def golden_hero() -> PlannedAgent:
     return PlannedAgent(
         name="golden-hero",
         plan=[
-            Call("get_table_state", {}),
-            Call("get_hole_cards", {}),
-            Call("opponent_action", {}),
+            Call(name="get_table_state"),
+            Call(name="get_hole_cards"),
+            Call(name="opponent_action"),
             Reason(
-                "Pot is 100 and I must call 100, so I need ~33% equity. Villain "
-                "raised pre and barreled every street, then shoved the river."
+                text=(
+                    "Pot is 100 and I must call 100, so I need ~33% equity. Villain "
+                    "raised pre and barreled every street, then shoved the river."
+                )
             ),
-            Call("estimate_equity", {"hand": "AcKc", "board": "Qc7d2s5hJd"}),
+            Call(name="estimate_equity", args={"hand": "AcKc", "board": "Qc7d2s5hJd"}),
             Reason(
-                "Ace-high is ~6% vs a range this tight villain never bluffs with. "
-                "6% << 33% pot odds, so this is a clear fold."
+                text=(
+                    "Ace-high is ~6% vs a range this tight villain never bluffs with. "
+                    "6% << 33% pot odds, so this is a clear fold."
+                )
             ),
             Say(
-                "Fold. Facing a pot-sized river shove I'd need ~33% equity, but this "
-                "villain almost never bluffs here, so my ace-high (~6%) can't call."
+                text=(
+                    "Fold. Facing a pot-sized river shove I'd need ~33% equity, but this "
+                    "villain almost never bluffs here, so my ace-high (~6%) can't call."
+                )
             ),
         ],
     )
@@ -211,11 +217,11 @@ def naive_hero() -> PlannedAgent:
     return PlannedAgent(
         name="naive-hero",
         plan=[
-            Call("get_hole_cards", {}),
+            Call(name="get_hole_cards"),
             Reason(
-                "I have ace-high — a decent bluff-catcher, and I hate being bluffed."
+                text="I have ace-high — a decent bluff-catcher, and I hate being bluffed."
             ),
-            Say("Call — ace-high is a fine bluff catcher here."),
+            Say(text="Call — ace-high is a fine bluff catcher here."),
         ],
     )
 
