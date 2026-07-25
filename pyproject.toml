@@ -35,6 +35,7 @@ dependencies = [
   "pydantic>=2.11.5",
   "joblib",
   "google-genai>=1.38.0",
+  "google-adk>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -68,9 +69,9 @@ kaggle = [
   "nbdev>=2.4.2",
   "papermill>=2.6.0",
   # b/276358430: pin jupyter-lsp to 1.5.1 to match docker-python; newer versions freeze the server
-  "jupyter-lsp==1.5.1",
+  "jupyter-lsp>=1.5.1",
   # b/333854354: pin jupyter-server to 2.12.5; later versions break LSP
-  "jupyter-server==2.12.5",
+  "jupyter-server>=2.12.5",
   "python-lsp-server",
   "jupyterlab-lsp",
   "jedi",
@@ -109,7 +110,7 @@ dev = [
 # To upgrade packages: bump this date to ~2 days before today, then run `uv lock --upgrade`.
 # This is a fixed date (not a rolling window) and must be bumped periodically.
 # See: https://docs.astral.sh/uv/reference/settings/#exclude-newer
-exclude-newer = "2026-03-24T00:00:00Z"
+exclude-newer = "2026-07-20T00:00:00Z"
 
 [tool.mypy]
 warn_unused_configs = true
