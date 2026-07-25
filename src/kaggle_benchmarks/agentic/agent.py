@@ -37,10 +37,18 @@ from kaggle_benchmarks.messages import Message
 
 
 class Response(pydantic.BaseModel):
+    """What an agent's ``act()`` returns: the answer, the trajectory, and
+    metadata (usage, model, timings, …). Design decision §3.1.
+
+    Intended to also support *progressive* construction for streaming — a live
+    UI can watch it fill in — but that lives in a follow-up.
+    """
+
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     answer: Any = None
     trajectory: Trajectory
+    metadata: dict[str, Any] = pydantic.Field(default_factory=dict)
 
 
 @runtime_checkable

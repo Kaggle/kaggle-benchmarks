@@ -151,7 +151,9 @@ class Trajectory(pydantic.BaseModel, PanelRenderable):
     def full_text(self) -> str:
         parts: list[str] = []
         for s in self.steps:
-            if _is_reasoning(s):
+            if isinstance(s, Trajectory):  # a nested sub-agent trajectory
+                parts.append(s.full_text())
+            elif _is_reasoning(s):
                 parts.append(s.reasoning_traces)
             elif isinstance(s, Message):
                 parts.append(str(s.content))
@@ -176,7 +178,10 @@ class Trajectory(pydantic.BaseModel, PanelRenderable):
     def render(self) -> str:
         lines: list[str] = []
         for s in self.steps:
-            if _is_reasoning(s):
+            if isinstance(s, Trajectory):  # a nested sub-agent trajectory
+                nested = s.render().replace("\n", "\n    ")
+                lines.append(f"↳ sub-trajectory:\n    {nested}")
+            elif _is_reasoning(s):
                 lines.append(f"🧠 {s.reasoning_traces}")
             elif isinstance(s, ToolInvocation):
                 lines.append(f"🔧 call {s.name}({s.arguments})")
@@ -194,7 +199,11 @@ class Trajectory(pydantic.BaseModel, PanelRenderable):
             pn.pane.Markdown(f"### 🧭 Trajectory ({len(self.steps)} steps)")
         ]
         for s in self.steps:
-            if _is_reasoning(s):
+            if isinstance(s, Trajectory):  # a nested sub-agent trajectory
+                objs.append(
+                    pn.Card(pn.panel(s), title="↳ sub-trajectory", collapsed=True)
+                )
+            elif _is_reasoning(s):
                 objs.append(
                     pn.pane.Markdown(
                         f"🧠 *{s.reasoning_traces}*", styles={"color": "#666"}

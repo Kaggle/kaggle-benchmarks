@@ -1,10 +1,12 @@
 # Agentic End-to-End Evaluation — Vision & Design
 
-> **Status: DRAFT / in-flight 🛩️ — do not treat anything here as decided.**
-> This is a living scratchpad. It intentionally keeps *multiple competing
-> options* side by side (Option A/B/C…) and *more examples than we need* so we
-> can pick later. Inline markers:
+> **Status: DRAFT / in-flight 🛩️ — still evolving, but some questions are now
+> resolved (marked `Decision`).**
+> This is a living scratchpad. It keeps *multiple competing options* side by side
+> (Option A/B/C…) and *more examples than we need* so we can pick later. Inline
+> markers:
 > - `> **Q:**` open question to resolve
+> - `> **Decision:**` a resolved question (owner's call, captured inline)
 > - `> **Idea:**` half-baked thought worth keeping
 > - `> **Comment:**` editorial note / caveat
 > - `<!-- TODO -->` something to fill in
@@ -35,6 +37,9 @@ manufactures the long tail of tricky cases you'd never hand-author.
 
 > **Q:** What's the single most important adjective for tier 1 — *fast to start*,
 > *realistic*, or *reproducible*? They pull the design in different directions.
+> **Decision:** **fast to start + easy to use** come first. Realism and
+> reproducibility are secondary and bought back later via shared frozen scenarios
+> and caching (see §4.5), not bit-exact determinism.
 
 ---
 
@@ -48,6 +53,8 @@ manufactures the long tail of tricky cases you'd never hand-author.
 - Mix programmatic checks and LLM/agent-as-judge freely.
 - Tasks are **data**: generated once, stored, versioned, human-editable, reused
   across all models/agents.
+- **Comparable, not bit-exact:** every agent/LLM is compared over the *same
+  frozen scenarios* (+ caching), so results are similar run-to-run.
 - Results are shareable and visualizable (notebook + export).
 
 **Non-goals (for now — challenge these)**
@@ -58,6 +65,9 @@ manufactures the long tail of tricky cases you'd never hand-author.
 > **Q:** Is "reproducibility" a goal or a nice-to-have? If a goal, simulated
 > tools must be deterministic/cached and generation must be seedable — that's a
 > real constraint on the design below.
+> **Decision:** Nice-to-have. Runs should be *similar* run-to-run, but the main
+> lever is comparing every LLM/agent over the **same frozen scenarios** (plus
+> caching, §4.5) rather than bit-exact determinism.
 
 ---
 
@@ -86,10 +96,16 @@ and a record of how it got there.
 > `stream`) and `LLMChat` (`invoke`/`prompt`/`respond`), plus `Participant` for
 > rooms. We should decide: extend those, or introduce a new evaluation-facing
 > `Actor` protocol that wraps them. Naming collision risk is real.
+> **Decision:** **Reuse the existing `Actor`** (don't fork identities); layer a
+> thin `Agent` Protocol / an `act()` method on top. `act()` returns a `Response`
+> that carries the `trajectory` **plus metadata** (usage, model, timings, …).
+> Streaming is wanted: build the `Response` **progressively** via methods +
+> context managers, so a live UI can watch it fill in. → Option A, with Option
+> B's streaming ergonomics.
 
 **The contract (competing options):**
 
-**Option A — single call, returns answer + trajectory**
+**Option A — single call, returns answer + trajectory (chosen)**
 ```python
 class Actor(Protocol):
     def act(self, history: Chat) -> Response: ...
@@ -127,9 +143,14 @@ scripted= ScriptedActor([...])                     # for testing the harness its
 
 > **Q:** Sync vs async? Agents are often async. Do we expose `async act`, or hide
 > it behind the orchestrator (we already have `orchestration/` + asyncio)?
+> **Decision:** **Async core with a sync wrapper.** Async is the real shape
+> (agents/ADK are async); expose a sync interface on top for the wider audience.
 > **Q:** Multi-turn: does `act` take the *whole* history each time (stateless), or
 > do we hand the Actor a live session it mutates? Stateless is cleaner to cache
 > and parallelize; stateful matches real agents better. Maybe support both.
+> **Decision:** **Stateless by default** — `act(conversation)` takes the whole
+> history (easy to test / cache / parallelize), plus a convenience that runs it
+> against the *current* context (`chats` history) for interactive use.
 
 ---
 
@@ -153,6 +174,9 @@ structure.
 > **Comment:** Probably overkill for v1, but the travel example with a user
 > simulator + tool emulators is already multi-party → a flat list per participant
 > may need a parent pointer. Compromise: flat list + `parent_id`/`turn` fields.
+> **Decision:** A step may itself be a **nested `Trajectory`** (a sub-agent's
+> run) — a tree by nesting rather than `parent_id` bookkeeping. Analyzers can
+> recurse into nested trajectories or stay per-level.
 
 **Option C — reuse `Chat` (recommended starting point)**
 We *already* capture most of this: `Chat.history` of `Message`/`LLMMessage`, with
@@ -165,6 +189,10 @@ trajectory = Trajectory.from_chat(chat)   # zero-copy view; adds analysis helper
 > **Idea:** If Trajectory == "Chat + helpers", we get storage (proto JSON),
 > streaming, and notebook rendering *for free* (the rendering seam already
 > renders `Chat`/`Message`). Strong pull toward Option C.
+> **Decision:** Lean Option C — consider a **base/subclass relationship between
+> `Trajectory` and `Chat`** (one extends the other) so they share storage and
+> rendering instead of being parallel types. (The current prototype *composes* a
+> `Chat`; revisit as a subclass.)
 
 **What a trajectory carries (draft fields):**
 - ordered steps (as above)
@@ -180,6 +208,9 @@ trajectory = Trajectory.from_chat(chat)   # zero-copy view; adds analysis helper
 
 > **Q:** Do trajectories live *inside* a `Run`, or are they first-class and a Run
 > references them? (Matters for the dataset/dedup story.)
+> **Decision:** **First-class, not necessarily part of a `Run`.** You can build
+> and analyze a trajectory standalone (notebook, tests); a `Run` *references*
+> trajectories when persisted.
 
 ---
 
@@ -222,6 +253,8 @@ can aggregate. Straw-man taxonomy (edit heavily):
 - `format_violation`
 
 > **Q:** Is the taxonomy fixed, per-domain, or Examiner-generated per suite?
+> **Decision:** The super-agent (Examiner) generates **evaluation guidance / a
+> taxonomy per suite**; humans can then freeze it.
 > **Idea:** Let Examiner propose a taxonomy alongside the tasks, then let humans
 > freeze it.
 
@@ -265,8 +298,12 @@ tags: [planning, web_search, hidden_constraint]
 ```
 
 > **Q:** One schema for all domains, or a base + per-domain extensions?
+> **Decision:** A **base schema** that works everywhere, with room to **extend**
+> per domain when needed.
 > **Q:** Should the Examiner also emit the *analyzers* (structural checks) for
 > each task, or only the rubric (and we derive checks)?
+> **Decision:** Emit **both** — low-level **analyzers** (concrete checks) and a
+> higher-level **rubric**, so results can be rolled up / analyzed by rubric.
 
 **Worked example — the travel planner (from the original sketch):**
 > User = novice traveler picking trip dates → agent should check weather + ticket
@@ -303,6 +340,9 @@ every model/agent is evaluated over the *same frozen suite* for comparability.
 
 > **Q:** Versioning — if a human edits task 5, do results computed on the old task
 > 5 stay valid? Need a content-hash / suite version stamped into every Run.
+> **Decision:** **Cache task results keyed on task code/version + arguments** —
+> change the args (or the task) and the cache invalidates automatically. See
+> §4.5 (caching & storage backends).
 
 ---
 
@@ -338,9 +378,14 @@ result = simulate(
 
 > **Q:** Who decides the conversation is "done" — the user simulator, the agent,
 > a turn cap, or a judge watching live? Probably a combination with a hard cap.
+> **Decision:** A **turn cap** (hard stop) **plus** any actor being able to
+> return a **terminating response**.
 > **Q:** Do tool emulators need an LLM (to synthesize plausible results), or are
 > they pure functions over the scenario's ground truth? LLM-backed = more
 > realistic but nondeterministic (mitigate with caching + seed).
+> **Decision:** **Both.** Simple tools are pure functions over the environment;
+> hard-to-implement ones use an LLM. LLM-backed results are **cached per suite**
+> so every agent/LLM under test sees the same answers.
 
 #### 4.2.1 Progressive tool implementation (the "start with nothing" path)
 
@@ -387,8 +432,14 @@ tools = build_toolset(specs, world=world_llm, env=scenario.environment,
 > agent seeing it — the same visibility trick as `rooms` (`visible_to`).
 > **Q:** cache invalidation — an emulated result is cached by args, but a stateful
 > tool (dealer) isn't idempotent. Python-actor tools opt out of caching.
+> **Decision:** Introduce a pluggable **storage/cache backend** (extending the
+> existing `client`) for runs, results, and caches — see **§4.5**. Stateful
+> Python-actor tools opt out of caching.
 > **Q:** should the Examiner/super-agent *auto-implement* tools it detects are
 > flaky when emulated (like the deck), and hand you the code?
+> **Decision:** Offer it as a **human-in-the-loop option**: the super-agent
+> *proposes* an implementation for a flaky-when-emulated tool and the user
+> approves before it's used (not automatic — safety/uncertainty).
 
 ---
 
@@ -430,6 +481,42 @@ The Examiner reviews aggregate results and *calibrates difficulty*:
 > task difficulty stats).
 > **Q:** Risk of overfitting the benchmark to current models. How do we keep
 > generated suites *fair* and not just "adversarial to model X"?
+
+---
+
+### 4.5 Caching & storage backends
+
+> Consolidates several decisions above (task-result caching, per-suite tool-result
+> caching, run/result persistence). May graduate into its own doc.
+
+A pluggable **backend** — ideally an extension of the existing `client` — stores
+everything the eval produces and everything worth caching, behind one interface
+so we can swap *where* it lives without touching the rest.
+
+**Backends (same interface, different destination):**
+- **Local filesystem** — default; zero-setup, great for notebooks/tests.
+- **Database** — shared team results.
+- **Kaggle** — publish / share suites + runs.
+- **Google Cloud Storage** — scale / CI.
+
+**What it stores:**
+- Suites / scenarios, runs, results, trajectories.
+- **Caches**, keyed for correctness:
+  - *Task results* — key = task **code/version + arguments**; change either and
+    the entry invalidates (§4.1 decision).
+  - *LLM-emulated tool results* — key = `(suite, tool, args)`, cached **per
+    suite** so every agent/LLM under test sees identical answers (§4.2 decision).
+  - *Judge / generation LLM calls* — key = `(prompt, model, params)` to cut cost.
+
+**Rules of thumb:**
+- Deterministic Python tools don't need caching; **stateful Python-actor tools
+  (e.g. a `Dealer`) opt out** — their internal state, not a cache, is the source
+  of truth.
+- Cache keys always include a **version/seed**, so a deliberate change busts the
+  cache; sharing a suite can ship its cache for reproducible comparisons.
+
+> **Q:** exact key schema, and how `client` grows into a cache-capable backend
+> (a separate `Cache` interface vs. methods on `client`?). → its own doc.
 
 ---
 
@@ -759,8 +846,8 @@ here yet. Pointers (URLs, owners) are stored in `.kagent-context/INTERNAL.md`
   Rotating/hidden test sets? Private suites?
 - **Multi-turn user simulators** drifting off-persona or being too helpful/too
   adversarial. Need persona-adherence checks (an analyzer on the *user* too).
-- **Where do trajectories live** relative to Runs (embedded vs referenced).
-- **Async / concurrency** story for running many agents × many tasks.
+- **Async / concurrency** story for running many agents × many tasks (decided:
+  async core + sync wrapper — §3.1; open: how it threads through orchestration).
 - **Naming** of every concept here — `Examiner` and the eval-facing agent (vs the
   existing `Actor`) are the two most load-bearing to settle.
 
@@ -772,7 +859,8 @@ here yet. Pointers (URLs, owners) are stored in `.kagent-context/INTERNAL.md`
   produces an answer + trajectory. *(Distinct from the library's existing `Actor`,
   which is a speaker identity — naming TBD; see M0.)*
 - **Trajectory** — the recorded steps an Actor took (messages, tool calls,
-  reasoning, handoffs) + final answer + usage.
+  reasoning, handoffs, and nested sub-agent trajectories) + final answer +
+  metadata/usage. First-class: usable standalone, not necessarily part of a Run.
 - **Scenario / Task** — one generated case: persona, goal, shared context, hidden
   nuances, environment ground truth, rubric.
 - **Suite** — a frozen, versioned set of scenarios for a domain.
