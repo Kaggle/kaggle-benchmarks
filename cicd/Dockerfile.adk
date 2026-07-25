@@ -1,0 +1,30 @@
+# ADK-enabled image for the agentic evaluation demos.
+#
+# Adds the optional `google-adk` dependency on top of the standard benchmarks
+# image so examples/agentic_eval/08_adk_gemini.py (a real Gemini agent via ADK)
+# can run.
+#
+#   Build:  docker build -f cicd/Dockerfile.adk -t benchmarks-adk .
+#   Run:    docker run --rm --env-file .env benchmarks-adk \
+#               python examples/agentic_eval/08_adk_gemini.py
+#
+# The Gemini API key is provided at RUN time via `--env-file .env`. `.env` is
+# .dockerignored, so the key is never baked into an image layer. `.env` must
+# contain GOOGLE_API_KEY.
+FROM gcr.io/kaggle-private-byod/personal-benchmarks-base:v3
+
+WORKDIR /benchmarks
+COPY . /benchmarks
+
+# Install the project (deps already live in the base image) + the optional ADK
+# dependency. google-adk is installed with `uv pip install` (not a locked group)
+# so it doesn't touch pyproject.toml / uv.lock.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --group kaggle && \
+    uv pip install google-adk
+
+ENV PATH="/benchmarks/.venv/bin:$PATH"
+# Use the Gemini API (an API key), not Vertex.
+ENV GOOGLE_GENAI_USE_VERTEXAI=FALSE
+
+CMD ["python", "examples/agentic_eval/08_adk_gemini.py"]

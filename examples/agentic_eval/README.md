@@ -29,6 +29,21 @@ or `jupytext --to notebook <file>.py`. They also run as plain scripts
 (`python 03_simulate_travel.py`), though the `__panel__` visualizations only show
 in a notebook.
 
+### Running the live ADK demo (`08_adk_gemini.py`)
+
+It needs the optional `google-adk` dependency and a Gemini API key. Either:
+
+```bash
+# In your existing environment:
+pip install google-adk
+GOOGLE_API_KEY=... python examples/agentic_eval/08_adk_gemini.py
+
+# ...or in a container (key passed at run time, never baked into the image):
+docker build -f cicd/Dockerfile.adk -t benchmarks-adk .
+docker run --rm --env-file .env benchmarks-adk \
+    python examples/agentic_eval/08_adk_gemini.py
+```
+
 ## What each demo shows
 
 | Notebook | Design doc | Shows |
