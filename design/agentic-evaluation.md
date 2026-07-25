@@ -1,12 +1,11 @@
 # Agentic End-to-End Evaluation — Vision & Design
 
-> **Status: DRAFT / in-flight 🛩️ — still evolving, but some questions are now
-> resolved (marked `Decision`).**
+> **Status: DRAFT / in-flight 🛩️ — evolving; resolved points are written into the
+> design, open ones are still marked `Q`.**
 > This is a living scratchpad. It keeps *multiple competing options* side by side
 > (Option A/B/C…) and *more examples than we need* so we can pick later. Inline
 > markers:
 > - `> **Q:**` open question to resolve
-> - `> **Decision:**` a resolved question (owner's call, captured inline)
 > - `> **Idea:**` half-baked thought worth keeping
 > - `> **Comment:**` editorial note / caveat
 > - `<!-- TODO -->` something to fill in
@@ -35,11 +34,9 @@ manufactures the long tail of tricky cases you'd never hand-author.
 > levels — the end-to-end flow should be *made of* the low-level toolkit, not a
 > separate codepath. (Progressive disclosure.)
 
-> **Q:** What's the single most important adjective for tier 1 — *fast to start*,
-> *realistic*, or *reproducible*? They pull the design in different directions.
-> **Decision:** **fast to start + easy to use** come first. Realism and
-> reproducibility are secondary and bought back later via shared frozen scenarios
-> and caching (see §4.5), not bit-exact determinism.
+**Priority for tier 1: fast to start + easy to use.** Realism and reproducibility
+are secondary — bought back later via shared frozen scenarios and caching (§4.5),
+not bit-exact determinism.
 
 ---
 
@@ -62,12 +59,8 @@ manufactures the long tail of tricky cases you'd never hand-author.
 - Not a production agent runtime.
 - Not a general dataset-labeling tool.
 
-> **Q:** Is "reproducibility" a goal or a nice-to-have? If a goal, simulated
-> tools must be deterministic/cached and generation must be seedable — that's a
-> real constraint on the design below.
-> **Decision:** Nice-to-have. Runs should be *similar* run-to-run, but the main
-> lever is comparing every LLM/agent over the **same frozen scenarios** (plus
-> caching, §4.5) rather than bit-exact determinism.
+**Reproducibility is a nice-to-have, not a goal** — see the "comparable, not
+bit-exact" goal above and caching in §4.5.
 
 ---
 
@@ -92,16 +85,13 @@ manufactures the long tail of tricky cases you'd never hand-author.
 An **Actor** is anything that, given a conversation so far, produces a response
 and a record of how it got there.
 
-> **Comment:** The library *already* has `Actor` (sender identity + `send`/
-> `stream`) and `LLMChat` (`invoke`/`prompt`/`respond`), plus `Participant` for
-> rooms. We should decide: extend those, or introduce a new evaluation-facing
-> `Actor` protocol that wraps them. Naming collision risk is real.
-> **Decision:** **Reuse the existing `Actor`** (don't fork identities); layer a
-> thin `Agent` Protocol / an `act()` method on top. `act()` returns a `Response`
-> that carries the `trajectory` **plus metadata** (usage, model, timings, …).
-> Streaming is wanted: build the `Response` **progressively** via methods +
-> context managers, so a live UI can watch it fill in. → Option A, with Option
-> B's streaming ergonomics.
+The library *already* has `Actor` (sender identity + `send`/`stream`), `LLMChat`
+(`invoke`/`prompt`/`respond`), and `Participant` for rooms. **We reuse the
+existing `Actor`** (don't fork identities) and layer a thin `Agent` protocol / an
+`act()` method on top. `act()` returns a `Response` carrying the `trajectory`
+**plus metadata** (usage, model, timings, …). Streaming is wanted, so the
+`Response` can be built **progressively** (methods + context managers) for a live
+UI. → **Option A**, with Option B's streaming ergonomics.
 
 **The contract (competing options):**
 
@@ -141,16 +131,12 @@ adk     = ADKActor(my_adk_agent)                   # trajectory = tool calls + r
 scripted= ScriptedActor([...])                     # for testing the harness itself
 ```
 
-> **Q:** Sync vs async? Agents are often async. Do we expose `async act`, or hide
-> it behind the orchestrator (we already have `orchestration/` + asyncio)?
-> **Decision:** **Async core with a sync wrapper.** Async is the real shape
-> (agents/ADK are async); expose a sync interface on top for the wider audience.
-> **Q:** Multi-turn: does `act` take the *whole* history each time (stateless), or
-> do we hand the Actor a live session it mutates? Stateless is cleaner to cache
-> and parallelize; stateful matches real agents better. Maybe support both.
-> **Decision:** **Stateless by default** — `act(conversation)` takes the whole
-> history (easy to test / cache / parallelize), plus a convenience that runs it
-> against the *current* context (`chats` history) for interactive use.
+**Sync/async:** an **async core with a sync wrapper** — async is the real shape
+(agents/ADK are async), with a sync interface on top for the wider audience.
+
+**Multi-turn:** `act(conversation)` is **stateless** (takes the whole history —
+easy to test / cache / parallelize), plus a convenience that runs it against the
+*current* `chats` context for interactive use.
 
 ---
 
@@ -170,13 +156,9 @@ Simple, easy to serialize and scan with analyzers.
 
 **Option B — tree / DAG**
 For branching, retries, and multi-agent handoffs where a flat list loses
-structure.
-> **Comment:** Probably overkill for v1, but the travel example with a user
-> simulator + tool emulators is already multi-party → a flat list per participant
-> may need a parent pointer. Compromise: flat list + `parent_id`/`turn` fields.
-> **Decision:** A step may itself be a **nested `Trajectory`** (a sub-agent's
-> run) — a tree by nesting rather than `parent_id` bookkeeping. Analyzers can
-> recurse into nested trajectories or stay per-level.
+structure. **A step may itself be a nested `Trajectory`** (a sub-agent's run) —
+a tree by nesting rather than `parent_id` bookkeeping. Analyzers can recurse into
+nested trajectories or stay per-level.
 
 **Option C — reuse `Chat` (recommended starting point)**
 We *already* capture most of this: `Chat.history` of `Message`/`LLMMessage`, with
@@ -186,13 +168,12 @@ We *already* capture most of this: `Chat.history` of `Message`/`LLMMessage`, wit
 ```python
 trajectory = Trajectory.from_chat(chat)   # zero-copy view; adds analysis helpers
 ```
-> **Idea:** If Trajectory == "Chat + helpers", we get storage (proto JSON),
-> streaming, and notebook rendering *for free* (the rendering seam already
-> renders `Chat`/`Message`). Strong pull toward Option C.
-> **Decision:** Lean Option C — consider a **base/subclass relationship between
-> `Trajectory` and `Chat`** (one extends the other) so they share storage and
-> rendering instead of being parallel types. (The current prototype *composes* a
-> `Chat`; revisit as a subclass.)
+Trajectory == "Chat + helpers" gets us storage (proto JSON), streaming, and
+notebook rendering *for free* (the rendering seam already renders `Chat`/
+`Message`). **We lean Option C**, and consider a **base/subclass relationship
+between `Trajectory` and `Chat`** (one extends the other) so they share storage
+and rendering instead of being parallel types. (The current prototype *composes*
+a `Chat`; revisit as a subclass.)
 
 **What a trajectory carries (draft fields):**
 - ordered steps (as above)
@@ -206,11 +187,9 @@ trajectory = Trajectory.from_chat(chat)   # zero-copy view; adds analysis helper
 - Store: `*.trajectory.json` (or fold into the existing run proto).
 - Share: single file or a URL/gist; a "trajectory viewer" HTML export.
 
-> **Q:** Do trajectories live *inside* a `Run`, or are they first-class and a Run
-> references them? (Matters for the dataset/dedup story.)
-> **Decision:** **First-class, not necessarily part of a `Run`.** You can build
-> and analyze a trajectory standalone (notebook, tests); a `Run` *references*
-> trajectories when persisted.
+**Trajectories are first-class, not necessarily part of a `Run`.** You can build
+and analyze one standalone (notebook, tests); a `Run` *references* trajectories
+when persisted.
 
 ---
 
@@ -252,11 +231,8 @@ can aggregate. Straw-man taxonomy (edit heavily):
 - `gave_up_early` / `looped`
 - `format_violation`
 
-> **Q:** Is the taxonomy fixed, per-domain, or Examiner-generated per suite?
-> **Decision:** The super-agent (Examiner) generates **evaluation guidance / a
-> taxonomy per suite**; humans can then freeze it.
-> **Idea:** Let Examiner propose a taxonomy alongside the tasks, then let humans
-> freeze it.
+The taxonomy isn't fixed: the **Examiner generates evaluation guidance / a
+taxonomy per suite** (alongside the tasks), and humans can freeze it.
 
 ---
 
@@ -297,13 +273,9 @@ rubric:             # how to grade (feeds the judge + analyzers)
 tags: [planning, web_search, hidden_constraint]
 ```
 
-> **Q:** One schema for all domains, or a base + per-domain extensions?
-> **Decision:** A **base schema** that works everywhere, with room to **extend**
-> per domain when needed.
-> **Q:** Should the Examiner also emit the *analyzers* (structural checks) for
-> each task, or only the rubric (and we derive checks)?
-> **Decision:** Emit **both** — low-level **analyzers** (concrete checks) and a
-> higher-level **rubric**, so results can be rolled up / analyzed by rubric.
+**Schema:** a **base schema** that works everywhere, extensible per domain when
+needed. The Examiner emits **both** low-level **analyzers** (concrete checks) and
+a higher-level **rubric**, so results can be rolled up / analyzed by rubric.
 
 **Worked example — the travel planner (from the original sketch):**
 > User = novice traveler picking trip dates → agent should check weather + ticket
@@ -338,11 +310,9 @@ tags: [planning, web_search, hidden_constraint]
 `*.task.json` proto or a new `*.suite.json`). Humans can edit/add/delete tasks;
 every model/agent is evaluated over the *same frozen suite* for comparability.
 
-> **Q:** Versioning — if a human edits task 5, do results computed on the old task
-> 5 stay valid? Need a content-hash / suite version stamped into every Run.
-> **Decision:** **Cache task results keyed on task code/version + arguments** —
-> change the args (or the task) and the cache invalidates automatically. See
-> §4.5 (caching & storage backends).
+**Versioning:** task results are **cached keyed on task code/version +
+arguments** — change the args (or the task) and the cache invalidates
+automatically. See §4.5 (caching & storage backends).
 
 ---
 
@@ -376,16 +346,12 @@ result = simulate(
 # result.trajectory, result.answer, result.usage
 ```
 
-> **Q:** Who decides the conversation is "done" — the user simulator, the agent,
-> a turn cap, or a judge watching live? Probably a combination with a hard cap.
-> **Decision:** A **turn cap** (hard stop) **plus** any actor being able to
-> return a **terminating response**.
-> **Q:** Do tool emulators need an LLM (to synthesize plausible results), or are
-> they pure functions over the scenario's ground truth? LLM-backed = more
-> realistic but nondeterministic (mitigate with caching + seed).
-> **Decision:** **Both.** Simple tools are pure functions over the environment;
-> hard-to-implement ones use an LLM. LLM-backed results are **cached per suite**
-> so every agent/LLM under test sees the same answers.
+**Termination:** a **turn cap** (hard stop) plus any actor being able to return a
+**terminating response**.
+
+**Tool emulators — LLM or pure function? Both.** Simple tools are pure functions
+over the environment; hard-to-implement ones use an LLM. LLM-backed results are
+**cached per suite** so every agent/LLM under test sees the same answers.
 
 #### 4.2.1 Progressive tool implementation (the "start with nothing" path)
 
@@ -430,16 +396,16 @@ tools = build_toolset(specs, world=world_llm, env=scenario.environment,
 > **Idea:** the world model reads the scenario's *hidden* environment, so an
 > emulated tool can encode the twist (e.g. the villain's true range) without the
 > agent seeing it — the same visibility trick as `rooms` (`visible_to`).
-> **Q:** cache invalidation — an emulated result is cached by args, but a stateful
-> tool (dealer) isn't idempotent. Python-actor tools opt out of caching.
-> **Decision:** Introduce a pluggable **storage/cache backend** (extending the
-> existing `client`) for runs, results, and caches — see **§4.5**. Stateful
-> Python-actor tools opt out of caching.
-> **Q:** should the Examiner/super-agent *auto-implement* tools it detects are
-> flaky when emulated (like the deck), and hand you the code?
-> **Decision:** Offer it as a **human-in-the-loop option**: the super-agent
-> *proposes* an implementation for a flaky-when-emulated tool and the user
-> approves before it's used (not automatic — safety/uncertainty).
+
+**Caching:** emulated results are cached by args via a pluggable **storage/cache
+backend** (extending the existing `client`) that also holds runs and results —
+see §4.5. Stateful Python-actor tools (e.g. a `Dealer`) **opt out of caching**;
+their internal state is the source of truth.
+
+**Auto-implementing flaky tools:** offered as a **human-in-the-loop option** —
+the super-agent *proposes* an implementation for a tool that's unreliable when
+emulated (like the deck) and the user approves before it's used (not automatic,
+for safety).
 
 ---
 

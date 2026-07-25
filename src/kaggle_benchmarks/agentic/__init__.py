@@ -35,6 +35,8 @@ from kaggle_benchmarks.agentic.agent import (
     Reason,
     Response,
     Say,
+    act_in_current_chat,
+    as_agent,
 )
 from kaggle_benchmarks.agentic.analyzers import (
     Analyzer,
@@ -72,6 +74,8 @@ __all__ = [
     "PlannedAgent",
     "ConstantAgent",
     "LLMAgent",
+    "as_agent",
+    "act_in_current_chat",
     "Action",
     "Reason",
     "Call",

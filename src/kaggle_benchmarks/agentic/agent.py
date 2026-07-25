@@ -122,3 +122,29 @@ class LLMAgent:
             answer=result.content,
             trajectory=Trajectory.from_chat(chat, answer=result.content),
         )
+
+
+def as_agent(
+    obj: Any, *, tools: list[Callable] | None = None, name: str | None = None
+) -> Agent:
+    """Adapt an existing object into an eval Agent (design decision §3.1).
+
+    - already an ``Agent`` (has ``act``) → returned unchanged;
+    - anything else (e.g. an ``LLMChat``) → wrapped in ``LLMAgent``.
+
+    Reuses the library's existing actors rather than forking a new identity type.
+    """
+    if isinstance(obj, Agent):
+        return obj
+    return LLMAgent(obj, tools=tools, name=name)
+
+
+def act_in_current_chat(agent: Agent) -> Response:
+    """Run a (stateless) agent against the *current* chat's history.
+
+    Convenience for interactive/notebook use; ``act()`` itself stays stateless
+    (design decision §3.1).
+    """
+    from kaggle_benchmarks import chats
+
+    return agent.act(chats.get_current_chat().messages)
