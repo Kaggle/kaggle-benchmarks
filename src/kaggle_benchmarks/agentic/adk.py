@@ -33,6 +33,7 @@ pick the key up from the environment.
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any, Callable
 
 from kaggle_benchmarks import actors
@@ -59,21 +60,38 @@ def _require_adk():
 def _run_sync(coro):
     """Run an async coroutine from sync code, including inside a notebook loop.
 
-    With no running loop we just ``asyncio.run``. Inside a running loop (e.g.
-    Jupyter) we run the coroutine in a **separate thread** with its own fresh
-    event loop. We deliberately avoid ``nest_asyncio``: its re-entrant loop
-    breaks sniffio/anyio async-library detection that ADK/httpx rely on, which
-    surfaces as ``AsyncLibraryNotFoundError`` ("not in async context").
+    ``kaggle_benchmarks`` applies ``nest_asyncio`` globally, which class-patches
+    the event loop to be re-entrant. A side effect is that ``sniffio``/``anyio``
+    can no longer auto-detect the running async library — deep in httpcore
+    ``asyncio.current_task()`` reads ``None`` — which surfaces (via ADK) as
+    ``AsyncLibraryNotFoundError`` when ADK/httpx make requests. We work around
+    this by (a) running the coroutine in a dedicated worker thread with its own
+    fresh event loop, and (b) explicitly pinning sniffio's async-library context
+    variable to ``"asyncio"`` so detection short-circuits. The task created by
+    ``asyncio.run`` copies the worker thread's context, so httpcore's
+    ``current_async_library()`` returns ``"asyncio"``. Any error is re-raised in
+    the calling thread.
     """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
+    import sniffio
 
-    import concurrent.futures
+    result: list[Any] = []
+    error: list[BaseException] = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+    def _worker() -> None:
+        token = sniffio.current_async_library_cvar.set("asyncio")
+        try:
+            result.append(asyncio.run(coro))
+        except BaseException as exc:  # noqa: BLE001 - re-raised in caller thread
+            error.append(exc)
+        finally:
+            sniffio.current_async_library_cvar.reset(token)
+
+    thread = threading.Thread(target=_worker)
+    thread.start()
+    thread.join()
+    if error:
+        raise error[0]
+    return result[0]
 
 
 def _last_user_text(conversation: list[Message]) -> str:
