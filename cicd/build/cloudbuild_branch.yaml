@@ -54,7 +54,7 @@ steps:
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
     dir: /benchmarks
     entrypoint: uvx
-    args: ["ruff", "check"]
+    args: ["ruff@0.11.4", "check"]
     waitFor: ["push-image"]
 
 images:
