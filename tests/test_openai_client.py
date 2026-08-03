@@ -382,6 +382,62 @@ def test_extra_api_params_rejects_sdk_params():
         llm.prompt("Hi", seed=42, extra_api_params={"seed": 99})
 
 
+def test_call_api_handles_none_message(mocker, caplog):
+    """Empty response when choices[0].message is None (see issue #191).
+
+    Model Proxy has been observed to intermittently return a response where
+    choices[0].message is None. The library must not raise AttributeError
+    on message.tool_calls; it should degrade to an empty LLMResponse so the
+    native tool loop can terminate cleanly.
+    """
+    mock_client = mocker.MagicMock()
+
+    mock_usage = mocker.MagicMock()
+    mock_usage.prompt_tokens = 10
+    mock_usage.completion_tokens = 0
+
+    mock_choice = mocker.MagicMock()
+    mock_choice.message = None
+
+    mock_response = mocker.MagicMock(spec=[])
+    mock_response.choices = [mock_choice]
+    mock_response.usage = mock_usage
+
+    mock_client.chat.completions.create.return_value = mock_response
+
+    llm = OpenAI(client=mock_client, model="anthropic/claude-opus-5@default")
+    llm.stream_responses = False
+
+    with chats.new("Test None message"), caplog.at_level("WARNING"):
+        response = llm.prompt("Hi")
+
+    assert response == ""
+    assert any("choices[0].message=None" in record.message for record in caplog.records)
+
+
+def test_call_api_handles_empty_choices(mocker):
+    """Empty response when choices is empty (existing guard, now covered by a test)."""
+    mock_client = mocker.MagicMock()
+
+    mock_usage = mocker.MagicMock()
+    mock_usage.prompt_tokens = 10
+    mock_usage.completion_tokens = 0
+
+    mock_response = mocker.MagicMock(spec=[])
+    mock_response.choices = []
+    mock_response.usage = mock_usage
+
+    mock_client.chat.completions.create.return_value = mock_response
+
+    llm = OpenAI(client=mock_client, model="anthropic/claude-opus-5@default")
+    llm.stream_responses = False
+
+    with chats.new("Test empty choices"):
+        response = llm.prompt("Hi")
+
+    assert response == ""
+
+
 def test_prompt_reasoning_none_sets_effort_without_thinking_config():
     """Tests that reasoning='none' sets reasoning_effort but skips thinking_config."""
     llm = MockedOpenAI(model="test-model")
