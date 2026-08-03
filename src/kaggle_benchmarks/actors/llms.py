@@ -89,6 +89,7 @@ import dataclasses
 import enum
 import inspect
 import json
+import logging
 import re
 import typing
 import uuid
@@ -106,6 +107,8 @@ from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.serializers import openai as openai_serializer
 from kaggle_benchmarks.tools import base as tool_utils
 from kaggle_benchmarks.tools import functions, native
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import llm_messages
@@ -417,7 +420,12 @@ class OpenAI(LLMChat):
         }
 
     def _should_remove_seed(self) -> bool:
-        unsupported_prefixes = ("google/", "openai/gpt-5.4-pro", "openai/gpt-5.6", "xai/grok-4.5")
+        unsupported_prefixes = (
+            "google/",
+            "openai/gpt-5.4-pro",
+            "openai/gpt-5.6",
+            "xai/grok-4.5",
+        )
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
 
     def invoke(
@@ -527,6 +535,18 @@ class OpenAI(LLMChat):
             # Anthropic models proxied through the OpenAI endpoint can
             # return choices=None on multi-turn tool conversations).
             if not response.choices:
+                return LLMResponse(
+                    content="",
+                    meta=self._get_usage_meta(response.usage),
+                )
+            # Handle choices[0].message being None (observed intermittently
+            # from Model Proxy — see issue #191).
+            if response.choices[0].message is None:
+                logger.warning(
+                    "Model Proxy returned choices[0].message=None for "
+                    "model %s; treating as empty response.",
+                    self.model,
+                )
                 return LLMResponse(
                     content="",
                     meta=self._get_usage_meta(response.usage),
