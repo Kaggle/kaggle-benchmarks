@@ -94,13 +94,13 @@ import re
 import typing
 import uuid
 from types import SimpleNamespace
-from typing import Any, Callable, Iterator, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, TypeVar
 
 import openai
 from google import genai
 from google.genai import types
 
-from kaggle_benchmarks import actors, chats, llm_messages, messages, prompting, utils
+from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
@@ -109,6 +109,9 @@ from kaggle_benchmarks.tools import base as tool_utils
 from kaggle_benchmarks.tools import functions, native
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from kaggle_benchmarks import llm_messages
 
 T = TypeVar("T")
 ReasoningLevel = Literal["none", "low", "medium", "high"]
@@ -174,7 +177,7 @@ class LLMChat(actors.Actor):
         reasoning: ReasoningLevel | None = None,
         tools: list[Callable] | None = None,
         **kwargs,
-    ) -> LLMResponse | Iterator[LLMResponse] | llm_messages.LLMMessage[str]:
+    ) -> LLMResponse | Iterator[LLMResponse] | "llm_messages.LLMMessage[str]":
         """Invokes the LLM with the given messages and system instructions."""
         raise NotImplementedError
 
