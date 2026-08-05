@@ -66,7 +66,7 @@ def evaluate_function(
         parameters,
         desc="Parameters",
         colour="#777777",
-        disable=config.disable_tqdm or len(parameters) == 1,
+        disable=config.disable_tqdm() or len(parameters) == 1,
         leave=False,
     ):
         if evaluation_data is None:
@@ -100,6 +100,6 @@ def evaluate_function(
                     total=len(evaluation_data),
                     desc="Running subtasks",
                     colour="#888888",
-                    disable=config.disable_tqdm or len(evaluation_data) == 1,
+                    disable=config.disable_tqdm() or len(evaluation_data) == 1,
                     leave=False,
                 )
