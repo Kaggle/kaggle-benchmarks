@@ -31,7 +31,7 @@ from typing import (
 
 import pandas as pd
 
-from kaggle_benchmarks import chats, events, results, utils
+from kaggle_benchmarks import chats, core, events, results
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import runs
@@ -93,7 +93,7 @@ class Task(Generic[T]):
                     f"Skipping run {run.id} for task {self.name} as its output file already exists."
                 )
                 run.cached = True
-                run.status = utils.Status.SUCCESS
+                run.status = core.Status.SUCCESS
                 run.result = client.load_run_result(run)
                 if ctx.parent and ctx.parent.run:
                     ctx.parent.run.subruns.append(run)
@@ -330,7 +330,7 @@ class Task(Generic[T]):
             # because contexts.enter swallowed them (Kaggle batch). In dev
             # mode, the worker already raised and we never reach here.
             if on_failure == "raise":
-                failures = [r for r in all_runs if r.status == utils.Status.FAILED]
+                failures = [r for r in all_runs if r.status == core.Status.FAILED]
                 if failures:
                     first = failures[0]
                     summary = (
@@ -390,7 +390,7 @@ class Task(Generic[T]):
                 all_runs = runs.Runs(list(runs_by_position.values()))
 
                 # Nothing failed — no point trying again.
-                if not any(r.status == utils.Status.FAILED for r in all_runs):
+                if not any(r.status == core.Status.FAILED for r in all_runs):
                     break
 
                 if stop_condition and stop_condition(all_runs):
