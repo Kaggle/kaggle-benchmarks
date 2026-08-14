@@ -38,7 +38,7 @@ import dataclasses
 from contextvars import ContextVar
 from typing import Iterator, Self
 
-from kaggle_benchmarks import chats, events, runs, utils
+from kaggle_benchmarks import chats, core, events, runs
 from kaggle_benchmarks.tasks import NonRecoverableError
 
 
@@ -67,15 +67,15 @@ def enter(**kwargs) -> Iterator[Context]:
     try:
         for key, value in kwargs.items():
             events.manager.dispatch(f"new_{key}", value)
-            value.status = utils.Status.RUNNING
+            value.status = core.Status.RUNNING
 
-        status = utils.Status.SUCCESS
+        status = core.Status.SUCCESS
         yield new
 
     except (NonRecoverableError, KeyboardInterrupt):
         raise
     except Exception:
-        status = utils.Status.FAILED
+        status = core.Status.FAILED
         # Re-raise it if we are within a run so the exception can be propagated.
         if parent and parent.run:
             raise

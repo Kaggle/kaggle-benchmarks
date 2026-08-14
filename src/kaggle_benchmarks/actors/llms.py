@@ -100,7 +100,7 @@ import openai
 from google import genai
 from google.genai import types
 
-from kaggle_benchmarks import actors, chats, messages, prompting, utils
+from kaggle_benchmarks import actors, chats, core, messages, prompting, utils
 from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.serializers import genai as genai_serializer
@@ -319,7 +319,7 @@ class LLMChat(actors.Actor):
         response = messages.Message(
             sender=sender or self,
             content="",
-            _status=utils.Status.RUNNING,
+            _status=core.Status.RUNNING,
         )
 
         raw_messages = [
@@ -346,18 +346,18 @@ class LLMChat(actors.Actor):
                 response._meta["tool_calls"] = None
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
-            response.status = utils.Status.SUCCESS
+            response.status = core.Status.SUCCESS
             chat.append(response)
         elif isinstance(invoke_response, Iterator):
-            # Append before streaming so UIs see new_message (with empty
+            # Append before streaming so UIs see new_event (with empty
             # content + RUNNING status) before chunks arrive — lets them
             # render the message header before tokens stream in.
             chat.append(response)
             response.stream(invoke_response)
-            response.status = utils.Status.SUCCESS
+            response.status = core.Status.SUCCESS
         elif isinstance(invoke_response, llm_messages.LLMMessage):
             response = invoke_response
-            # Set sender before append: chat.append fires the new_message
+            # Set sender before append: chat.append fires the new_event
             # event, so the sender must already be the Participant (not the
             # backing LLMChat) by then.
             response.sender = sender or self
@@ -380,7 +380,7 @@ class LLMChat(actors.Actor):
                     sender=actors.system,
                 )
             )
-            response.status = utils.Status.FAILED
+            response.status = core.Status.FAILED
             raise e
 
         except StopIteration as e:

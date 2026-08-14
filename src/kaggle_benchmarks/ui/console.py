@@ -19,7 +19,7 @@ import sys
 import textwrap
 import threading
 
-from kaggle_benchmarks import assertions, chats, utils
+from kaggle_benchmarks import assertions, chats, core
 
 _DEFAULT_MIN_WIDTH = 40
 _DEFAULT_MAX_WIDTH = 120
@@ -86,7 +86,7 @@ class ConsoleUI:
         self._in_run = False
         self._run_depth = 0
         # Tracks message ids whose body was already rendered via new_chunk
-        # events; new_message skips the eager body print for these so the
+        # events; new_event skips the eager body print for these so the
         # text isn't duplicated. Stores id(message) to avoid pinning Message
         # objects in memory.
         self._streamed_messages: set[int] = set()
@@ -204,7 +204,7 @@ class ConsoleUI:
     def _quiet_end_chat(self, chat):
         self.depth -= 1
 
-    def _quiet_new_message(self, chat, message):
+    def _quiet_new_event(self, chat, message):
         if isinstance(message, chats.Chat):
             return
         # If this message was streamed, chunks already rendered the body.
@@ -212,7 +212,7 @@ class ConsoleUI:
             return
         print(
             message.__str__(indent=" " * (self.depth * self.tab_size)),
-            end="" if message.status == utils.Status.RUNNING else "\n",
+            end="" if message.status == core.Status.RUNNING else "\n",
             file=self._output,
         )
 
@@ -260,7 +260,7 @@ class ConsoleUI:
                 self._print(f"\n{self._colorize('METRICS:', c.BOLD)}  {usage_str}")
 
         # Result or error
-        if run.status == utils.Status.FAILED:
+        if run.status == core.Status.FAILED:
             error_msg = run.error_message or "Unknown Error"
             self._print(self._colorize(f"ERROR:    {error_msg}", c.RED))
         else:
@@ -313,14 +313,14 @@ class ConsoleUI:
                 wrapped_lines.append(line)
         return "\n".join(wrapped_lines)
 
-    def new_message(self, chat, message):
+    def new_event(self, chat, message):
         if self.quiet:
-            self._quiet_new_message(chat, message)
+            self._quiet_new_event(chat, message)
             return
         if isinstance(message, chats.Chat):
             return
         if not self._in_run:
-            self._quiet_new_message(chat, message)
+            self._quiet_new_event(chat, message)
             return
 
         # Skip assertion result messages -- they're shown in the assertion
