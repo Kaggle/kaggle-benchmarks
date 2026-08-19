@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import uuid
 from collections.abc import Iterable
 from typing import Iterator
 
@@ -70,10 +71,24 @@ class Chat(Session):
             status=status,
             id=id,
         )
+        # Preserve the historical name-derived id format ("<name>-<hex8>") for
+        # backward compatibility (e.g. serialized conversation ids). Event's
+        # __init__ assigns a bare uuid; override it when no explicit id is given.
+        if id is None:
+            self.id = f"{self.name}-{uuid.uuid4().hex[:8]}"
 
     @property
     def messages(self) -> list[Message]:
         return [m for m in self.history if isinstance(m, Message)]
+
+    def to_dict(self) -> dict:
+        """Returns a dictionary representation of the chat.
+
+        Emits the legacy ``messages`` key alongside the ``history`` key so that
+        consumers written before the Event refactor keep working.
+        """
+        serialized = [obj.to_dict() for obj in self.history]
+        return dict(messages=serialized, history=serialized, name=self.name)
 
     @property
     def usage(self) -> Usage:
@@ -98,7 +113,7 @@ class Chat(Session):
 class GoldfishChat(Chat):
     """A chat that keeps only the last message (useful for interactive mode)."""
 
-    @events.manager.event_dispatcher("new_event")
+    @events.manager.event_dispatcher("new_event", "new_message")
     def append(self, item: Event) -> Event:
         self.history = [item]
         return item

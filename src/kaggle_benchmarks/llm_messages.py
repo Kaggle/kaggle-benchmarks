@@ -86,7 +86,10 @@ class LLMMessage(messages.Message[T]):
 
         tool_calls = []
         obj = cls(content="", tool_calls=tool_calls, **kwargs)
-        events.manager.dispatch("new_event", chats.get_current_chat(), obj)
+        current_chat = chats.get_current_chat()
+        events.manager.dispatch("new_event", current_chat, obj)
+        # Legacy alias for listeners predating the Event refactor.
+        events.manager.dispatch("new_message", current_chat, obj)
         events.manager.dispatch("start_streaming", obj)
         for chunk in chunks:
             if isinstance(chunk, str):
