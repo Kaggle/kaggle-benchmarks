@@ -212,7 +212,9 @@ class Session(Event):
         self.history = list(history)
         self.name = type(self).__name__ if name is None else name
 
-    @manager.event_dispatcher("new_event")
+    # "new_message" is dispatched alongside "new_event" for backward
+    # compatibility with listeners written before the Event refactor.
+    @manager.event_dispatcher("new_event", "new_message")
     def append(self, item: Event) -> Event:
         """Adds an event to the session."""
         self.history.append(item)
