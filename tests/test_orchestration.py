@@ -18,6 +18,7 @@ import time
 import pandas as pd
 
 from kaggle_benchmarks import orchestration
+from kaggle_benchmarks._config import ExecutionMode, config
 from kaggle_benchmarks.tasks import task
 
 
@@ -115,3 +116,30 @@ def test_parallel_subruns_are_nested_correctly():
     # Verify the results of the sub-runs
     subrun_results = [run.result for run in parent_run.subruns]
     assert sorted(subrun_results) == [10, 20, 30, 40]
+
+
+def test_tqdm_enabled_in_notebook_mode():
+    # config.disable_tqdm is a method; reading it without calling it yields a
+    # truthy bound method that silently disables every progress bar.
+    disable_flags = []
+
+    def recording_tqdm(iterable, **kwargs):
+        disable_flags.append(kwargs.get("disable"))
+        return iterable
+
+    original_mode = config.execution_mode
+    try:
+        config.execution_mode = ExecutionMode.NOTEBOOK
+        list(
+            orchestration.evaluate_function(
+                func=lambda a, x: (a, x),
+                grid={"a": [1, 2]},
+                evaluation_data=pd.DataFrame({"x": [1, 2]}),
+                tqdm=recording_tqdm,
+            )
+        )
+    finally:
+        config.execution_mode = original_mode
+
+    assert disable_flags
+    assert all(flag is False for flag in disable_flags)
