@@ -12,45 +12,50 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""The ``Message`` type: the full concrete conversation message.
+
+``Message`` is a :class:`kaggle_benchmarks.core.BaseMessage` (itself an
+``Event``) that adds LLM-oriented state — visibility, streaming, token usage,
+reasoning traces and tool calls. ``BaseMessage`` and ``Event`` are re-exported
+here for convenience; use them for typing when you only need ``content``.
+"""
+
+from __future__ import annotations
+
 import dataclasses
 import json
 import warnings
-from typing import TYPE_CHECKING, Any, Generic, Iterable, TypeVar
+from typing import Any, Iterable, TypeVar
 
 import pydantic
 
-from kaggle_benchmarks import events, utils
+from kaggle_benchmarks import events
+from kaggle_benchmarks.core import Actor, BaseMessage, Event, Status
 
-if TYPE_CHECKING:
-    from kaggle_benchmarks import actors
-
+__all__ = ["BaseMessage", "Chunk", "Event", "Message", "T"]
 
 T = TypeVar("T")
 Chunk = TypeVar("Chunk")
 
 
-@dataclasses.dataclass
-class Message(Generic[T]):
-    content: T
-    sender: "actors.Actor"
-    _status: utils.Status = utils.Status.SUCCESS
-    # Controls 1) visibility to the LLM and 2) inclusion in the
-    # conversation's protobuf JSON output. Defaults to True.
-    is_visible_to_llm: bool = True
-    _meta: dict[str, Any] = dataclasses.field(default_factory=dict)
+class Message(BaseMessage[T]):
+    """A message sent by an ``Actor`` into a chat."""
 
-    @property
-    def status(self):
-        return self._status
-
-    @status.setter
-    def status(self, value: utils.Status):
-        events.manager.dispatch("message_update", self, value)
-        self._status = value
-
-    @property
-    def text(self):
-        return str(self.content)
+    def __init__(
+        self,
+        content: T,
+        sender: Actor,
+        _status: Status = Status.SUCCESS,
+        is_visible_to_llm: bool = True,
+        _meta: dict[str, Any] | None = None,
+        *,
+        id: str | None = None,
+    ):
+        super().__init__(content, sender=sender, status=_status, id=id)
+        # Controls 1) visibility to the LLM and 2) inclusion in the
+        # conversation's protobuf JSON output. Defaults to True.
+        self.is_visible_to_llm = is_visible_to_llm
+        self._meta: dict[str, Any] = {} if _meta is None else _meta
 
     @property
     def reasoning_traces(self):
@@ -112,10 +117,9 @@ class Message(Generic[T]):
         """Returns a dictionary representation of the message."""
         return dict(sender={"id": self.sender.id}, content=self.payload)
 
-    def __str__(self, indent: str = "") -> str:
-        return f"{indent}{self.sender.avatar} [{self.sender.name}]: {self.text}"
-
     def __eq__(self, other):
+        # Defining __eq__ makes Message unhashable (Python sets __hash__ = None),
+        # matching the old dataclass behavior.
         return (
             isinstance(other, Message)
             and self.sender == other.sender
@@ -161,8 +165,6 @@ class Message(Generic[T]):
             content: An iterable of chunks. Chunks can be strings or objects
                 with `content` and `meta` attributes.
         """
-        from kaggle_benchmarks import events
-
         events.manager.dispatch("start_streaming", self)
         for chunk in content:
             chunk_content = (

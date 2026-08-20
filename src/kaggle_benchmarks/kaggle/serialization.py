@@ -28,6 +28,7 @@ from kaggle_benchmarks import (
     assertions,
     chats,
     content_types,
+    core,
     results,
     runs,
     tasks,
@@ -206,13 +207,15 @@ def _extract_model_version_data(run: runs.Run) -> dict[str, Any | None]:
     }
 
 
-def _get_run_state_proto(run_status: utils.Status | str) -> types.BenchmarkTaskRunState:
+def _get_run_state_proto(
+    run_status: core.Status | str,
+) -> types.BenchmarkTaskRunState:
     """Maps a run status string to its corresponding protobuf enum."""
     RUN_STATUS_MAP = {
-        utils.Status.PENDING: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_QUEUED,
-        utils.Status.RUNNING: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_RUNNING,
-        utils.Status.SUCCESS: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_COMPLETED,
-        utils.Status.FAILED: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_ERRORED,
+        core.Status.PENDING: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_QUEUED,
+        core.Status.RUNNING: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_RUNNING,
+        core.Status.SUCCESS: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_COMPLETED,
+        core.Status.FAILED: types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_ERRORED,
     }
     return RUN_STATUS_MAP.get(
         run_status, types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_UNSPECIFIED

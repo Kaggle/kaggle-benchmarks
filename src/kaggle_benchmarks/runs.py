@@ -21,7 +21,7 @@ from typing import Any, Generic, Literal, Self, TypeVar
 
 import pandas as pd
 
-from kaggle_benchmarks import actors, assertions, chats, results, tasks, utils
+from kaggle_benchmarks import actors, assertions, chats, core, results, tasks
 from kaggle_benchmarks.actors.llms import LLMChat
 
 T = TypeVar("T")
@@ -35,7 +35,7 @@ class Run(Generic[T]):
     task: tasks.Task[T]
     result: T | results.Unknown = results.PENDING
     chat: chats.Chat | None = None
-    status: utils.Status = utils.Status.PENDING
+    status: core.Status = core.Status.PENDING
     params: dict[str, Any] = dataclasses.field(default_factory=dict)
     id: str = ""
     param_id: Any = None
@@ -69,7 +69,7 @@ class Run(Generic[T]):
 
     def fail_with_message(self, msg: str | None = None):
         """Sets the run status to FAILED and records the error message."""
-        self.status = utils.Status.FAILED
+        self.status = core.Status.FAILED
         self.error_message = msg
         self.result = results.FAILED
 
@@ -128,7 +128,7 @@ class Run(Generic[T]):
         # Reject known-bad first: a run whose task body raised an exception.
         # Without this guard, result_type.passed() would return True for most
         # result types regardless of the value, masking the failure.
-        if self.status == utils.Status.FAILED:
+        if self.status == core.Status.FAILED:
             return False
         # TODO: cached runs always report passed=True here because
         # _handle_cached_run restores self.result but not assertion_results
@@ -203,7 +203,7 @@ class Runs(Generic[T], abc.MutableSequence):
         may still have failed assertions or scored 0. Use `run.passed`
         to check that.
         """
-        return Runs([r for r in self.runs if r.status == utils.Status.SUCCESS])
+        return Runs([r for r in self.runs if r.status == core.Status.SUCCESS])
 
     @property
     def errored_runs(self) -> "Runs[T]":
@@ -213,7 +213,7 @@ class Runs(Generic[T], abc.MutableSequence):
         They're the candidates that `max_attempts > 1` will retry on the
         next attempt (with `enable_cache()` enabled).
         """
-        return Runs([r for r in self.runs if r.status == utils.Status.FAILED])
+        return Runs([r for r in self.runs if r.status == core.Status.FAILED])
 
     def as_dataframe(self) -> pd.DataFrame:
         if not self.runs:

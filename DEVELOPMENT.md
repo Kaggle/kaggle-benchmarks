@@ -14,8 +14,9 @@ The source lives in `src/kaggle_benchmarks/`. Here are the main subsystems — b
 
 | Subsystem | Key Modules | Responsibility |
 |-----------|------------|----------------|
-| **Core primitives** | `tasks.py`, `messages.py`, `runs.py`, `results.py` | Task/benchmark decorators, message types, execution records |
-| **LLM interaction** | `actors/` (incl. `llms.py`), `chats.py`, `prompting.py` | LLM abstraction (`LLMChat`, `OpenAI`, `GoogleGenAI`), conversation management, schema processing |
+| **Core objects** | `core.py`, `messages.py`, `chats.py`, `actors/base.py` | Base classes `Actor`/`Event`/`BaseMessage`/`Session` and the `Status` enum (`core.py`); their concrete types — `Message`, `Chat`/`GoldfishChat`, and the `Tool`/`system`/`user` actors |
+| **Core primitives** | `tasks.py`, `runs.py`, `results.py` | Task/benchmark decorators, execution records |
+| **LLM interaction** | `actors/llms.py`, `chats.py`, `prompting.py` | LLM abstraction (`LLMChat`, `OpenAI`, `GoogleGenAI`), conversation management, schema processing |
 | **Serialization** | `serializers/` | Translating messages to/from provider-specific API payloads |
 | **Content types** | `content_types/` | Provider-agnostic data models for images, audio, video |
 | **Configuration** | `_config.py` | Centralized `Config` dataclass, `ExecutionMode` enum |
@@ -44,6 +45,31 @@ Each layer has a single responsibility. Understanding which layer owns a piece o
 ---
 
 ## 2. Architecture & Design Principles
+
+### Core Objects: `Actor`, `Event`, `BaseMessage`, `Session`
+
+The library's core objects are defined together in `core.py`:
+
+- **`Actor`** — participates in a conversation and produces events (`send()`, `stream()`).
+- **`Event`** — a single item in a session's history; carries a `sender`, a `status`, and a unique `id`.
+- **`BaseMessage(Event)`** — a minimal event that carries `content`. Kept deliberately small (no usage/reasoning/tool-call state) so it — or `Event` — can serve as a lightweight type.
+- **`Session(Event)`** — an ordered list of `Event`s. Because `Session` subclasses `Event`, a session's `history` can hold both messages and nested sessions.
+
+The `Status` lifecycle enum also lives in `core` (`utils` re-exports it for backward compatibility).
+
+The full concrete types live in their own modules and subclass these bases:
+
+| Base | Concrete type(s) | Module |
+|------|------------------|--------|
+| `BaseMessage` (→ `Event`) | `Message` → `LLMMessage` | `messages.py`, `llm_messages.py` |
+| `Session` (→ `Event`) | `Chat` → `GoldfishChat` | `chats.py` |
+| `Actor` | `Tool`, `system`, `assertion`, `user` | `actors/base.py` |
+
+Keeping the bases together in `core.py` lets them reference each other directly, which removes the circular imports that otherwise arise between the concrete `Message`/`Actor`/`Chat` types. `core.py` imports only leaf modules at load time (`events`); `Message` is imported lazily where an `Actor` produces one, and referenced under `TYPE_CHECKING` for annotations.
+
+These core types are **plain classes, not dataclasses**: each concrete type defines an explicit `__init__` that calls `super().__init__`, so every event/session gets a stable `id` (a chat's `id` no longer changes when it's renamed) and consistent `sender`/`status` handling. `BaseMessage`/`Message` keep their positional `content`/`sender` constructor (e.g. `Message(content, sender=...)`).
+
+For backward compatibility the concrete types remain importable from their original locations — `messages.Message`, `actors.Actor`/`Tool`/`system`/`user`/`assertion`, `chats.Chat`/`GoldfishChat` — and `messages.BaseMessage`/`messages.Event` and `chats.Session` are also exposed.
 
 ### Content Types Are Provider-Agnostic
 
@@ -326,6 +352,8 @@ def respond(self, ...):
     from kaggle_benchmarks import contexts, llm_messages  # Lazy import
     ...
 ```
+
+The shared base classes (`Actor`, `Event`, `Session`) live together in `core.py` for the same reason — co-locating them lets the mutually-referential core types avoid importing one another at module load. See §2, "Core Objects".
 
 ### `TYPE_CHECKING` for Type-Only Imports
 

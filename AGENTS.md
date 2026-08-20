@@ -33,7 +33,8 @@ This is a **library-first codebase** organized by functional concerns:
 - **LLM clients** → `src/kaggle_benchmarks/clients.py` (client abstraction and resolution)
 
 ### Subsystems
-- **Actor system** → `src/kaggle_benchmarks/actors/` (LLMChat, Actor base classes)
+- **Core objects** → `src/kaggle_benchmarks/core.py` (base classes `Actor`, `Event`, `BaseMessage`, `Session` + the `Status` enum; concrete types are `Message` in `messages.py`, `Chat`/`GoldfishChat` in `chats.py`, and the actors in `actors/base.py`. These are plain classes, not dataclasses.)
+- **Actor system** → `src/kaggle_benchmarks/actors/` (`LLMChat` in `llms.py`; concrete `Tool`/`system`/`user` actors in `base.py`; `Actor` base class in `core.py`)
 - **Tools** → `src/kaggle_benchmarks/tools/` (Python interpreter, web search)
 - **Execution environments** → `src/kaggle_benchmarks/envs/` (local, docker)
 - **Kaggle integration** → `src/kaggle_benchmarks/kaggle/` (model loading, serialization)
