@@ -118,8 +118,18 @@ ReasoningLevel = Literal["none", "low", "medium", "high"]
 
 _THINK_TAG_PATTERN = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
 
-# Grok 4.5 and newer reject the `seed` parameter through Model Proxy.
-_UNSUPPORTED_GROK_RE = re.compile(r"^xai/grok-(4\.[5-9]|[5-9])")
+_GROK_VERSION_RE = re.compile(r"^xai/grok-(\d+)(?:\.(\d+))?")
+# Grok 4.5 is the first release to reject the `seed` parameter through Model Proxy.
+_MIN_SEEDLESS_GROK_VERSION = (4, 5)
+
+
+def _is_seedless_grok(model: str) -> bool:
+    """Reports whether a Grok model is new enough to reject `seed`."""
+    match = _GROK_VERSION_RE.match(model)
+    if not match:
+        return False
+    major, minor = match.groups()
+    return (int(major), int(minor or 0)) >= _MIN_SEEDLESS_GROK_VERSION
 
 
 def _parse_think_tags(content: str) -> tuple[str, str | None]:
@@ -430,7 +440,7 @@ class OpenAI(LLMChat):
         )
         if any(self.model.startswith(prefix) for prefix in unsupported_prefixes):
             return True
-        return bool(_UNSUPPORTED_GROK_RE.match(self.model))
+        return _is_seedless_grok(self.model)
 
     def invoke(
         self,
