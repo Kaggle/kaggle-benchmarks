@@ -425,6 +425,7 @@ class OpenAI(LLMChat):
             "openai/gpt-5.4-pro",
             "openai/gpt-5.6",
             "xai/grok-4.5",
+            "xai/grok-4.6",
         )
         return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
 
