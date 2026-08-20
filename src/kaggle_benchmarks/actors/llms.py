@@ -118,6 +118,9 @@ ReasoningLevel = Literal["none", "low", "medium", "high"]
 
 _THINK_TAG_PATTERN = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
 
+# Grok 4.5 and newer reject the `seed` parameter through Model Proxy.
+_UNSUPPORTED_GROK_RE = re.compile(r"^xai/grok-(4\.[5-9]|[5-9])")
+
 
 def _parse_think_tags(content: str) -> tuple[str, str | None]:
     """Extracts all <think>...</think> blocks from content.
@@ -424,9 +427,10 @@ class OpenAI(LLMChat):
             "google/",
             "openai/gpt-5.4-pro",
             "openai/gpt-5.6",
-            "xai/grok-4.5",
         )
-        return any(self.model.startswith(prefix) for prefix in unsupported_prefixes)
+        if any(self.model.startswith(prefix) for prefix in unsupported_prefixes):
+            return True
+        return bool(_UNSUPPORTED_GROK_RE.match(self.model))
 
     def invoke(
         self,

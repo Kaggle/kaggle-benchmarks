@@ -464,6 +464,28 @@ def test_reasoning_extra_body_only_for_google_models():
     assert anthropic_llm.kwargs["reasoning_effort"] == "high"
 
 
+@pytest.mark.parametrize(
+    "model,expected",
+    [
+        ("google/gemini-2.5-flash", True),
+        ("openai/gpt-5.4-pro", True),
+        ("openai/gpt-5.6", True),
+        ("xai/grok-4.5", True),
+        ("xai/grok-4.6", True),
+        ("xai/grok-4.9-fast", True),
+        ("xai/grok-5", True),
+        ("xai/grok-7.1", True),
+        ("xai/grok-4.4", False),
+        ("xai/grok-4", False),
+        ("xai/grok-3", False),
+        ("openai/gpt-5.5", False),
+        ("anthropic/claude-sonnet-4-6@default", False),
+    ],
+)
+def test_should_remove_seed(model, expected):
+    assert MockedOpenAI(model=model)._should_remove_seed() is expected
+
+
 def test_invoke_prompt():
     llm = MockedOpenAI(model="test-model")
     llm.support_structured_outputs = False
