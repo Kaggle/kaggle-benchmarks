@@ -276,6 +276,8 @@ def _message_to_proto_content(message: benchmark_messages.Message) -> dict[str, 
 
 def _prepare_conversations_data(
     chat: chats.Chat | None,
+    parent_id: str = "",
+    previous_request_id: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str]]]:
     """
     Converts a benchmark `chats.Chat` object, including any nested sub-chats,
@@ -288,8 +290,16 @@ def _prepare_conversations_data(
     Assertions encountered are mapped to their parent chat ID and the specific
     request (the previous request) ID they link to, facilitating contextual display.
 
+    Each conversation entry includes ``parent_conversation_id`` and
+    ``previous_request_id`` fields linking it chronologically to its parent
+    conversation, enabling consumers to reconstruct the chat tree hierarchy.
+
     Args:
         chat: The `chats.Chat` object to process.
+        parent_id: The ID of the parent conversation, used to populate the
+            ``parent_conversation_id`` field on child conversations.
+        previous_request_id: The ID of the request in the parent conversation
+            that immediately preceded the start of this conversation.
 
     Returns:
         A tuple containing:
@@ -313,14 +323,14 @@ def _prepare_conversations_data(
             if item.sender.name == "Assertion" and isinstance(
                 item.content, assertions.AssertionResult
             ):
-                previous_request_id = (
+                prev_assertion_request_id = (
                     current_conversation_requests[-1]["id"]
                     if current_conversation_requests
                     else None
                 )
                 conversation_assertion_map[item.content.id] = (
                     chat.id,
-                    previous_request_id,
+                    prev_assertion_request_id,
                 )
 
             # Ignore messages invisible to llm in requests.
@@ -362,7 +372,14 @@ def _prepare_conversations_data(
         elif isinstance(item, chats.Chat):
             # Recursively prepare conversation data for the sub-chat
             # and collect its entries to be added after the current chat's entry.
-            conversation_entries, assertion_map = _prepare_conversations_data(item)
+            prev_req_id = (
+                current_conversation_requests[-1]["id"]
+                if current_conversation_requests
+                else ""
+            )
+            conversation_entries, assertion_map = _prepare_conversations_data(
+                item, parent_id=chat.id, previous_request_id=prev_req_id
+            )
 
             conversation_assertion_map.update(assertion_map)
             subchat_conversation_entries.extend(conversation_entries)
@@ -392,6 +409,8 @@ def _prepare_conversations_data(
         "requests": current_conversation_requests,
         "metrics": conversation_metrics,
         "model_version_slug": "model_version_slug for conversation is DEPRECATED",
+        "parent_conversation_id": parent_id or None,
+        "previous_request_id": previous_request_id or None,
     }
 
     conversation_entries = [current_conversation_entry] + subchat_conversation_entries
