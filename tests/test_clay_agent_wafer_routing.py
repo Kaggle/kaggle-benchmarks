@@ -125,6 +125,10 @@ def test_case_contract_is_exact_and_balanced() -> None:
 
 def test_file_has_matching_task_and_top_level_run() -> None:
     tree = ast.parse(TASK_PATH.read_text(encoding="utf-8"))
+    assert not any(
+        isinstance(node, ast.ImportFrom) and node.module == "__future__"
+        for node in tree.body
+    )
     task_names = []
     has_top_level_run = False
     for node in tree.body:

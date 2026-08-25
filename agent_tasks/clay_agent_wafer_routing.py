@@ -13,8 +13,6 @@
 # limitations under the License.
 
 # %%
-from __future__ import annotations
-
 import hashlib
 import json
 import time
@@ -65,7 +63,7 @@ class SacredEggTimer:
         period_s: int = 30,
         now_monotonic_ns: int | None = None,
         now_utc_ns: int | None = None,
-    ) -> SacredEggTimer:
+    ) -> "SacredEggTimer":
         if not label:
             raise ValueError("timer label must be non-empty")
         if type(budget_s) is not int or budget_s <= 0:
