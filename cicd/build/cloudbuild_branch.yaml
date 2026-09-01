@@ -50,6 +50,16 @@ steps:
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
 
+  # Golden tests without credentials: the cookbook tasks run against scripted
+  # models, covering the end-to-end paths (schema parsing, tool loops, chatrooms,
+  # assertions). Tests that need a live provider skip themselves.
+  - id: golden-tests
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    dir: /benchmarks
+    entrypoint: uv
+    args: ["run", "--python", "3.11", "--group", "test", "pytest", "golden_tests"]
+    waitFor: ["push-image"]
+
   - id: ruff
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
     dir: /benchmarks
