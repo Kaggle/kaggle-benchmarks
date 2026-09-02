@@ -43,8 +43,11 @@ def native_tool_agent(
 ) -> Message:
     """Runs a multi-turn tool calling loop.
 
-    Forks the chat to isolate tool-calling round-trips from the main
-    conversation. The loop runs in two phases:
+    Builds the message list for each round locally and passes it as
+    ``input_messages``, the same way ``rooms.ChatRoom`` gives each participant
+    its own view of a shared history. The chat itself stays single, so the
+    caller's next turn sees the tool rounds that preceded it. The loop runs in
+    two phases:
 
     1. **Tool rounds** — calls ``llm.respond(tools=…)`` without ``schema=``
        to avoid backend conflicts (OpenAI requires ``strict=True`` on tools
@@ -74,37 +77,40 @@ def native_tool_agent(
     """
     from kaggle_benchmarks import actors, chats
 
+    # `respond()` and `send()` append to the chat on their own, so this list is
+    # only what the next call gets to see, not the record of what happened.
+    view = [m for m in chats.get_current_chat().messages if m.is_visible_to_llm]
     response = None
     exhausted = True
 
-    with chats.fork(name="Tool loop"):
-        for _ in range(max_tool_rounds):
-            response = llm.respond(tools=tools, **respond_kwargs)
+    for _ in range(max_tool_rounds):
+        response = llm.respond(input_messages=view, tools=tools, **respond_kwargs)
 
-            # tool_calls is a list[ToolInvocation] post-normalization:
-            #  - plain Message responses: normalized in respond()'s LLMResponse
-            #    branch (Step 2) or in stream()'s finalize pass (Step 3)
-            #  - LLMMessage responses (e.g., MockedChat): typed field set
-            #    directly by the producer
-            tool_calls = response.tool_calls
-            if not tool_calls:
-                exhausted = False
-                break
+        # tool_calls is a list[ToolInvocation] post-normalization:
+        #  - plain Message responses: normalized in respond()'s LLMResponse
+        #    branch (Step 2) or in stream()'s finalize pass (Step 3)
+        #  - LLMMessage responses (e.g., MockedChat): typed field set
+        #    directly by the producer
+        tool_calls = response.tool_calls
+        if not tool_calls:
+            exhausted = False
+            break
 
-            for invocation in tool_calls:
-                result = invoke_tool(invocation, tools)
-                actors.Tool(name=invocation.name).send(result)
+        view.append(response)
+        for invocation in tool_calls:
+            result = invoke_tool(invocation, tools)
+            view.append(actors.Tool(name=invocation.name).send(result))
 
-        if not exhausted and schema is not str:
-            # User message required: some models (e.g. Claude) reject requests
-            # where the conversation ends with an assistant message.
+    if not exhausted and schema is not str:
+        # User message required: some models (e.g. Claude) reject requests
+        # where the conversation ends with an assistant message.
+        view.append(
             actors.user.send(
                 "Now format your previous answer using the requested schema."
             )
-            response = llm.respond(schema=schema, **respond_kwargs)
+        )
+        response = llm.respond(input_messages=view, schema=schema, **respond_kwargs)
 
-    # Raised outside `with chats.fork()` because the context manager may
-    # swallow exceptions when no parent run is active (see contexts.enter).
     if exhausted:
         raise ToolInvocationLimitExhausted(
             f"Tool invocation limit of {max_tool_rounds} rounds exhausted"

@@ -697,8 +697,19 @@ class ModelRequest(google.protobuf.message.Message):
     CONTENTS_FIELD_NUMBER: builtins.int
     METRICS_FIELD_NUMBER: builtins.int
     ID_FIELD_NUMBER: builtins.int
+    REASONING_TRACES_FIELD_NUMBER: builtins.int
     id: builtins.str
     """Model request ID generated in Python"""
+    reasoning_traces: builtins.str
+    """The model's own reasoning for the reply that closes this request, when the
+    provider returns it. A property of the turn rather than a Part, because
+    both providers hand back one blob per reply, and a Part variant would have
+    to be re-joined by every reader. Empty for streaming, which does not
+    capture reasoning yet.
+
+    Not yet mirrored in kaggleazure's copy of this file. When it is added
+    there it must reuse field 4 -- a number means one thing forever.
+    """
     @property
     def contents(
         self,
@@ -713,16 +724,37 @@ class ModelRequest(google.protobuf.message.Message):
         contents: collections.abc.Iterable[Global___Content] | None = ...,
         metrics: Global___ModelUsageMetrics | None = ...,
         id: builtins.str = ...,
+        reasoning_traces: builtins.str | None = ...,
     ) -> None: ...
     def HasField(
-        self, field_name: typing.Literal["metrics", b"metrics"]
+        self,
+        field_name: typing.Literal[
+            "_reasoning_traces",
+            b"_reasoning_traces",
+            "metrics",
+            b"metrics",
+            "reasoning_traces",
+            b"reasoning_traces",
+        ],
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
-            "contents", b"contents", "id", b"id", "metrics", b"metrics"
+            "_reasoning_traces",
+            b"_reasoning_traces",
+            "contents",
+            b"contents",
+            "id",
+            b"id",
+            "metrics",
+            b"metrics",
+            "reasoning_traces",
+            b"reasoning_traces",
         ],
     ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_reasoning_traces", b"_reasoning_traces"]
+    ) -> typing.Literal["reasoning_traces"] | None: ...
 
 Global___ModelRequest: typing_extensions.TypeAlias = ModelRequest
 

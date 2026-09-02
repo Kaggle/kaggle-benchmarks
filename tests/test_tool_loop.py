@@ -309,17 +309,19 @@ def test_extra_arguments_filtered():
     assert result == "15"
 
 
-def test_assert_tool_was_invoked_in_forked_chat():
-    """assert_tool_was_invoked finds tools in the forked subchat."""
+def test_assert_tool_was_invoked_finds_the_result_in_the_chat():
+    """assert_tool_was_invoked finds the tool result the loop left behind."""
     tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
     final_response = LLMMessage(sender=None, content="3")
 
-    llm = MockedChat(responses=[tool_response, final_response])
-    llm.prompt("1+2?", tools=[_add])
+    # An explicit chat: the loop uses whatever chat it is given, and the global
+    # default is a GoldfishChat, which keeps only the last message.
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response, final_response])
+        llm.prompt("1+2?", tools=[_add])
 
-    # The assertion should find the tool result in the nested fork.
-    result = assertions.assert_tool_was_invoked(_add)
-    assert result.passed
+        result = assertions.assert_tool_was_invoked(_add)
+        assert result.passed
 
 
 def test_assert_tool_was_invoked_by_name():
@@ -327,15 +329,16 @@ def test_assert_tool_was_invoked_by_name():
     tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
     final_response = LLMMessage(sender=None, content="3")
 
-    llm = MockedChat(responses=[tool_response, final_response])
-    llm.prompt("1+2?", tools=[_add])
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response, final_response])
+        llm.prompt("1+2?", tools=[_add])
 
-    assert assertions.assert_tool_was_invoked("_add").passed
-    assert not assertions.assert_tool_was_invoked("_multiply").passed
+        assert assertions.assert_tool_was_invoked("_add").passed
+        assert not assertions.assert_tool_was_invoked("_multiply").passed
 
 
-def test_no_fork_without_tools():
-    """When no tools are provided, prompt() doesn't fork the chat."""
+def test_no_nested_chat_without_tools():
+    """prompt() answers in the current chat rather than opening a nested one."""
     response = LLMMessage(sender=None, content="Hello.")
     llm = MockedChat(responses=[response])
 
@@ -403,6 +406,57 @@ def test_multiple_tool_calls_in_single_response():
     assert result == "1+2=3, 3*4=12"
     # 2 invocations: first with tool calls, second with final answer.
     assert len(llm.invocations) == 2
+
+
+def test_the_turn_after_a_tool_loop_can_see_it():
+    """The loop leaves its rounds in the chat, so the next prompt is answered in
+    light of them. It used to run in a fork that was thrown away, leaving the
+    caller's own chat with an unanswered turn."""
+    tool_response = _make_tool_call_response("_add", {"a": 2, "b": 3})
+    replies = [
+        LLMMessage(sender=None, content="Hi there!"),
+        tool_response,
+        LLMMessage(sender=None, content="The sum is 5."),
+        LLMMessage(sender=None, content="Goodbye!"),
+    ]
+
+    with chats.new("Mixed"):
+        llm = MockedChat(responses=replies)
+        llm.prompt("Hi")
+        llm.prompt("Add 2 and 3", tools=[_add])
+        llm.prompt("Bye")
+
+    # The history the model is shown only grows, the tool round included.
+    sent = [len(messages) for messages, _ in llm.invocations]
+    assert sent == [1, 3, 5, 7]
+    last, _ = llm.invocations[-1]
+    assert any(isinstance(message.content, ToolInvocationResult) for message in last)
+
+
+def test_the_loop_shows_the_model_only_what_the_chat_would_show_it():
+    """The loop builds its own view, so it has to honour the same two rules the
+    chat does: hidden messages stay hidden, and a side chat stays outside."""
+    tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
+    replies = [
+        LLMMessage(sender=None, content="aside"),
+        tool_response,
+        LLMMessage(sender=None, content="3"),
+    ]
+
+    with chats.new("Outer"):
+        actors.user.send("a note to self", is_visible_to_llm=False)
+        llm = MockedChat(responses=replies)
+        with chats.new("Inner"):
+            llm.prompt("private")
+        llm.prompt("1+2?", tools=[_add])
+
+    seen = [
+        str(message.content)
+        for messages, _ in llm.invocations[1:]
+        for message in messages
+    ]
+    assert not any("note to self" in text for text in seen)
+    assert not any("private" in text for text in seen)
 
 
 def test_tool_not_found_through_loop():

@@ -49,6 +49,7 @@ Here is a simple example of a benchmark that asks a model a riddle and checks it
 ```python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task(name="simple_riddle")
 def solve_riddle(llm, riddle: str, answer: str):
     """Asks a riddle and checks for a keyword in the answer."""
@@ -59,9 +60,10 @@ def solve_riddle(llm, riddle: str, answer: str):
         f"(?i){answer}", response, expectation="LLM should give the right answer."
     )
 
+
 # Execute the task
 solve_riddle.run(
-    llm=kbench.llm, # Uses the default LLM
+    llm=kbench.llm,  # Uses the default LLM
     riddle="What gets wetter as it dries?",
     answer="Towel",
 )

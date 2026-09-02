@@ -95,6 +95,7 @@ the answer is correct.
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task(name="simple_riddle")
 def solve_riddle(llm, riddle: str, answer: str):
     """Asks a riddle and checks for a keyword in the answer."""
@@ -398,6 +399,7 @@ df = pd.DataFrame(
     ]
 )
 
+
 # First define the task for a single row of the dataset.
 @kbench.task(store_task=False)
 def single_qa_task(llm, question, answer) -> dict:
@@ -408,6 +410,7 @@ def single_qa_task(llm, question, answer) -> dict:
         "predicted_answer": response,
         "is_correct": answer.lower() in response.lower(),
     }
+
 
 # Define the task for the entire dataset.
 @kbench.task()
@@ -486,12 +489,14 @@ For example, given the following tasks:
 @kbench.task()
 def sub_task1(): ...
 
+
 @kbench.task()
 def sub_task2(): ...
 
+
 @kbench.task()
 def main_task():
-   sub_task1.evaluate(...)
+    sub_task1.evaluate(...)
 ```
 
 You can select the main task like this:

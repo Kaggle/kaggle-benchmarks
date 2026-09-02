@@ -60,6 +60,7 @@ it fails. This is perfect for simple Q&A checks.
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task(name="check_capital")
 def check_capital(llm):
     # 1. Prompt the model
@@ -71,6 +72,7 @@ def check_capital(llm):
     kbench.assertions.assert_contains_regex(
         r"(?i)Paris", response, expectation="Model should answer Paris."
     )
+
 
 check_capital.run(kbench.llm)
 ```
@@ -90,6 +92,7 @@ subjective and may vary between runs.
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task(name="haiku_evaluation")
 def haiku_evaluation(llm, topic):
     response = llm.prompt(f"Write a haiku about {topic}.")
@@ -102,15 +105,16 @@ def haiku_evaluation(llm, topic):
             f"The poem must be about {topic}.",
         ],
         response_text=response,
-        judge_llm=llm
+        judge_llm=llm,
     )
 
     # Convert judge results into formal assertions
     for result in assessment.results:
         kbench.assertions.assert_true(
             result.passed,
-            expectation=f"Criterion '{result.criterion}' failed: {result.reason}"
+            expectation=f"Criterion '{result.criterion}' failed: {result.reason}",
         )
+
 
 haiku_evaluation.run(kbench.judge_llm, topic="AGI")
 ```
@@ -124,6 +128,7 @@ import textwrap
 from typing import Iterable
 
 import kaggle_benchmarks as kbench
+
 
 @dataclasses.dataclass
 class StoryCritique:
@@ -224,18 +229,17 @@ that require structured output.
 ``` python
 from dataclasses import dataclass
 
+
 @dataclass
 class MovieReview:
     sentiment: str
     score: int
 
+
 @kbench.task(name="analyze_review")
 def analyze_review(llm):
     # The model will return an instance of MovieReview, not a string.
-    result = llm.prompt(
-        "Analyze this review: 'Fantastic movie!'",
-        schema=MovieReview
-    )
+    result = llm.prompt("Analyze this review: 'Fantastic movie!'", schema=MovieReview)
     print(f"Score: {result.score}, Sentiment: {result.sentiment}")
 ```
 
@@ -274,17 +278,21 @@ row in a pandas DataFrame.
 ``` python
 import pandas as pd
 
+
 # 1. Define a task that accepts row columns as arguments
 @kbench.task()
 def solve_question(llm, question, answer) -> bool:
     response = llm.prompt(question)
     return answer.lower() in response.lower()
 
+
 # 2. Prepare your dataset
-df = pd.DataFrame([
-    {"question": "2+2", "answer": "4"},
-    {"question": "Capital of UK", "answer": "London"},
-])
+df = pd.DataFrame(
+    [
+        {"question": "2+2", "answer": "4"},
+        {"question": "Capital of UK", "answer": "London"},
+    ]
+)
 
 # 3. Run evaluation
 results = solve_question.evaluate(llm=[kbench.llm], evaluation_data=df)
@@ -321,8 +329,8 @@ with kbench.client.enable_cache():
         llm=[kbench.llm],
         evaluation_data=df,
         on_failure="continue",  # collect failures instead of raising
-        max_attempts=3,         # retry transient failures up to twice
-        retry_delay=5,          # wait 5 seconds between attempts
+        max_attempts=3,  # retry transient failures up to twice
+        retry_delay=5,  # wait 5 seconds between attempts
     )
 
 # 3. Inspect what completed and what didn't
@@ -355,10 +363,7 @@ However, if you need to compare models directly within your notebook
 LLMs to `.evaluate()` to run them all.
 
 ``` python
-models = [
-    kbench.llms["google/gemini-2.5-flash"],
-    kbench.llms["meta/llama-3.1-70b"]
-]
+models = [kbench.llms["google/gemini-2.5-flash"], kbench.llms["meta/llama-3.1-70b"]]
 
 # Runs the evaluation for BOTH models
 results = solve_question.evaluate(llm=models, evaluation_data=df)
@@ -422,6 +427,7 @@ lightweight `Participant` wrapper returned by `add_participant`.
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task()
 def debate_task(llm):
     room = kbench.ChatRoom(
@@ -429,11 +435,15 @@ def debate_task(llm):
         name="Moderator",
     )
     pro = room.add_participant(
-        llm, name="Pro", avatar="🔵",
+        llm,
+        name="Pro",
+        avatar="🔵",
         system_prompt="Argue IN FAVOR of the topic. Be concise.",
     )
     con = room.add_participant(
-        llm, name="Con", avatar="🔴",
+        llm,
+        name="Con",
+        avatar="🔴",
         system_prompt="Argue AGAINST the topic. Be concise.",
     )
 
@@ -674,13 +684,12 @@ assertion functions using the `@assertion_handler` decorator.
 ``` python
 from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
 
+
 @assertion_handler()
 def assert_is_even(value: int, expectation: str) -> AssertionResult:
     # Return a structured result object
-    return AssertionResult(
-        passed=(value % 2 == 0),
-        expectation=expectation
-    )
+    return AssertionResult(passed=(value % 2 == 0), expectation=expectation)
+
 
 @kbench.task()
 def even_task(llm):
@@ -728,6 +737,7 @@ def get_weather(city: str) -> str:
     """Returns the weather for a city."""
     return "Sunny"
 
+
 @kbench.task()
 def weather_task(llm):
     # Pass the function directly to the 'tools' argument
@@ -735,6 +745,7 @@ def weather_task(llm):
 
     # Verify that the tool was actually called
     kbench.assertions.assert_tool_was_invoked(get_weather)
+
 
 weather_task.run(kbench.llm)
 ```
@@ -745,14 +756,17 @@ tool-calling phase:
 ``` python
 from dataclasses import dataclass
 
+
 def lookup_population(city: str) -> int:
     """Looks up the population of a city."""
     return 14_000_000
+
 
 @dataclass
 class CityReport:
     city: str
     population: int
+
 
 @kbench.task()
 def city_report_task(llm):
@@ -763,6 +777,7 @@ def city_report_task(llm):
     )
     kbench.assertions.assert_tool_was_invoked(lookup_population)
     kbench.assertions.assert_equal("Tokyo", report.city)
+
 
 city_report_task.run(kbench.llm)
 ```

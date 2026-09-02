@@ -97,7 +97,9 @@ class Message(Generic[T]):
                 f"Object of type {type(self.content)} (value: {self.content}) lacks a proper serialization method."
                 "Falling back to `__dict__`."
             )
-            return json.dumps(self.content.__dict__)
+            # default=str so one odd attribute degrades to its string form
+            # rather than raising, which would lose the whole run file.
+            return json.dumps(self.content.__dict__, default=str)
         return self.text
 
     def __panel__(self):
