@@ -12,53 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import itertools
-import json
+"""Backward-compatible alias for the public ``ScriptedLLM``.
 
-from kaggle_benchmarks import actors
-from kaggle_benchmarks.llm_messages import LLMMessage
+``MockedChat`` now lives in :mod:`kaggle_benchmarks.testing` as ``ScriptedLLM``.
+This thin subclass preserves the original signature (positional ``name``) for
+existing tests; new code should use ``kaggle_benchmarks.testing.ScriptedLLM``.
+"""
+
+from kaggle_benchmarks.testing import ScriptedLLM
 
 
-class MockedChat(actors.LLMChat):
-    """A mock LLMChat that returns pre-configured responses.
+class MockedChat(ScriptedLLM):
+    """Deprecated alias for :class:`kaggle_benchmarks.testing.ScriptedLLM`."""
 
-    Note: invoke() returns LLMMessage (not LLMResponse), exercising a
-    different branch in LLMChat.respond() than real backends.
-    """
-
-    def __init__(
-        self, responses: list[LLMMessage[str]], name="MockedChat", cycle=False, **kwargs
-    ):
-        super().__init__(name=name, **kwargs)
-        self.response = itertools.cycle(responses) if cycle else iter(responses)
-        self.invocations = []
-
-    @classmethod
-    def from_contents(cls, contents: list[str], cycle=False, **kwargs):
-        return cls(
-            responses=[
-                LLMMessage(sender=None, content=content) for content in contents
-            ],
-            cycle=cycle,
-            **kwargs,
-        )
-
-    @classmethod
-    def from_contents_data(cls, contents: list[dict], cycle=False, **kwargs):
-        return cls(
-            responses=[
-                LLMMessage(sender=None, content=json.dumps(content))
-                for content in contents
-            ],
-            cycle=cycle,
-            **kwargs,
-        )
-
-    def invoke(self, messages, tools=None, **kwargs):
-        self.invocations.append((messages, kwargs))
-        try:
-            response = next(self.response)
-            response.sender = self
-            return response
-        except StopIteration:
-            assert False, "No more responses available"
+    def __init__(self, responses, name="MockedChat", cycle=False, **kwargs):
+        super().__init__(responses, name=name, cycle=cycle, **kwargs)
