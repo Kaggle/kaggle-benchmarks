@@ -33,7 +33,7 @@ This is a **library-first codebase** organized by functional concerns:
 - **LLM clients** → `src/kaggle_benchmarks/clients.py` (client abstraction and resolution)
 
 ### Subsystems
-- **Actor system** → `src/kaggle_benchmarks/actors/` (LLMChat, Actor base classes)
+- **Actor system** → `src/kaggle_benchmarks/actors/` (base `LLMChat` and `Actor` in `llms.py`/`base.py`; the `OpenAI` and `GoogleGenAI` backends in `openai.py`/`genai.py`, re-exported from `llms.py`)
 - **Tools** → `src/kaggle_benchmarks/tools/` (Python interpreter, web search)
 - **Execution environments** → `src/kaggle_benchmarks/envs/` (local, docker)
 - **Kaggle integration** → `src/kaggle_benchmarks/kaggle/` (model loading, serialization)
