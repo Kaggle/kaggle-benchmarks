@@ -54,11 +54,9 @@ Content objects (`ImageContent`, `VideoContent`, `AudioContent` in `content_type
 class ImageContent:
     detail: str = "auto"  # OpenAI-specific
 
-
 # ✅ DO — content types stay clean; serializers handle provider logic
 class ImageContent:
     """Provider-agnostic image representation."""
-
     ...
 ```
 
@@ -71,7 +69,6 @@ The codebase has a dedicated serializer layer built on `BaseSerializer` (in `ser
 class MyClient:
     def send(self, msg):
         payload = {"parts": [{"text": msg.content}]}
-
 
 # ✅ DO — delegate to the serializer
 class MyClient:
@@ -90,9 +87,7 @@ When adding new modality support or specialized behavior, prefer **dedicated sub
 
 ```python
 # ❌ DON'T — generic kwargs are hard to validate and discover
-video = videos.from_url(
-    "https://youtube.com/...", video_metadata={"start_offset": "0s"}
-)
+video = videos.from_url("https://youtube.com/...", video_metadata={"start_offset": "0s"})
 
 # ✅ DO — dedicated factory with explicit parameters
 video = videos.from_youtube("https://youtube.com/...", start_offset=0, end_offset=10)
@@ -350,12 +345,10 @@ Some module-level objects (`kbench.llm`, `kbench.judge_llm`, `kbench.llms`) are 
 ```python
 # ✅ Always works — import the submodule directly
 from kaggle_benchmarks import actors
-
 llm_chat = actors.LLMChat(...)
 
 # ⚠️ Only works when Kaggle is configured
 import kaggle_benchmarks as kbench
-
 kbench.llm  # AttributeError if not configured
 ```
 
@@ -393,7 +386,6 @@ Use the standard `logging` module for informational and diagnostic messages. Cre
 
 ```python
 import logging
-
 logger = logging.getLogger(__name__)
 
 logger.info("Loading environment variables from %s", path)
@@ -422,9 +414,7 @@ Custom assertions use the `@assertion_handler` decorator (in `assertions.py`). T
 
 ```python
 @assertions.assertion_handler()
-def assert_response_valid(
-    response: str, expectation: str = ""
-) -> assertions.AssertionResult:
+def assert_response_valid(response: str, expectation: str = "") -> assertions.AssertionResult:
     """Verifies that the response is well-formed."""
     passed = len(response) > 0 and not response.startswith("Error")
     return assertions.AssertionResult(
@@ -458,7 +448,6 @@ If something can be computed once and reused, do so — especially for module-le
 ```python
 # ✅ Compile once at module level
 _PATTERN = re.compile(r"<think>.*?</think>", flags=re.DOTALL)
-
 
 def strip_tags(text):
     return _PATTERN.sub("", text)

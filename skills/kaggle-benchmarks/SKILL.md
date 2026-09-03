@@ -40,14 +40,13 @@ import kaggle_benchmarks as kbench
 ```python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="geography_quiz")
 def geography_quiz(llm):
     response = llm.prompt("What is the longest river in the world?")
     kbench.assertions.assert_contains_regex(
-        r"(?i)nile", response, expectation="Should mention the Nile river."
+        r"(?i)nile", response,
+        expectation="Should mention the Nile river."
     )
-
 
 geography_quiz.run(kbench.llm)
 ```
@@ -58,29 +57,23 @@ geography_quiz.run(kbench.llm)
 import kaggle_benchmarks as kbench
 import pandas as pd
 
-
 @kbench.task(name="math_qa", store_task=False)
 def math_qa(llm, question, expected) -> bool:
     answer = llm.prompt(question + "\nAnswer with just the number.", schema=int)
     kbench.assertions.assert_equal(expected, answer)
     return answer == expected
 
-
 # %%
-df = pd.DataFrame(
-    [
-        {"question": "What is 15% of 200?", "expected": 30},
-        {"question": "What is 7 × 8?", "expected": 56},
-    ]
-)
-
+df = pd.DataFrame([
+    {"question": "What is 15% of 200?", "expected": 30},
+    {"question": "What is 7 × 8?", "expected": 56},
+])
 
 @kbench.task(name="math_benchmark")
 def math_benchmark(llm) -> float:
     results = math_qa.evaluate(llm=[llm], evaluation_data=df, n_jobs=2)
     scores = results.as_dataframe()
     return float(scores.result.mean())
-
 
 math_benchmark.run(kbench.llm)
 ```
@@ -125,7 +118,6 @@ There are two main import styles. **Prefer Style A** for clarity.
 ```python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="my_task")
 def my_task(llm):
     response = llm.prompt("Question?")
@@ -135,7 +127,6 @@ def my_task(llm):
 ### Style B: Direct imports
 ```python
 from kaggle_benchmarks import assertions, chats, llm, task, system, user
-
 
 @task("my_task")
 def my_task(llm):
@@ -153,20 +144,18 @@ Benchmark files are Python scripts (`.py`), but use `# %%` cell markers to creat
 # %%
 import kaggle_benchmarks as kbench
 
-
 # %%
 @kbench.task()
 def my_task(llm):
     response = llm.prompt("Hello!")
     kbench.assertions.assert_not_empty(response)
 
-
 my_task.run(kbench.llm)
-
 
 # %%
 @kbench.task()
-def another_task(llm) -> float: ...
+def another_task(llm) -> float:
+    ...
 ```
 
 **IPython magics (`!pip install`, `%time`, etc.):** These work on Kaggle notebooks but NOT when running as standalone Python files. If you need a magic command (e.g., to install a dependency), comment it out so the file remains runnable locally:
@@ -199,13 +188,14 @@ my_task.run(kbench.llm)
 
 ```python
 @kbench.task(
-    name="optional_name",  # Defaults to function name, title-cased
-    description="What it does",  # Defaults to docstring
-    version=1,  # Task version
-    store_task=True,  # Set False for sub-tasks
-    store_run=True,  # Set False to skip storing results
+    name="optional_name",         # Defaults to function name, title-cased
+    description="What it does",   # Defaults to docstring
+    version=1,                    # Task version
+    store_task=True,              # Set False for sub-tasks
+    store_run=True,               # Set False to skip storing results
 )
-def my_task(llm): ...
+def my_task(llm):
+    ...
 ```
 
 `@kbench.benchmark()` is an exact alias for `@kbench.task()`.
@@ -216,12 +206,11 @@ The first parameter **must** be the LLM actor. It receives the model to test.
 
 ```python
 @kbench.task()
-def my_task(llm):  # ✅ Correct
+def my_task(llm):           # ✅ Correct
     ...
 
-
 @kbench.task()
-def my_task(llm, judge_llm):  # ✅ Also fine — second LLM for judging
+def my_task(llm, judge_llm): # ✅ Also fine — second LLM for judging
     ...
 ```
 
@@ -233,8 +222,9 @@ Extra parameters are passed via `.run()` kwargs:
 @kbench.task()
 def check_knowledge(llm, question, expected_answer):
     response = llm.prompt(question)
-    kbench.assertions.assert_contains_regex(rf"(?i){expected_answer}", response)
-
+    kbench.assertions.assert_contains_regex(
+        rf"(?i){expected_answer}", response
+    )
 
 check_knowledge.run(kbench.llm, question="Capital of Japan?", expected_answer="Tokyo")
 ```
@@ -261,12 +251,10 @@ check_knowledge.run(kbench.llm, question="Capital of Japan?", expected_answer="T
 def accuracy(llm) -> float:
     return 0.85
 
-
 # Count task
 @kbench.task()
 def count_correct(llm) -> tuple[int, int]:
     return (8, 10)  # 8 out of 10 passed
-
 
 # Dict task (for rich results)
 @kbench.task()
@@ -288,8 +276,8 @@ run = my_task.run(kbench.llm)
 run = my_task.run(kbench.llm, question="What is Python?")
 
 # Multiple models
-run1 = my_task.run(kbench.llm)  # Default model
-run2 = my_task.run(kbench.judge_llm)  # Judge model
+run1 = my_task.run(kbench.llm)         # Default model
+run2 = my_task.run(kbench.judge_llm)   # Judge model
 ```
 
 **Available models (loaded from Kaggle environment):**
@@ -304,11 +292,11 @@ The `Run` object returned by `.run()` has useful attributes:
 ```python
 run = my_task.run(kbench.llm)
 
-run.passed  # bool — True if result + all assertions passed
-run.result  # The returned value (type depends on task return annotation)
-run.assertion_results  # list[AssertionResult] — all recorded assertions
-run.status  # Status enum (PENDING, DONE, FAILED)
-run.chat  # The conversation log
+run.passed              # bool — True if result + all assertions passed
+run.result              # The returned value (type depends on task return annotation)
+run.assertion_results   # list[AssertionResult] — all recorded assertions
+run.status              # Status enum (PENDING, DONE, FAILED)
+run.chat                # The conversation log
 ```
 
 This is especially useful in sub-task composition:
@@ -323,15 +311,15 @@ accuracy = sum(r.passed for r in runs) / len(runs)
 import pandas as pd
 
 results = my_task.evaluate(
-    llm=[kbench.llm],  # List of models
-    evaluation_data=df,  # DataFrame of test cases
-    n_jobs=3,  # Parallel workers (default: 1)
-    timeout=120,  # Per-job timeout in seconds
-    max_attempts=3,  # Retry count
-    retry_delay=15,  # Seconds between retries
-    on_failure="raise",  # "raise" (default) or "continue"
+    llm=[kbench.llm],                    # List of models
+    evaluation_data=df,                   # DataFrame of test cases
+    n_jobs=3,                             # Parallel workers (default: 1)
+    timeout=120,                          # Per-job timeout in seconds
+    max_attempts=3,                       # Retry count
+    retry_delay=15,                       # Seconds between retries
+    on_failure="raise",                   # "raise" (default) or "continue"
     stop_condition=lambda runs: len(runs) == df.shape[0],  # Early stop
-    remove_run_files=True,  # Clean up after
+    remove_run_files=True,                # Clean up after
 )
 
 # Access results
@@ -355,7 +343,7 @@ When `on_failure="continue"` returns a mixed `Runs`, split it with the two prope
 results = my_task.evaluate(..., on_failure="continue")
 
 print(f"Completed: {len(results.completed_runs)}")  # status=SUCCESS
-print(f"Errored:   {len(results.errored_runs)}")  # status=FAILED
+print(f"Errored:   {len(results.errored_runs)}")    # status=FAILED
 
 # Inspect failures for debugging
 for run in results.errored_runs:
@@ -376,10 +364,10 @@ import kaggle_benchmarks as kbench
 with kbench.client.enable_cache():
     results = my_task.evaluate(
         llm=[kbench.llm],
-        evaluation_data=df,  # e.g. 500 samples
+        evaluation_data=df,         # e.g. 500 samples
         n_jobs=20,
-        on_failure="continue",  # collect failures instead of raising
-        max_attempts=3,  # retry transient failures up to twice
+        on_failure="continue",      # collect failures instead of raising
+        max_attempts=3,             # retry transient failures up to twice
         retry_delay=30,
     )
 ```
@@ -418,16 +406,12 @@ def single_qa(llm, question, answer) -> dict:
     response = llm.prompt(question)
     return {"is_correct": answer.lower() in response.lower()}
 
-
 @kbench.task(name="full_eval")
 def full_eval(llm, df) -> tuple[float, float]:
     with kbench.client.enable_cache():
         runs = single_qa.evaluate(
-            llm=[llm],
-            evaluation_data=df,
-            n_jobs=2,
-            timeout=120,
-            max_attempts=1,
+            llm=[llm], evaluation_data=df,
+            n_jobs=2, timeout=120, max_attempts=1,
             remove_run_files=True,
         )
     eval_df = runs.as_dataframe()
@@ -481,12 +465,10 @@ response = llm.prompt("What is my name?")  # Remembers "Alice"
 ```python
 from dataclasses import dataclass
 
-
 @dataclass
 class Sentiment:
     label: str
     score: float
-
 
 result = llm.prompt("Analyze: 'I love this!'", schema=Sentiment)
 print(result.label, result.score)  # "positive", 0.95
@@ -504,20 +486,18 @@ print(result.answer, result.explanation)
 **Style 3: Primitive type**
 ```python
 count = llm.prompt("How many letters in 'hello'?", schema=int)  # returns int
-is_yes = llm.prompt("Is the sky blue?", schema=bool)  # returns bool
-text = llm.prompt("Summarize briefly.", schema=str)  # returns str
+is_yes = llm.prompt("Is the sky blue?", schema=bool)             # returns bool
+text = llm.prompt("Summarize briefly.", schema=str)               # returns str
 ```
 
 **Style 4: Pydantic model (with Field descriptions)**
 ```python
 import pydantic
 
-
 class Review(pydantic.BaseModel):
     sentiment: str = pydantic.Field(description="positive, negative, or neutral")
     score: float = pydantic.Field(description="confidence score 0-1")
     key_phrases: list[str] = pydantic.Field(description="notable phrases from the text")
-
 
 result = llm.prompt("Analyze: 'Great movie!'", schema=Review)
 # result.sentiment, result.score, result.key_phrases are all typed
@@ -554,17 +534,16 @@ response = llm.prompt("Compare these images")
 
 Image factories:
 ```python
-img = images.from_url("https://example.com/photo.jpg")  # From URL
-img = images.from_path("local/photo.png")  # From local file
-img = images.from_base64(b64_str, format="png")  # From Base64
-img = images.from_array(numpy_array)  # From NumPy array (requires Pillow)
-b64 = images.image_url_to_base64("https://...")  # Download + convert helper
+img = images.from_url("https://example.com/photo.jpg")   # From URL
+img = images.from_path("local/photo.png")                 # From local file
+img = images.from_base64(b64_str, format="png")           # From Base64
+img = images.from_array(numpy_array)                      # From NumPy array (requires Pillow)
+b64 = images.image_url_to_base64("https://...")            # Download + convert helper
 ```
 
 **Videos** (limited to specific models — Gemini 2.5+):
 ```python
 from kaggle_benchmarks.content_types import videos
-
 video = videos.from_url("https://www.youtube.com/watch?v=...")
 response = llm.prompt("What happens in this video?", video=video)
 ```
@@ -574,9 +553,9 @@ response = llm.prompt("What happens in this video?", video=video)
 from kaggle_benchmarks.content_types import audios
 
 # Three factory methods:
-audio = audios.from_path("speech.mp3")  # From local file
-audio = audios.from_base64(b64_string, format="mp3")  # From Base64
-audio = audios.from_url("https://example.com/speech.mp3")  # From URL
+audio = audios.from_path("speech.mp3")                               # From local file
+audio = audios.from_base64(b64_string, format="mp3")                  # From Base64
+audio = audios.from_url("https://example.com/speech.mp3")             # From URL
 
 response = llm.prompt("Transcribe this audio.", audio=audio)
 ```
@@ -591,7 +570,6 @@ response = llm.prompt("Transcribe this audio.", audio=audio)
 def code_analysis(llm):
     kbench.system.send("You are an expert Python programmer.")
     response = llm.prompt("Check this code for bugs...")
-
 
 # Approach B: via chats.new(system_instructions=) — for new isolated conversations
 with kbench.chats.new("pirate_chat", system_instructions="You are a pirate."):
@@ -650,17 +628,11 @@ kbench.assertions.assert_empty(container, expectation="...")
 kbench.assertions.assert_not_empty(container, expectation="...")
 
 # Regex
-kbench.assertions.assert_contains_regex(
-    pattern, text, expectation="...", flags=re.NOFLAG
-)
-kbench.assertions.assert_not_contains_regex(
-    pattern, text, expectation="...", flags=re.NOFLAG
-)
+kbench.assertions.assert_contains_regex(pattern, text, expectation="...", flags=re.NOFLAG)
+kbench.assertions.assert_not_contains_regex(pattern, text, expectation="...", flags=re.NOFLAG)
 
 # Exception safety
-kbench.assertions.assert_raises_no_exceptions(
-    callable_obj, expectation="...", *args, **kwargs
-)
+kbench.assertions.assert_raises_no_exceptions(callable_obj, expectation="...", *args, **kwargs)
 
 # Unconditional failure
 kbench.assertions.assert_fail(expectation="...")
@@ -711,7 +683,8 @@ if assessment is None:
 else:
     for result in assessment.results:
         kbench.assertions.assert_true(
-            result.passed, expectation=f"'{result.criterion}': {result.reason}"
+            result.passed,
+            expectation=f"'{result.criterion}': {result.reason}"
         )
 ```
 
@@ -723,13 +696,12 @@ class StoryCritique:
     feedback: str
     passed_checks: list[str]
 
-
 assessment = kbench.assertions.assess_response_with_judge(
     criteria=[...],
     response_text=story,
     judge_llm=kbench.judge_llm,
-    prompt_fn=custom_prompt_fn,  # Custom prompt generator
-    output_schema=StoryCritique,  # Custom output type
+    prompt_fn=custom_prompt_fn,       # Custom prompt generator
+    output_schema=StoryCritique,       # Custom output type
 )
 ```
 
@@ -738,17 +710,13 @@ assessment = kbench.assertions.assess_response_with_judge(
 ```python
 from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
 
-
 @assertion_handler()
-def assert_word_count(
-    text: str, min_w: int, max_w: int, expectation: str
-) -> AssertionResult:
+def assert_word_count(text: str, min_w: int, max_w: int, expectation: str) -> AssertionResult:
     count = len(text.split())
     return AssertionResult(
         passed=(min_w <= count <= max_w),
         expectation=expectation,
     )
-
 
 # Use like built-in assertions:
 assert_word_count(response, 10, 100, "Response should be 10-100 words")
@@ -787,9 +755,9 @@ with kbench.chats.new("evaluation") as chat:
 Parameters:
 ```python
 kbench.chats.new(
-    name="chat_name",  # Display name
-    system_instructions="You are ...",  # Optional system prompt
-    orphan=False,  # If True, don't nest in parent chat history
+    name="chat_name",                    # Display name
+    system_instructions="You are ...",   # Optional system prompt
+    orphan=False,                        # If True, don't nest in parent chat history
 )
 ```
 
@@ -823,13 +791,13 @@ gives each participant a perspective-projected view automatically.
 import kaggle_benchmarks as kbench
 
 room = kbench.ChatRoom(system_prompt="A friendly debate on AI safety.")
-alice = room.add_participant(kbench.llm, name="Alice", system_prompt="Argue FOR.")
-bob = room.add_participant(kbench.judge_llm, name="Bob", system_prompt="Argue AGAINST.")
+alice = room.add_participant(kbench.llm,        name="Alice", system_prompt="Argue FOR.")
+bob   = room.add_participant(kbench.judge_llm,  name="Bob",   system_prompt="Argue AGAINST.")
 
 with room:
     room.post("Topic: Should we phase out fossil fuels by 2035?")
-    alice.reply()  # LLM sees Alice's view, generates a response
-    bob.reply()  # LLM sees Bob's view (with Alice's reply attributed)
+    alice.reply()        # LLM sees Alice's view, generates a response
+    bob.reply()          # LLM sees Bob's view (with Alice's reply attributed)
 
 # After the room exits, the full ground-truth transcript is available
 for msg in room.messages:
@@ -949,16 +917,11 @@ Define plain Python functions with type hints and docstrings. Pass them via `too
 ```python
 def run_simple_calculator(a: float, b: float, operator: str) -> float:
     """Calculates the result of an arithmetic operation. Supported operators: + - * /"""
-    if operator == "+":
-        return a + b
-    if operator == "-":
-        return a - b
-    if operator == "*":
-        return a * b
-    if operator == "/":
-        return a / b
+    if operator == "+": return a + b
+    if operator == "-": return a - b
+    if operator == "*": return a * b
+    if operator == "/": return a / b
     raise ValueError(f"Unknown operator: {operator}")
-
 
 @kbench.task()
 def calc_task(llm):
@@ -972,11 +935,9 @@ def add_tool(a: float, b: float) -> float:
     """Adds two numbers."""
     return a + b
 
-
 def multiply_tool(a: float, b: float) -> float:
     """Multiplies two numbers."""
     return a * b
-
 
 @kbench.task()
 def multi_tool_task(llm):
@@ -993,12 +954,9 @@ def flaky_tool() -> str:
     """This tool always fails with an error."""
     raise ValueError("Tool execution failed.")
 
-
 @kbench.task()
 def error_handling_task(llm):
-    response = llm.prompt(
-        "Call the flaky_tool and report what happens.", tools=[flaky_tool]
-    )
+    response = llm.prompt("Call the flaky_tool and report what happens.", tools=[flaky_tool])
     kbench.assertions.assert_contains_regex(r"(?i)error|failed", response)
 ```
 
@@ -1021,8 +979,8 @@ def error_handling_task(llm):
 
 ```python
 # 1. Default model (Preferred — lets Kaggle platform manage model selection)
-kbench.llm  # Default model
-kbench.judge_llm  # Judge model
+kbench.llm          # Default model
+kbench.judge_llm    # Judge model
 
 # 2. Named model from available models
 kbench.llms["google/gemini-2.5-flash"]
@@ -1030,7 +988,6 @@ kbench.llms["meta/llama-3.1-70b"]
 
 # 3. Direct ModelProxy (for explicit API control)
 from kaggle_benchmarks.kaggle import model_proxy
-
 llm = model_proxy.ModelProxy(model="google/gemini-2.5-flash", api="genai")
 llm = model_proxy.ModelProxy(model="google/gemini-2.5-flash", api="openai")
 ```
@@ -1045,19 +1002,15 @@ llm = model_proxy.ModelProxy(model="google/gemini-2.5-flash", api="openai")
 ```python
 import pandas as pd
 
-
 @kbench.task()
 def qa_task(llm, question, answer) -> bool:
     response = llm.prompt(question)
     return answer.lower() in response.lower()
 
-
-df = pd.DataFrame(
-    [
-        {"question": "What is 2+2?", "answer": "4"},
-        {"question": "Capital of France?", "answer": "Paris"},
-    ]
-)
+df = pd.DataFrame([
+    {"question": "What is 2+2?", "answer": "4"},
+    {"question": "Capital of France?", "answer": "Paris"},
+])
 
 # Task parameter names must match DataFrame column names
 results = qa_task.evaluate(llm=[kbench.llm], evaluation_data=df)
@@ -1106,7 +1059,7 @@ from tests.mocks import MockedChat
 
 mock = MockedChat(responses=["Paris", "42"])
 response1 = mock.prompt("Capital of France?")  # Returns "Paris"
-response2 = mock.prompt("What is 6*7?")  # Returns "42"
+response2 = mock.prompt("What is 6*7?")         # Returns "42"
 
 # Verify what was sent
 assert mock.invocations[0].messages[0].content == "Capital of France?"
@@ -1123,14 +1076,13 @@ The most basic pattern. Good for factual questions with known keywords.
 ```python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="geography_quiz")
 def geography_quiz(llm):
     response = llm.prompt("What is the longest river in the world?")
     kbench.assertions.assert_contains_regex(
-        r"(?i)nile", response, expectation="Should mention the Nile river."
+        r"(?i)nile", response,
+        expectation="Should mention the Nile river."
     )
-
 
 geography_quiz.run(kbench.llm)
 ```
@@ -1143,27 +1095,23 @@ For tasks needing parsed, validated responses.
 import kaggle_benchmarks as kbench
 from dataclasses import dataclass
 
-
 @dataclass
 class Person:
     name: str
     age: int
     occupation: str
 
-
 @kbench.task(name="extract_person")
 def extract_person(llm, bio: str):
     person = llm.prompt(
-        f"Extract the name, age, and occupation:\n\n{bio}", schema=Person
+        f"Extract the name, age, and occupation:\n\n{bio}",
+        schema=Person
     )
     kbench.assertions.assert_equal("Marie Curie", person.name)
     kbench.assertions.assert_equal(66, person.age)
     kbench.assertions.assert_in("physicist", person.occupation.lower())
 
-
-extract_person.run(
-    kbench.llm, bio="Marie Curie was a physicist... born 1867, died 1934 at 66."
-)
+extract_person.run(kbench.llm, bio="Marie Curie was a physicist... born 1867, died 1934 at 66.")
 ```
 
 ### Pattern C: Hallucination Detection (Structured + Negative Assert)
@@ -1182,8 +1130,7 @@ def check_hallucination(llm):
         expectation="Model should recognize fictitious theory.",
     )
     kbench.assertions.assert_contains_regex(
-        r"(not|never|no|didn't)",
-        response.explanation.lower(),
+        r"(not|never|no|didn't)", response.explanation.lower(),
         expectation="Explanation should deny the theory exists.",
     )
 ```
@@ -1212,9 +1159,9 @@ def story_quality(llm):
     else:
         for result in assessment.results:
             kbench.assertions.assert_true(
-                result.passed, expectation=f"'{result.criterion}': {result.reason}"
+                result.passed,
+                expectation=f"'{result.criterion}': {result.reason}"
             )
-
 
 story_quality.run(kbench.llm)
 ```
@@ -1235,8 +1182,9 @@ def solve_with_python(llm):
     kbench.assertions.assert_empty(
         result.stderr.strip(), "Code should run without errors."
     )
-    kbench.assertions.assert_equal("610", result.stdout.strip(), "Should print 610.")
-
+    kbench.assertions.assert_equal(
+        "610", result.stdout.strip(), "Should print 610."
+    )
 
 solve_with_python.run(kbench.llm)
 ```
@@ -1274,7 +1222,6 @@ def twenty_questions(llm, judge_llm, target: str):
 
     return False
 
-
 twenty_questions.run(kbench.llm, kbench.judge_llm, target="dog")
 ```
 
@@ -1285,11 +1232,9 @@ Multiple judges scoring the same output, each in isolation.
 ```python
 from dataclasses import dataclass
 
-
 @dataclass
 class PoemScore:
     score: float
-
 
 @kbench.task(name="judge_poem")
 def judge_poem(llm, question: str) -> float:
@@ -1307,7 +1252,6 @@ def judge_poem(llm, question: str) -> float:
 
     return (score1.score + score2.score) / 2
 
-
 judge_poem.run(kbench.llm, question="Write a haiku about clouds.")
 ```
 
@@ -1318,7 +1262,6 @@ The basic shape — for small datasets where any failure should abort.
 ```python
 import pandas as pd
 
-
 @kbench.task()
 def riddle_solver(llm, riddle: str, answer_keyword: str) -> bool:
     response = llm.prompt(riddle)
@@ -1326,18 +1269,14 @@ def riddle_solver(llm, riddle: str, answer_keyword: str) -> bool:
     kbench.assertions.assert_true(is_correct)
     return is_correct
 
+df = pd.DataFrame({
+    "riddle": ["I have cities but no houses. What am I?", "What has an eye but cannot see?"],
+    "answer_keyword": ["map", "needle"],
+})
 
-df = pd.DataFrame(
-    {
-        "riddle": [
-            "I have cities but no houses. What am I?",
-            "What has an eye but cannot see?",
-        ],
-        "answer_keyword": ["map", "needle"],
-    }
+runs = riddle_solver.evaluate(
+    llm=[kbench.llm], evaluation_data=df, n_jobs=3
 )
-
-runs = riddle_solver.evaluate(llm=[kbench.llm], evaluation_data=df, n_jobs=3)
 runs.as_dataframe()
 ```
 
@@ -1347,7 +1286,6 @@ For large datasets (500+ samples) where transient API failures are expected. Com
 
 ```python
 import pandas as pd
-
 
 @kbench.task(name="per_sample_qa", store_task=False)
 def per_sample_qa(llm, question: str, answer: str) -> dict:
@@ -1362,8 +1300,8 @@ def resilient_qa_benchmark(llm, df) -> dict:
             llm=[llm],
             evaluation_data=df,
             n_jobs=20,
-            on_failure="continue",  # collect failures into results.errored_runs
-            max_attempts=3,  # retry transient failures up to twice
+            on_failure="continue",   # collect failures into results.errored_runs
+            max_attempts=3,          # retry transient failures up to twice
             retry_delay=30,
         )
 
@@ -1395,16 +1333,13 @@ attributed `user` messages — no manual message routing.
 ```python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="ai_safety_debate")
 def ai_safety_debate(llm, judge_llm) -> float:
     room = kbench.ChatRoom(system_prompt="A structured 2-turn debate.")
-    pro = room.add_participant(
-        llm, name="Pro", system_prompt="Argue FOR strict AI regulation."
-    )
-    con = room.add_participant(
-        llm, name="Con", system_prompt="Argue AGAINST strict AI regulation."
-    )
+    pro  = room.add_participant(llm,       name="Pro",
+                                system_prompt="Argue FOR strict AI regulation.")
+    con  = room.add_participant(llm,       name="Con",
+                                system_prompt="Argue AGAINST strict AI regulation.")
 
     with room:
         room.post("Topic: Should AI labs be subject to mandatory licensing?")
@@ -1420,7 +1355,6 @@ def ai_safety_debate(llm, judge_llm) -> float:
             schema=float,
         )
     return score
-
 
 ai_safety_debate.run(kbench.llm, kbench.judge_llm)
 ```
@@ -1438,12 +1372,10 @@ Combining system messages, structured output, and code execution.
 ```python
 from dataclasses import dataclass
 
-
 @dataclass
 class CodeAnalysis:
     has_bugs: bool
     fixed_code: str
-
 
 @kbench.task("code_analysis")
 def analyze_code(llm):

@@ -13,7 +13,6 @@ it fails. This is perfect for simple Q&A checks. By default, assertions are non-
 ``` python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="check_capital")
 def check_capital(llm):
     # 1. Prompt the model
@@ -25,7 +24,6 @@ def check_capital(llm):
     kbench.assertions.assert_contains_regex(
         r"(?i)Paris", response, expectation="Model should answer Paris."
     )
-
 
 check_capital.run(kbench.llm)
 ```
@@ -52,7 +50,6 @@ Examples of assertions:
 import re
 from kaggle_benchmarks import assertions, llm, task, utils
 
-
 @task("code_validation_task")
 def code_validation_task(llm):
     prompt = "Write a Python function called 'add' that takes two arguments and returns their sum. Please include a docstring."
@@ -62,14 +59,14 @@ def code_validation_task(llm):
     assertions.assert_in(
         "def ",
         generated_code,
-        expectation="The generated code should contain a function definition.",
+        expectation="The generated code should contain a function definition."
     )
 
     # 2. Check for the correct function name
     assertions.assert_contains_regex(
         r"def add\s*\(",
         generated_code,
-        expectation="The function should be named 'add'.",
+        expectation="The function should be named 'add'."
     )
 
     # 3. Ensure no dangerous keywords are present
@@ -78,7 +75,7 @@ def code_validation_task(llm):
         assertions.assert_not_in(
             word,
             generated_code,
-            expectation=f"The output should not contain the dangerous keyword: {word}",
+            expectation=f"The output should not contain the dangerous keyword: {word}"
         )
 
     # 4. Safely test logic execution wrapper
@@ -86,11 +83,10 @@ def code_validation_task(llm):
         assertions.assert_contains_regex(
             r"return.*?\+.*?",
             generated_code,
-            expectation="The function should return the sum of its arguments.",
+            expectation="The function should return the sum of its arguments."
         )
     except Exception as e:
         assertions.assert_fail(f"Could not validate the function's logic: {e}")
-
 
 code_validation_task.run(llm)
 ```
@@ -106,7 +102,6 @@ list of criteria using `assess_response_with_judge`.
 ``` python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="haiku_evaluation")
 def haiku_evaluation(llm, topic):
     response = llm.prompt(f"Write a haiku about {topic}.")
@@ -120,23 +115,20 @@ def haiku_evaluation(llm, topic):
             f"The poem must be about {topic}.",
         ],
         response_text=response,
-        judge_llm=kbench.judge_llm,
+        judge_llm=kbench.judge_llm
     )
 
     # Handle judge failure gracefully
     if assessment is None:
-        kbench.assertions.assert_fail(
-            expectation="Judge LLM failed to return a valid assessment."
-        )
+        kbench.assertions.assert_fail(expectation="Judge LLM failed to return a valid assessment.")
         return
 
     # Convert judge results into formal assertions
     for result in assessment.results:
         kbench.assertions.assert_true(
             result.passed,
-            expectation=f"Criterion '{result.criterion}' failed: {result.reason}",
+            expectation=f"Criterion '{result.criterion}' failed: {result.reason}"
         )
-
 
 haiku_evaluation.run(kbench.judge_llm, topic="AGI")
 ```
@@ -150,15 +142,12 @@ import textwrap
 from typing import Iterable
 import kaggle_benchmarks as kbench
 
-
 @dataclasses.dataclass
 class StoryCritique:
     """A custom schema for receiving a story critique from the judge."""
-
     overall_rating: int  # A rating from 1 (poor) to 5 (excellent).
     feedback: str  # General feedback on the story.
     passed_checks: list[str]  # A list of criteria that the story successfully met.
-
 
 def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
     """A custom prompt function that instructs the judge to use the StoryCritique schema."""
@@ -173,12 +162,9 @@ def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
         {formatted_criteria}
     """)
 
-
 @kbench.task()
 def critique_short_story(llm):
-    story = llm.prompt(
-        "Write a one-paragraph short story about a robot who discovers music."
-    )
+    story = llm.prompt("Write a one-paragraph short story about a robot who discovers music.")
 
     critique = kbench.assertions.assess_response_with_judge(
         criteria=[
@@ -193,9 +179,7 @@ def critique_short_story(llm):
     )
 
     if critique is None:
-        kbench.assertions.assert_fail(
-            expectation="Judge LLM should respond with a critique."
-        )
+        kbench.assertions.assert_fail(expectation="Judge LLM should respond with a critique.")
     else:
         kbench.assertions.assert_true(
             critique.overall_rating >= 3,
@@ -204,9 +188,8 @@ def critique_short_story(llm):
         kbench.assertions.assert_not_in(
             "The story is inspired by a true story.",
             critique.passed_checks,
-            expectation="The critique incorrectly passed a failing criterion.",
+            expectation="The critique incorrectly passed a failing criterion."
         )
-
 
 critique_short_story.run(kbench.judge_llm)
 ```
@@ -226,7 +209,6 @@ Supported return type annotations:
 ```python
 import kaggle_benchmarks as kbench
 
-
 # Float (score) task
 @kbench.task(name="conciseness_score")
 def conciseness_score(llm) -> float:
@@ -235,8 +217,7 @@ def conciseness_score(llm) -> float:
 
     word_count = len(response.split())
     error = abs(word_count - 5)
-    return max(0.0, 1.0 - (error / 5.0))  # Normalized between 0 and 1
-
+    return max(0.0, 1.0 - (error / 5.0)) # Normalized between 0 and 1
 
 # Tuple[int, int] (Count) Task
 @kbench.task(name="math_quiz")
@@ -266,13 +247,9 @@ import kaggle_benchmarks as kbench
 from kaggle_benchmarks.prompting import ResponseParsingError
 from pydantic import BaseModel, Field
 
-
 # 1. Define the new schema with a list of strings
 class LanguageList(BaseModel):
-    languages: list[str] = Field(
-        default_factory=list, description="A list of programming language names."
-    )
-
+    languages: list[str] = Field(default_factory=list, description="A list of programming language names.")
 
 @kbench.task(name="list_programming_languages")
 def list_programming_languages(llm):
@@ -289,7 +266,7 @@ def list_programming_languages(llm):
         kbench.assertions.assert_in(
             "python",
             languages_lower,
-            expectation="The list of popular programming languages should include 'Python'.",
+            expectation="The list of popular programming languages should include 'Python'."
         )
 
     except ResponseParsingError as e:
@@ -297,7 +274,6 @@ def list_programming_languages(llm):
         kbench.assertions.assert_fail(
             expectation=f"The output was not valid JSON or did not match the LanguageList schema. Error: {e.error}"
         )
-
 
 # Run the task
 list_programming_languages.run(kbench.llm)
@@ -308,28 +284,25 @@ from pydantic import BaseModel, Field
 from kaggle_benchmarks.prompting import ResponseParsingError
 import kaggle_benchmarks as kbench
 
-
 class Planet(BaseModel):
     name: str
     mass_earth_masses: float = Field(description="Mass relative to Earth")
     has_life: bool = Field(description="Whether the planet is known to have life")
     moons: list[str] = Field(default_factory=list, description="List of major moons")
 
-
 @kbench.task(name="planet_info")
 def planet_info(llm):
     """Retrieves planet information using a Pydantic model."""
     try:
         planet = llm.prompt(
-            "Provide information about the planet Jupiter.", schema=Planet
+            "Provide information about the planet Jupiter.",
+            schema=Planet
         )
         kbench.assertions.assert_contains_regex(
             r"(?i)jupiter", planet.name, expectation="Planet name should be Jupiter."
         )
     except ResponseParsingError as e:
-        kbench.assertions.assert_fail(
-            expectation=f"Failed to parse structured output: {e.error}"
-        )
+        kbench.assertions.assert_fail(expectation=f"Failed to parse structured output: {e.error}")
 ```
 
 ## Recipe: Evaluating Performance on a Dataset
@@ -345,20 +318,16 @@ import pandas as pd
 import kaggle_benchmarks as kbench
 
 # 1. Prepare your dataset columns (maps directly to task parameters)
-df = pd.DataFrame(
-    [
-        {"question": "2+2", "answer": "4"},
-        {"question": "Capital of UK", "answer": "London"},
-    ]
-)
-
+df = pd.DataFrame([
+    {"question": "2+2", "answer": "4"},
+    {"question": "Capital of UK", "answer": "London"},
+])
 
 # 2. Define a task that accepts the row columns as arguments
 @kbench.task(name="single_qa_task", store_task=False)
 def single_qa_task(llm, question, answer) -> bool:
     response = llm.prompt(question)
     return answer.lower() in response.lower()
-
 
 # 3. Define the aggregation task
 @kbench.task(name="multi_qa_task")
@@ -368,16 +337,15 @@ def multi_qa_task(llm, df) -> float:
         runs = single_qa_task.evaluate(
             llm=[llm],
             evaluation_data=df,
-            n_jobs=2,  # Parallel workers
+            n_jobs=2,               # Parallel workers
             retry_delay=5,
-            remove_run_files=True,  # Clean up intermediate run files
+            remove_run_files=True   # Clean up intermediate run files
         )
 
     # 4. Analyze the returned `Runs` collection
     eval_df = runs.as_dataframe()
     accuracy = float(eval_df.result.mean())
     return accuracy
-
 
 multi_qa_task.run(kbench.llm, df)
 ```
@@ -387,7 +355,10 @@ multi_qa_task.run(kbench.llm, df)
 You can pass a list of LLM instances to `.evaluate()` to run the cross-product of `(models × rows)`. The resulting `Runs` object contains built-in rendering helpers for organizing results.
 
 ``` python
-models = [kbench.llms["google/gemini-2.5-flash"], kbench.llms["meta/llama-3.1-70b"]]
+models = [
+    kbench.llms["google/gemini-2.5-flash"],
+    kbench.llms["meta/llama-3.1-70b"]
+]
 
 # Runs the evaluation for BOTH models across the entire dataset
 results = single_qa_task.evaluate(llm=models, evaluation_data=df)
@@ -424,9 +395,7 @@ def game_task(llm, judge_llm):
     llm.prompt("Player move: pawn to e4")
 
     # Opens an isolated chat context
-    with kbench.chats.new(
-        "judging_context", system_instructions="You are a strict chess arbiter."
-    ):
+    with kbench.chats.new("judging_context", system_instructions="You are a strict chess arbiter."):
         # This interaction is saved in 'judging_context' and hidden from 'llm'
         valid = judge_llm.prompt("Is pawn to e4 a valid opening move?", schema=bool)
 
@@ -440,7 +409,6 @@ For complex interactions where multiple agents require long-lived, independent h
 
 ``` python
 from kaggle_benchmarks import chats, contexts, task
-
 
 @task()
 def multi_chat_task(llm1, llm2):
@@ -474,13 +442,10 @@ from kaggle_benchmarks.content_types import images
 import kaggle_benchmarks as kbench
 import numpy as np
 
-
 @kbench.task("Analyze Images")
 def vision_task(llm):
     # 1. From a URL (Auto-converted to base64 by llm.prompt)
-    url_img = images.from_url(
-        "https://www.kaggle.com/static/images/site-logo.png", caption="Logo"
-    )
+    url_img = images.from_url("https://www.kaggle.com/static/images/site-logo.png", caption="Logo")
     response1 = llm.prompt("Describe this image.", image=url_img)
 
     # 2. From a local file (Read and encoded to base64 immediately)
@@ -504,7 +469,6 @@ The library provides tools to extract and safely execute python code generated b
 ```python
 import kaggle_benchmarks as kbench
 
-
 @kbench.task(name="python_math")
 def python_math(llm):
     prompt = "Write a python script that prints 'Hello World'."
@@ -522,13 +486,11 @@ def python_math(llm):
 
     # 3. Validate execution metrics (exit code 0 indicates success)
     kbench.assertions.assert_equal(
-        0,
-        result.exit_code,
-        expectation=f"Code should execute successfully. Stderr: {result.stderr}",
+        0, result.exit_code,
+        expectation=f"Code should execute successfully. Stderr: {result.stderr}"
     )
     kbench.assertions.assert_contains_regex(
-        r"(?i)hello world",
-        result.stdout,
-        expectation="Standard output should contain 'Hello World'.",
+        r"(?i)hello world", result.stdout,
+        expectation="Standard output should contain 'Hello World'."
     )
 ```
