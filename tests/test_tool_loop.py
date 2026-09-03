@@ -507,9 +507,8 @@ def test_truncated_streaming_json_surfaces_clean_error_end_to_end():
                 extra_api_params={"max_tool_rounds": 1},
             )
 
-        tool_loop = next(item for item in chat.history if isinstance(item, chats.Chat))
         tool_results = [
-            m for m in tool_loop.history if isinstance(m.content, ToolInvocationResult)
+            m for m in chat.history if isinstance(m.content, ToolInvocationResult)
         ]
         assert len(tool_results) == 1
         result = tool_results[0].content
