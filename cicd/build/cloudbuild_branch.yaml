@@ -50,6 +50,36 @@ steps:
     env:
       - "PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright"
 
+  # Validates the converter's output against harbor's own models, which is the
+  # only check that catches "we produced something harbor rejects". Its own step
+  # because harbor is heavy, test-only, and cannot import on 3.11 -- so it is
+  # never a kbench dependency, and the tests skip wherever it is absent.
+  # Pinned: an ATIF schema bump must be an explicit, reviewed change.
+  - id: harbor-validation-3.12
+    name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
+    dir: /benchmarks
+    entrypoint: uv
+    args:
+      [
+        "run",
+        "--python",
+        "3.12",
+        "--no-project",
+        "--exclude-newer",
+        "2026-09-03T00:00:00Z",
+        "--with",
+        "harbor==0.22.0",
+        "--with",
+        "pytest",
+        "--with-editable",
+        ".",
+        "pytest",
+        "tests/kaggle/test_atif.py",
+        "-k",
+        "harbor",
+      ]
+    waitFor: ["push-image"]
+
   - id: ruff
     name: "${_IMAGE_REPO_NAME}/${_IMAGE_NAME}:${COMMIT_SHA}"
     dir: /benchmarks

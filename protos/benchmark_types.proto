@@ -152,6 +152,15 @@ message ModelRequest {
   ModelUsageMetrics metrics = 2;
   // Model request ID generated in Python
   string id = 3;
+  // The model's own reasoning for the reply that closes this request, when the
+  // provider returns it. A property of the turn rather than a Part, because
+  // both providers hand back one blob per reply, and a Part variant would have
+  // to be re-joined by every reader. Empty for streaming, which does not
+  // capture reasoning yet.
+  //
+  // Not yet mirrored in kaggleazure's copy of this file. When it is added
+  // there it must reuse field 4 -- a number means one thing forever.
+  optional string reasoning_traces = 4;
 }
 
 // Trying to keep this aligned with Open Telemetry specs
