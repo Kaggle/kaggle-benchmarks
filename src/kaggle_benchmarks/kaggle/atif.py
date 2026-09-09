@@ -543,7 +543,13 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
         for sub in subagents
         if (chat := sub["agent"]["name"])
     ]
-    named = [sub["agent"]["name"] for sub in subagents if sub["agent"]["name"]]
+    # Qualified by model where there is one, since a run may hold two judges
+    # and "judge, judge" names neither of them.
+    named = [
+        f"{chat} ({slug})" if (slug := sub["agent"]["model_name"]) else chat
+        for sub in subagents
+        if (chat := sub["agent"]["name"])
+    ]
     for row_id in [subrun.get("pyRunId") for subrun in subruns]:
         if not (path := (subrun_paths or {}).get(row_id)):
             _warn(warnings, "subrun_path_unknown", f"{row_id}")

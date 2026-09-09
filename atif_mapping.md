@@ -234,7 +234,7 @@ Whenever a run has other trajectories — side chats or dataset rows — the con
 
 ```json
 {"step_id": 3, "source": "system",
- "message": "[delegated] Other trajectories from this run: judge.",
+ "message": "[delegated] Other trajectories from this run: judge (google/gemini-2.5-flash-lite).",
  "observation": {"results": [{"subagent_trajectory_ref": [
    {"trajectory_id": "Judged-Run #1::Response assessment with google/gemini-2.5-flash-lite-0ea9b787",
     "extra": {"kbench_chat": "judge"}}
@@ -310,6 +310,14 @@ The parent's own transcript is empty whenever the task did nothing but run the r
 Any conversation after the first that is not a tool loop becomes an embedded subagent trajectory, with `trajectory_id` of the form `<run id>::<conversation id>`.
 
 A judge is the one chat named after the model that ran it (`Response assessment with google/gemini-2.5-flash-lite`). The converter recognises the prefix, sets `agent.name` to `"judge"`, and pulls the model out of the rest of the name — it is the only place the file records who graded.
+
+**Several judges on several models are fine.** `agent.name` is the fixed string `"judge"` for all of them, and the model that tells them apart lives in `agent.model_name`, which every subagent trajectory carries in its own right. So the delegation step names each one by model:
+
+```
+[delegated] Other trajectories from this run: judge (Alpha), judge (Beta).
+```
+
+A subagent with no model — a room, whose participants' models are not recorded — is listed by name alone. Note that none of these is the run's own `agent.model_name`: that is the model being *graded*.
 
 ### 4.5 Dataset evaluation
 
@@ -455,3 +463,4 @@ You opened an `.atif.json` and something looks off. Start here.
 - **Streamed replies carry no reasoning.** `ModelRequest.reasoning_traces` is only filled when the provider hands it back on a complete response; streaming does not capture it yet, so those steps have no `reasoning_content`.
 - **A tool call with no result is lost.** The call is only recoverable from its result blob, so a loop that ends without one drops both.
 - **Latency is per turn only.** kbench records no end time per message, so steps after the first carry no `timestamp`.
+- **Inline media is described, not written out.** A producer may save the bytes beside the trajectory and point `path` at them — harbor's own antigravity adapter writes an `images/` directory next to the file — which would turn most of [§4.7](#47-media-atif-cannot-hold) into real content parts. Not done here: it makes conversion a writer of arbitrarily many files, and the bytes are still in `extra.kbench_media` either way.

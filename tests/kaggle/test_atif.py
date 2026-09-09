@@ -129,11 +129,11 @@ def _asks_for(name, arguments, call_id):
     return message
 
 
-def _judge_llm():
+def _judge_llm(name="Judge"):
     verdict = {
         "results": [{"criterion": "c", "passed": True, "reason": "y", "confidence": 5}]
     }
-    return MockedChat.from_contents_data([verdict], cycle=True, name="Judge")
+    return MockedChat.from_contents_data([verdict], cycle=True, name=name)
 
 
 # --- Fixtures: one shape per thing kbench can do ---
@@ -618,6 +618,30 @@ def test_a_judge_is_named_for_the_model_that_graded(client, duck):
         "model_name": "Judge",
     }
     assert [step["step_id"] for step in subagent["steps"]] == [1, 2]
+
+
+def test_two_judges_on_two_models_each_keep_their_own(client, duck):
+    """Every judge chat is renamed to the same "judge", so the model is what
+    tells them apart -- in the delegation step as much as on the trajectory."""
+
+    def judged(llm):
+        answer = llm.prompt("Capital of France?")
+        for name in ("Alpha", "Beta"):
+            assertions.assess_response_with_judge(
+                ["c"], str(answer), judge_llm=_judge_llm(name=name)
+            )
+        return True
+
+    _ran(duck, judged, "TwoJudges")
+    trajectory = atif.to_atif(_one(client))
+    subagents = trajectory["subagent_trajectories"]
+    assert [sub["agent"]["model_name"] for sub in subagents] == ["Alpha", "Beta"]
+    # The model graded by them, not one of them.
+    assert trajectory["agent"]["model_name"] == "Duck"
+    assert _messages(trajectory["steps"])[-1] == (
+        f"{atif.DELEGATED} Other trajectories from this run: "
+        "judge (Alpha), judge (Beta)."
+    )
 
 
 def test_a_room_full_of_models_is_one_subagent(client, duck):
