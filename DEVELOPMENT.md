@@ -406,6 +406,8 @@ cd protos && ./build.sh
 
 The build script runs `protoc` with both `--python_out` and `--mypy_out` to generate type stubs alongside the implementation.
 
+A stored run is also converted into harbor's trajectory format beside its `run.json`. If you add or change a proto field, check [`atif_mapping.md`](atif_mapping.md) — it documents where each field lands and what the converter does with one it does not recognise.
+
 ---
 
 ## 9. Writing New Assertions

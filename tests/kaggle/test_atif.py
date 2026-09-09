@@ -14,8 +14,8 @@
 
 """Tests for the run.json -> harbor converter, written to document it.
 
-SHAPES runs one real kbench task per thing kbench can do -- a tool loop, a
-judge, a chat room, a dataset eval, media, an error -- and every shape answers
+SHAPES runs one real kbench task per thing kbench can do — a tool loop, a
+judge, a chat room, a dataset eval, media, an error — and every shape answers
 the same three questions: is the output usable, does it tell the same story as
 the run.json, and does it admit what it could not carry. Then one run converted
 in full as a worked example, the parts a kbench user would find surprising, and
@@ -136,7 +136,7 @@ def _judge_llm():
     return MockedChat.from_contents_data([verdict], cycle=True, name="Judge")
 
 
-# --- One shape per thing kbench can do ---
+# --- Fixtures: one shape per thing kbench can do ---
 
 
 def _plain(duck):
@@ -302,10 +302,9 @@ needs_harbor = pytest.mark.skipif(Trajectory is None, reason="harbor not install
 @needs_harbor
 @shapes
 def test_every_shape_writes_files_harbor_accepts(client, duck, shape):
-    """The only check that catches "we produced something harbor rejects". Reads
-    what landed on disk, not what the converter returned, so a wire-up that
-    passed the wrong arguments fails here too. ATIF forbids unknown keys, so a
-    typo is an error and not a field that quietly vanishes."""
+    """The only check that catches "we produced something harbor rejects".
+    Reads what landed on disk rather than what the converter returned, so a
+    wire-up that passed the wrong arguments fails here too."""
     shape(duck)
     written = sorted(Path(client.directory).glob("*.atif.json"))
     assert written
@@ -415,9 +414,9 @@ def test_every_shape_is_honest_about_what_it_could_not_carry(client, duck, shape
 
 def test_carried_fields_are_renamed_all_the_way_down_but_user_keys_are_not(client):
     """`MessageToJson` camelCases the whole run.json, so undoing it only at the
-    top level would leave two spellings nested inside one another. Rewriting a
-    task author's own dict keys would be the opposite mistake: those are data,
-    not proto fields, and nothing else could put them back."""
+    top level would leave two spellings nested in one another. Rewriting a task
+    author's own dict keys would be the opposite mistake: those are data, not
+    proto fields."""
     run_json = {
         "pyRunId": "X-Run #1",
         "taskVersion": {"name": "X", "versionNumber": 2},
@@ -431,7 +430,7 @@ def test_carried_fields_are_renamed_all_the_way_down_but_user_keys_are_not(clien
     assert trajectory["final_metrics"]["extra"]["kbench_result"] == {"myScore": 1.0}
 
 
-# --- What the conversion looks like ---
+# --- Tests for the shape of the output ---
 
 
 def test_a_converted_run_in_full(client):
@@ -543,7 +542,7 @@ def test_a_converted_run_in_full(client):
     }
 
 
-# --- Surprises, for someone reading a run.json beside its trajectory ---
+# --- Tests for run.json shapes that convert unobviously ---
 
 
 def test_a_tool_loop_stays_in_the_conversation_it_runs_in(client, duck):
@@ -650,9 +649,8 @@ def test_a_room_full_of_models_is_one_subagent(client, duck):
 
 def test_a_dataset_evals_rows_are_siblings_the_parent_cannot_name(client, duck):
     """An eval writes N+1 files and the parent cannot point at the N: a row's
-    filename comes from its cache_id, and nothing in the embedded subrun records
-    it. The caller must supply the names, because a ref to a file that does not
-    exist is worse than no ref at all."""
+    filename comes from its cache_id, and the embedded subrun does not record
+    it. Only the caller can supply the names."""
     _dataset_eval(duck)
     rows = _run_files(client, "row_qa")
     parent = _one(client, "whole_ds")
@@ -696,8 +694,8 @@ def test_a_cached_row_keeps_its_score_but_loses_its_transcript(
 ):
     """Rerunning an eval from cache restores only each row's result, so the
     embedded subruns have no conversation and no times. Nothing is lost: the
-    row's own file still holds the transcript, and the parent's summary is built
-    from fields caching does restore, so it is identical either way."""
+    row's own file still holds the transcript, and the parent's summary is
+    built from fields caching does restore."""
     _dataset_eval(duck)
     fresh = _one(client, "whole_ds")
     # Only the parent is removed, so the rows are served from their files.
@@ -727,7 +725,7 @@ def test_a_cached_row_keeps_its_score_but_loses_its_transcript(
 
 def test_an_aggregate_has_no_transcript_and_says_how_many_it_merged(client, duck):
     """Merging repeat runs drops their conversations, so an aggregate is the only
-    run.json with no conversation at all -- a run that merely said nothing still
+    run.json with no conversation at all — a run that merely said nothing still
     has an empty one."""
 
     def rep(llm) -> float:
@@ -760,10 +758,10 @@ def test_an_aggregate_has_no_transcript_and_says_how_many_it_merged(client, duck
 
 
 def test_an_image_by_url_is_the_one_media_atif_can_point_at(client, duck):
-    """A type ATIF names, in the shape it stores: ImageSource is a media_type and
-    a path, so a url fits and nothing is lost. The message becomes a list of parts
-    rather than a string, which is harbor's own rule for content that is not only
-    text, and is why a list here means a picture."""
+    """A type ATIF names, in the shape it stores: ImageSource is a media_type
+    and a path, so a url fits and nothing is lost. The message becomes a list
+    of parts rather than a string, which is harbor's rule for content that is
+    not only text."""
     _with_media(duck)
     trajectory = atif.to_atif(_one(client))
     shown = [
@@ -785,11 +783,10 @@ def test_an_image_by_url_is_the_one_media_atif_can_point_at(client, duck):
 
 
 def test_media_atif_cannot_hold_is_marked_in_place_and_kept_in_extra(client, duck):
-    """Three ways to miss, and the payload survives all of them. An inline image is
-    a type ATIF names in a shape it has no field for; audio and video are types it
-    cannot name at all -- v1.6 added images and v1.8 audio, and we emit v1.7. That
-    the video arrives as a url and is still unrepresentable is what separates the
-    two: for it the type is the blocker, not the shape."""
+    """Three ways to miss, and the payload survives all of them: a type ATIF
+    names in a shape it has no field for, and two types it cannot name at all.
+    The video arrives as a url and is still unrepresentable, so for it the type
+    is the blocker and not the shape."""
     _with_media(duck)
     trajectory = atif.to_atif(_one(client))
     marked = [
@@ -817,11 +814,10 @@ def test_media_atif_cannot_hold_is_marked_in_place_and_kept_in_extra(client, duc
 
 
 def test_assertions_survive_but_their_pointers_do_not(client, duck):
-    """ATIF has no assertion of its own, so kbench's are carried whole -- names
-    renamed, structure untouched -- and each names the request it was checked
-    against, which resolves to nothing here, since a request boundary is a
-    serializer grouping the converter flattens away. The dangling pointer is
-    kept rather than pruned, so it is visibly kbench's."""
+    """ATIF has no assertion of its own, so kbench's are carried whole. Each
+    names the request it was checked against, which resolves to nothing here:
+    a request boundary is a serializer grouping the converter flattens away.
+    The dangling pointer is kept rather than pruned, so it reads as kbench's."""
     _judged(duck)
     run_json = _one(client)
     carried = atif.to_atif(run_json)["extra"]["kbench"]["assertions"]
@@ -879,7 +875,7 @@ def test_a_failing_assertion_scores_zero_without_an_exception(client, duck):
     """The idiomatic kbench task returns nothing and asserts instead: PassFail
     serializes run.passed, which a failing assertion makes false. So a run can
     score 0 having raised nothing, and exception_info is what tells the two
-    apart -- harbor's analyzer reads a set one as failed whatever the reward."""
+    apart."""
 
     def checked(llm):
         llm.prompt("Hi")
@@ -979,7 +975,7 @@ def test_the_models_reasoning_reaches_the_step_it_explains(client):
 
 def test_what_a_run_spent_is_totalled_once_despite_the_fork(client, monkeypatch):
     """Per-step metrics and the run total come from the same messages, so the fork
-    -- which copies its parent's requests, metrics included -- cannot inflate one
+    — which copies its parent's requests, metrics included — cannot inflate one
     without inflating the other."""
     respond = actors.LLMChat.respond
 
@@ -1022,7 +1018,7 @@ def test_one_odd_attribute_does_not_lose_the_whole_run_file(client, duck):
     assert messages[1:] == ["Hi", "quack"]
 
 
-# --- Degrade paths a real run cannot be asked for ---
+# --- Tests for degrade paths ---
 #
 # Hand-written run.json fragments, because kbench does not produce an unknown
 # content role or a chained traceback on request.
@@ -1153,10 +1149,10 @@ def test_a_tool_result_with_no_call_before_it_stays_a_step():
 
 
 def test_a_tool_that_refused_or_failed_says_so_on_the_result():
-    """invoke_tool keeps arguments it could not parse as a string and refuses the
-    call, so the pair is real but arguments has no dict to offer. A tool that
-    raised still produced an observation, so the failure goes on the result
-    rather than reading as an ordinary return value."""
+    """invoke_tool refuses a call whose arguments it could not parse, so the
+    pair is real but arguments has no dict to offer. A tool that raised still
+    produced an observation, so the failure goes on the result rather than
+    reading as an ordinary return value."""
     refused = {
         "name": "add",
         "arguments": "{oops",
@@ -1182,6 +1178,24 @@ def test_a_tool_that_refused_or_failed_says_so_on_the_result():
     }
 
 
+def test_a_reply_that_both_talks_and_calls_a_tool_keeps_the_talking():
+    """Every recorded loop has an empty reply beside its calls, because those
+    models answer one way or the other. A backend that does both puts the text
+    and the calls on one message, and the text is the only place the model
+    said why it called what it did."""
+    trajectory = atif.to_atif(
+        _run(
+            _said(ASSISTANT, "Let me add those for you."),
+            _tool({"name": "add", "arguments": {"a": 2, "b": 3}, "output": 5}),
+        )
+    )
+    (step,) = trajectory["steps"]
+    assert step["message"] == "Let me add those for you."
+    assert [call["function_name"] for call in step["tool_calls"]] == ["add"]
+    assert step["observation"]["results"][0]["content"] == "5"
+    assert not _warnings(trajectory)
+
+
 def test_a_backend_that_returns_no_call_id_still_gets_linkable_pairs():
     """ToolCall.tool_call_id is required and ToolInvocation.call_id is not. One id
     reused would make every result look like the answer to the same call."""
@@ -1195,9 +1209,9 @@ def test_a_backend_that_returns_no_call_id_still_gets_linkable_pairs():
 
 
 def test_the_leaderboard_score_comes_out_in_front_and_only_numbers_come_at_all(caplog):
-    """The midtier reads rewards.First(), so the aggregated score has to be first
-    however the splits were ordered -- and rewards maps a name to a number, so a
-    task returning a gold answer beside its score loses the answer, not the
+    """The midtier reads rewards.First(), so the aggregated score has to be
+    first however the splits were ordered. rewards maps a name to a number, so
+    a task returning a gold answer beside its score loses the answer, not the
     score."""
     results = [
         {
@@ -1330,7 +1344,7 @@ def test_a_field_the_converter_does_not_know_is_carried_through():
     assert kbench["split_breakdown"] == {"public": 1}
 
 
-# --- Writing the files, which is all the rest of kbench sees of this module ---
+# --- Tests for write_beside and remove_beside ---
 
 
 def _names(client, pattern="*") -> list[str]:
@@ -1378,7 +1392,7 @@ def test_writing_can_be_turned_off(client, duck, monkeypatch):
 
 def test_an_eval_writes_three_files_per_row_and_the_parent_names_them(client, duck):
     """The parent's refs are the only link from an eval to its rows, and they are
-    filenames the caller resolved -- so every one must be a file on disk."""
+    filenames the caller resolved — so every one must be a file on disk."""
     _dataset_eval(duck)
     assert len(_names(client)) == 4 * 3
     parent = json.loads(

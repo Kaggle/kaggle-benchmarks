@@ -14,12 +14,13 @@
 
 """Converts a run.json into the trajectory and result files harbor tooling reads.
 
-Both converters read the serialized dict rather than live objects, so the C#
-backfill can mirror them and their output can be compared. An unmappable field
-is skipped, logged and recorded in the output rather than raising.
+Both converters read the serialized dict rather than live objects, so that the
+C# backfill can mirror them and the two outputs can be compared. A field that
+cannot be mapped is skipped, logged and recorded in the output rather than
+raising.
 
-Fields are written even when empty and dropped by _prune on the way out, so a
-mapping reads as one expression rather than as a chain of ifs.
+Fields are written even when empty and dropped by _prune on the way out, which
+keeps each mapping one expression instead of a chain of ifs.
 """
 
 import importlib.metadata
@@ -37,9 +38,8 @@ Warnings = list[dict[str, str]]
 # and nothing else we use, so staying here costs only the audio case below.
 SCHEMA_VERSION = "ATIF-v1.7"
 
-# Mark the steps kbench produced and the model did not, so a reader does not
-# take one for something that was said. `notes` explains the placeholder at
-# length; these are what survive being read on their own, among real steps.
+# Prefixes for the steps kbench added and the model did not, so a reader does
+# not take one for something that was said. `notes` explains them at length.
 PLACEHOLDER = "[placeholder]"
 ERROR = "[error]"
 DELEGATED = "[delegated]"
@@ -69,9 +69,8 @@ REASONING_KEY = "_requestReasoning"
 TOKEN_FIELDS = (("inputTokens", "prompt_tokens"), ("outputTokens", "completion_tokens"))
 COST_FIELDS = ("inputTokensCostNanodollars", "outputTokensCostNanodollars")
 
-# Media ATIF can point at. Images only until we emit v1.8: a content part typed
-# anything else is rejected outright, so audio takes the placeholder path with
-# everything else we cannot show.
+# Media ATIF can point at. Images only until we emit v1.8: a part typed
+# anything else is rejected outright, so the rest is described in text.
 MEDIA_TYPES = frozenset("image/jpeg image/png image/gif image/webp".split())
 
 # Named after the model that graded, the only place the file says who it was.
@@ -80,13 +79,14 @@ TRACEBACK_HEADER = "Traceback (most recent call last):"
 # Harbor reads these as completed-without-reward; a kbench timeout has failed.
 HARBOR_TIMEOUTS = ("AgentTimeoutError", "VerifierTimeoutError")
 
-# Represented by the trajectory itself. The rest is copied into extra.kbench,
-# so a field a newer kbench adds is carried across regardless.
+# Represented by the trajectory itself. Everything else is copied into
+# extra.kbench, so a field a newer kbench adds is still carried across.
 MAPPED_FIELDS = frozenset(
     {"conversations", "results", "modelVersion", "pyRunId", "id", "startTime", "subruns"}
 )  # fmt: skip
 
-# Implausible on purpose: path-shaped invites treating a run as a harbor trial.
+# Implausible on purpose: anything path-shaped invites someone to treat a
+# converted run as a real harbor trial.
 TASK_PATH = "kbench://not-a-harbor-task"
 TRIAL_URI = "kbench://not-a-harbor-trial"
 
@@ -96,7 +96,7 @@ class ConversionError(Exception):
 
 
 def _warn(warnings: Warnings, kind: str, detail: str) -> None:
-    # In the file as well as the log: a log line is gone once the notebook closes.
+    # Also recorded in the file: a log line is gone once the notebook closes.
     logger.warning(f"Converting to atif, {kind}: {detail}")
     warnings.append({"kind": kind, "detail": detail})
 
@@ -108,10 +108,10 @@ def _snake(name: str) -> str:
 def _snake_keys(value: Any) -> Any:
     """Undoes the camelCasing MessageToJson applies on the way out.
 
-    Exactly reverses it, since protobuf capitalises only the letter after each
-    underscore: `version_number` can round-trip, `versionNUMBER` cannot occur.
-    So this restores the names the .proto declares rather than inventing any,
-    and it holds for fields added after this was written.
+    An exact reversal, because protobuf capitalises only the letter after each
+    underscore: `version_number` round-trips and `versionNUMBER` cannot occur.
+    So these are the names the .proto declares, including for fields added
+    after this was written.
     """
     if isinstance(value, dict):
         return {_snake(k): _snake_keys(v) for k, v in value.items()}
@@ -130,7 +130,7 @@ def _harness_version() -> str:
 
 
 def _int(value: Any) -> int | None:
-    """A proto int64, which serializes as a string, not a number."""
+    """Reads a proto int64, which serializes as a string, not a number."""
     if value is None or isinstance(value, bool):
         return None
     try:
@@ -140,10 +140,11 @@ def _int(value: Any) -> int | None:
 
 
 def _prune(node: Any) -> Any:
-    """The same structure without None or empty containers."""
+    """Copies the structure without its None or empty containers."""
     if isinstance(node, dict):
         pruned = ((key, _prune(value)) for key, value in node.items())
-        # Empty reads as measured-and-nothing, bar a call with no arguments.
+        # An empty value left in would read as measured-and-nothing. Tool
+        # arguments are the exception: harbor requires the key either way.
         return {k: v for k, v in pruned if v not in (None, {}, []) or k == "arguments"}
     if isinstance(node, list):
         return [_prune(value) for value in node]
@@ -151,7 +152,7 @@ def _prune(node: Any) -> Any:
 
 
 def _chat_name(conversation_id: str) -> str:
-    """The chat's name, without the uuid suffix kbench appends to it."""
+    """Strips the uuid suffix kbench appends to a chat's name."""
     name, _, suffix = conversation_id.rpartition("-")
     return name if name and len(suffix) == 8 else conversation_id
 
@@ -167,7 +168,7 @@ def _media_part(part: Json) -> Json | None:
 
 
 def _message_of(content: Json, warnings: Warnings) -> str | list[Json]:
-    """A message as plain text, or as content parts when it holds media."""
+    """Renders a message as plain text, or as parts when it holds media."""
     parts: list[Json] = []
     for part in content.get("parts") or []:
         media = _media_part(part)
@@ -187,14 +188,15 @@ def _message_of(content: Json, warnings: Warnings) -> str | list[Json]:
             {"type": "text", "text": f"[{described} -- not representable in ATIF]"}
         )
 
-    # Harbor allows both, and every other producer writes the plain string.
+    # Harbor allows a list or a string, and every other producer writes the
+    # string, so a list here means the message really does hold media.
     if all(part["type"] == "text" for part in parts):
         return "".join(part["text"] for part in parts)
     return parts
 
 
 def _usage_of(content: Json) -> Json:
-    """One message's cost and tokens, under the names ATIF gives them."""
+    """Renames one message's cost and tokens to the names ATIF uses."""
     metrics = content.get(METRICS_KEY) or {}
     usage = {
         key: value
@@ -203,21 +205,23 @@ def _usage_of(content: Json) -> Json:
     }
     halves = [_int(metrics.get(field)) for field in COST_FIELDS]
     if any(half is not None for half in halves):
-        # Half a cost is an unknown total, not a partial one; None says so.
+        # Half a cost is an unknown total, not a partial one.
         usage["cost_usd"] = None if None in halves else sum(halves) / 1_000_000_000
-    # Harbor has no latency field, but it is the only per-turn timing there is.
+    # Harbor has no latency field, but this is the only per-turn timing kbench
+    # records, so it is kept in extra rather than dropped.
     if (latency := _int(metrics.get("totalBackendLatencyMs"))) is not None:
         usage["extra"] = {"total_backend_latency_ms": latency}
     return usage
 
 
 def _contents_of(conversation: Json) -> list[Json]:
-    """A conversation flattened into messages, cost riding on the closing reply."""
+    """Flattens a conversation into messages, cost on the closing reply."""
     contents = []
     for request in conversation.get("requests") or []:
         group = list(request.get("contents") or [])
         if group and group[-1].get("role") == ASSISTANT_ROLE:
-            # Both belong to the reply that closed the request, not the request.
+            # Both belong to the reply that closed the request, not to the
+            # request as a whole, which is a serializer grouping.
             rider = {
                 METRICS_KEY: request.get("metrics"),
                 REASONING_KEY: request.get("reasoningTraces"),
@@ -230,13 +234,14 @@ def _contents_of(conversation: Json) -> list[Json]:
 def _partition(
     conversations: list[Json], warnings: Warnings
 ) -> tuple[list[Json], list[Json]]:
-    """One main transcript and any side chats."""
+    """Splits conversations into one main transcript and any side chats.
 
-    # A tool loop forks with a copy of the parent, and is merged back so it
-    # does not read as a second agent.
+    A tool loop forks with a copy of the parent chat, and is merged back here
+    so that it does not read as a second agent.
+    """
 
     def shared_prefix(main: list[Json], contents: list[Json]) -> int:
-        # By what a message says, since a fork renumbers ids.
+        # Compared by what a message says, since a fork renumbers ids.
         def key(content: Json) -> str:
             said = [content.get(f) for f in ("role", "senderName", "parts")]
             return json.dumps(said, sort_keys=True)
@@ -254,11 +259,11 @@ def _partition(
         shared = shared_prefix(main, contents)
         is_loop = _chat_name(conversation["id"]) == "Tool loop"
         if is_loop and (shared or not main):
-            # Spliced where it branched, which need not be the parent's end.
+            # Spliced back where it branched, which need not be the end.
             main = main[:shared] + contents[shared:] + main[shared:]
             continue
         if is_loop:
-            # Merging would interleave two unrelated threads.
+            # Merging here would interleave two unrelated threads.
             _warn(warnings, "fork_without_common_prefix", conversation["id"])
         side_chats.append(conversation)
     return main, side_chats
@@ -267,10 +272,10 @@ def _partition(
 def _steps(
     contents: list[Json], model: str | None, started_at: str | None, warnings: Warnings
 ) -> list[Json]:
-    """A transcript as steps, numbered from 1 with no gaps."""
+    """Converts a transcript into steps, numbered from 1 with no gaps."""
 
     def tool_blob(content: Json) -> Json | None:
-        """A tool result's payload, or None: it shares its role with context."""
+        """Returns a tool result's payload, or None if this is not one."""
         if content.get("role") != TOOL_ROLE:
             return None
         try:
@@ -280,7 +285,8 @@ def _steps(
                 blob = json.loads(blob)  # Encoded twice on the way in.
         except ValueError:
             return None
-        # Every tool result has both keys; plain context has neither.
+        # A tool result has both keys; the genuine context it shares a role
+        # with has neither.
         is_result = isinstance(blob, dict) and {"name", "arguments"} <= blob.keys()
         return blob if is_result else None
 
@@ -291,9 +297,10 @@ def _steps(
         args, given = blob.get("arguments"), blob.get("call_id")
         if not isinstance(args, (dict, type(None))):
             # kbench refused the call and quoted the arguments back, so they
-            # survive in the result below rather than in arguments.
+            # survive in the result below rather than here.
             _warn(warnings, "tool_arguments_unparsed", f"{blob.get('name')}: {args!r}")
-        # Harbor links result to call by id; position is all we have without.
+        # Harbor links a result to its call by id, and a backend need not
+        # supply one, so an invented id beats pairing by position.
         call_id = given or f"kbench_call_{step['step_id']}_{len(calls) + 1}"
         calls.append(
             {
@@ -317,7 +324,7 @@ def _steps(
     steps: list[Json] = []
     for content in contents:
         blob = tool_blob(content)
-        # A tool result is the outcome of a call, and only an agent step has one.
+        # A tool result is the outcome of a call, and only an agent made one.
         if blob and steps and steps[-1]["source"] == "agent":
             fold(steps[-1], blob)
             continue
@@ -340,17 +347,18 @@ def _steps(
                     "sender_name": content.get("senderName"),
                     # Both land on system; the role keeps them tellable apart.
                     "kbench_role": kbench_role,
-                    # Shown or not, so the trajectory alone says what was sent.
+                    # Kept whether shown above or not, so the trajectory alone
+                    # says what was sent.
                     "kbench_media": media,
                 },
-                # Harbor rejects the trajectory if a non-agent step carries these.
+                # Harbor rejects the whole file if a non-agent step has these.
                 "model_name": model if agent else None,
                 "metrics": _usage_of(content) if agent else None,
                 "reasoning_content": content.get(REASONING_KEY) if agent else None,
             }
         )
 
-    # kbench times the run, not each message, and all alike reads as instant.
+    # Only the first: kbench times the run, not each message.
     if steps and started_at:
         steps[0]["timestamp"] = started_at
     return steps
@@ -359,11 +367,11 @@ def _steps(
 def _subagent(
     conversation: Json, run_id: str, started_at: str | None, warnings: Warnings
 ) -> Json:
-    """One side chat as a subagent trajectory, complete in itself."""
-    # One subagent per room, not per persona: a room is one conversation, so
-    # its personas are names on messages, not models.
+    """Converts one side chat into a subagent trajectory, complete in itself."""
+    # One subagent per chat, not per persona: a room is a single conversation,
+    # so its personas are names on messages rather than models. Only a judge
+    # chat is named after the model that ran it.
     name = _chat_name(conversation["id"])
-    # Only a judge reveals which model it ran on.
     is_judge = name.startswith(JUDGE_CHAT_PREFIX)
     model = name[len(JUDGE_CHAT_PREFIX) :] or None if is_judge else None
     steps = _steps(_contents_of(conversation), model, started_at, warnings)
@@ -372,7 +380,8 @@ def _subagent(
         "schema_version": SCHEMA_VERSION,
         "trajectory_id": f"{run_id}::{conversation['id']}",
         "agent": {**agent, "version": _harness_version()},
-        # Harbor wants a step, and a room can be posted in and never answered.
+        # Harbor rejects a trajectory with no step, and a room can be posted
+        # in and never answered.
         "steps": steps
         or [
             {
@@ -385,7 +394,7 @@ def _subagent(
 
 
 def _rewards(run_json: Json, warnings: Warnings) -> dict[str, float] | None:
-    """A run's scores as the name-to-number map harbor reads."""
+    """Flattens a run's scores into the name-to-number map harbor reads."""
 
     def flatten(result: Json, prefix: str) -> dict[str, float]:
         if "numericResult" in result:
@@ -401,7 +410,7 @@ def _rewards(run_json: Json, warnings: Warnings) -> dict[str, float] | None:
 
         rewards = {}
         for key, value in leaves.items():
-            # bool is an int subclass, so a pass/fail flag lands here as 1.0/0.0.
+            # bool is an int subclass, so a pass/fail flag becomes 1.0 or 0.0.
             if isinstance(value, (int, float)):
                 rewards[f"{prefix}{key}"] = float(value)
             else:
@@ -409,8 +418,8 @@ def _rewards(run_json: Json, warnings: Warnings) -> dict[str, float] | None:
                 _warn(warnings, "reward_leaf_unusable", f"{prefix}{key} is a {kind}")
         return rewards
 
-    # The midtier shows rewards.First(), so the overall figure takes the
-    # unprefixed key however the splits were ordered.
+    # The midtier displays rewards.First(), so the overall figure has to take
+    # the unprefixed key however the splits happen to be ordered.
     results = list(run_json.get("results") or [])
     aggregate = next((r for r in results if r.get("type") == "AGGREGATED"), None)
     headline = aggregate or (results[0] if len(results) == 1 else None)
@@ -426,24 +435,22 @@ def _rewards(run_json: Json, warnings: Warnings) -> dict[str, float] | None:
 
 
 def _exception_info(run_json: Json) -> Json | None:
-    """How the run failed, or None if it did not."""
-    # Keyed off the message, not the state: an errored run can still carry a
-    # result and an intact transcript.
+    """Describes how the run failed, or returns None if it did not."""
+    # Keyed off the message rather than the state: an errored run can still
+    # carry a result and an intact transcript.
     if not (error := run_json.get("errorMessage")):
         return None
 
     lines = error.rstrip().splitlines()
-    # A chained traceback repeats the header and its last block ended the run.
-    # Frames are indented and the exception line is not, so it starts at the
-    # first unindented line after the last header.
+    # A chained traceback repeats the header, and the block that ended the run
+    # is the last one. Frames are indented and the exception line is not, so 0
+    # means not found: a header always precedes a real one.
     headers = [i for i, line in enumerate(lines) if line == TRACEBACK_HEADER]
     rest = range(headers[-1] + 1, len(lines)) if headers else range(0)
-    # 0 for not found, which no real exception line can be: a header precedes it.
     start = next((i for i in rest if lines[i][:1].strip()), 0)
-    # Split once: the message may hold a colon and may span lines. The proto
-    # field is free text, so a non-traceback degrades rather than guessing.
+    # Split once, since the message may hold a colon and may span lines.
     name, _, said = "\n".join(lines[start:]).partition(": ") if start else ("", "", "")
-    # Bare name, the form harbor uses for its own exceptions.
+    # The bare name, which is the form harbor uses for its own exceptions.
     exception_type = name.rpartition(".")[2] or name or "KbenchRunError"
     if exception_type in HARBOR_TIMEOUTS:
         exception_type = f"Kbench{exception_type}"
@@ -474,11 +481,12 @@ def _model_slug(run_json: Json) -> str | None:
 
 
 def _kbench_extra(run_json: Json, warnings: Warnings) -> Json:
-    """Everything with no ATIF field, so a reader can get back to the run.json."""
+    """Carries everything with no ATIF field, name for name."""
     kbench = {
         _snake(f): _snake_keys(v) for f, v in run_json.items() if f not in MAPPED_FIELDS
     }
-    # How each row turned out, minus its transcript. Own model: evals compare.
+    # How each row turned out, minus the transcript in its own file. Each
+    # keeps its model, since an eval may be comparing them.
     kbench["subruns"] = [
         {
             "py_run_id": subrun.get("pyRunId"),
@@ -496,10 +504,10 @@ def _kbench_extra(run_json: Json, warnings: Warnings) -> Json:
 
 
 def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
-    """A run.json as an ATIF trajectory.
+    """Converts a run.json into an ATIF trajectory.
 
-    `subrun_paths` maps a dataset eval's row ids to their trajectory files; only
-    the caller knows them. Raises ConversionError if the run has no task name.
+    `subrun_paths` maps a dataset eval's row ids to their trajectory files;
+    only the caller knows them. Raises ConversionError if there is no task name.
     """
     task_name = _task_name(run_json)
     run_id = _run_id(run_json)
@@ -511,9 +519,9 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
     steps = _steps(main, model, started_at, warnings)
     subagents = [_subagent(chat, run_id, started_at, warnings) for chat in side_chats]
     if not steps:
-        # Harbor wants a step, and which absence it was matters: only an
-        # aggregate has no conversation at all, while a run that merely said
-        # nothing still has an empty one of its own.
+        # Harbor requires a step, and which absence this was matters: only an
+        # aggregate has no conversation at all, while a run that said nothing
+        # still has an empty one of its own.
         error = run_json.get("errorMessage")
         if not run_json.get("conversations"):
             said = f"Aggregated from {len(subruns) or 'other'} runs."
@@ -525,12 +533,11 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
         step = {"step_id": 1, "source": "system", "message": message}
         steps = [{**step, "timestamp": started_at}]
 
-    # Zero when the only step is a placeholder; notes explains the disagreement.
-    # Before the steps kbench adds below, which are not turns it counts.
+    # Counted before the steps added below, which are kbench's and not turns.
     real_steps = len(steps) if main else 0
 
-    # A side chat rides inside this file; an eval's rows are sibling files the
-    # parent does not name. By id, never position: rows finish out of order.
+    # A side chat rides inside this file, while an eval's rows are sibling
+    # files. Paired by id and never by position: rows finish out of order.
     refs = [
         {"trajectory_id": sub["trajectory_id"], "extra": {"kbench_chat": chat}}
         for sub in subagents
@@ -545,10 +552,9 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
     if subruns:
         named.append(f"{len(subruns)} rows")
     if refs:
-        # A step of its own, rather than hung off the last real turn: run.json
-        # never records which turn opened a side chat, so any turn we chose
-        # would be a guess, and on the wrong one the chat reads as that turn's
-        # doing. This one says only that they ran, which is all the file knows.
+        # A step of its own rather than hung off the last real turn: run.json
+        # never records which turn opened a side chat, and on the wrong one
+        # the chat would read as that turn's doing.
         steps.append(
             {
                 "step_id": len(steps) + 1,
@@ -561,16 +567,14 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
 
     failure = _exception_info(run_json) or {}
     if failure.get("exception_type") == "ToolInvocationLimitExhausted":
-        # A loop out of rounds sends no closing reply, and kbench keeps nothing
-        # past the last one: the turns are gone before we see the file.
+        # A loop out of rounds sends no closing reply, and kbench keeps
+        # nothing past the last one, so those turns never reach the file.
         _warn(warnings, "transcript_truncated_by_serializer", failure["exception_type"])
 
     if failure and main:
-        # The transcript is the one file with nowhere to say a run ended badly:
-        # ATIF has no field for it, and exception_info lives in the other file.
-        # Only where there are turns to end -- a run that failed before its
-        # first says so in the placeholder above, and would say it twice here.
-        # Last of all, since it is how the run stopped.
+        # ATIF has no field for a failure, so without this the transcript ends
+        # mid-air. Only where there are turns to end: a run that failed before
+        # its first says so in the placeholder above.
         steps.append(
             {
                 "step_id": len(steps) + 1,
@@ -581,9 +585,10 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
             }
         )
 
-    # Off the steps, so a total cannot disagree with the transcript and a
-    # fork's copy of its parent's costs is counted once. Absent, not zero:
-    # unmeasured is not free.
+    # Summed off the steps, so a total cannot disagree with the transcript and
+    # a fork's copy of its parent's costs is counted once. Subruns are left
+    # out: each writes its own result.json, so they would be billed twice.
+    # Absent rather than zero, since unmeasured is not free.
     told = steps + [step for sub in subagents for step in sub["steps"]]
     spent = [step["metrics"] for step in told if step.get("metrics")]
     totals = {
@@ -591,7 +596,8 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
         for _, key in TOKEN_FIELDS
         if any(key in usage for usage in spent)
     }
-    # One unpriced message makes the bill unknowable; a partial sum hides that.
+    # One unpriced message makes the bill unknowable, and a partial sum hides
+    # that.
     costs = [usage["cost_usd"] for usage in spent if "cost_usd" in usage]
 
     note = f"Converted from kbench run.json for task {task_name!r}."
@@ -617,7 +623,8 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
                 "total_completion_tokens": totals.get("completion_tokens"),
                 "total_cost_usd": None if not costs or None in costs else sum(costs),
                 "total_steps": real_steps,
-                # ATIF has no reward field, so it rides in ours instead.
+                # ATIF has no reward field, so the score rides in extra while
+                # result.json keeps the authoritative copy.
                 "extra": {"kbench_result": _rewards(run_json, warnings)},
             },
             "extra": {"kbench": _kbench_extra(run_json, warnings)},
@@ -629,14 +636,14 @@ def to_atif(run_json: Json, subrun_paths: dict[str, str] | None = None) -> Json:
 def to_trial_result(
     run_json: Json, source: str | None = None, trajectory: Json | None = None
 ) -> Json:
-    """A run.json as harbor's TrialResult.
+    """Converts a run.json into harbor's TrialResult.
 
     `source` groups trials into a dataset, so an eval passes its parent task
     name on the parent and every row alike; a row's own file does not record
     which eval it belonged to. Raises ConversionError if there is no task name.
 
-    Pass `trajectory` when one has already been converted: converting a second
-    one logs every warning twice, and this one would not have the subrun paths.
+    Pass `trajectory` when one has already been converted. Converting a second
+    one logs every warning twice, and this one would have no subrun paths.
     """
     # Read back off the trajectory, so the two files cannot come to disagree.
     metrics = (trajectory or to_atif(run_json))["final_metrics"]
@@ -667,20 +674,21 @@ def to_trial_result(
             "exception_info": _exception_info(run_json),
             "started_at": run_json.get("startTime"),
             "finished_at": run_json.get("endTime"),
-            # No id: harbor defaults a uuid4, so the same input reconverts alike.
+            # No id: harbor defaults it to a fresh uuid4, so reconverting the
+            # same input would otherwise produce a different file.
         }
     )
 
 
 def paths_beside(run_path: str | Path) -> list[Path]:
-    """The two files write_beside would write for this run.json."""
+    """Returns the two files write_beside would write for this run.json."""
     run_path = Path(run_path)
     stem = run_path.name.removesuffix(RUN_SUFFIX)
     return [run_path.with_name(stem + s) for s in (ATIF_SUFFIX, TRIAL_SUFFIX)]
 
 
 def remove_beside(run_path: str | Path) -> None:
-    """Deletes both files. Missing is normal: conversion is allowed to fail."""
+    """Deletes both files. Missing is normal, since conversion may have failed."""
     for path in paths_beside(run_path):
         try:
             path.unlink(missing_ok=True)
@@ -694,11 +702,11 @@ def write_beside(
     subrun_paths: dict[str, str] | None = None,
     source: str | None = None,
 ) -> None:
-    """Writes the trajectory and result files next to an already-written run.json.
+    """Writes the trajectory and result files beside an existing run.json.
 
     Does nothing when `config.write_atif` is off. Each write is wrapped on its
-    own: the two conversions share helpers, so the one that fails is not always
-    the one you would guess, and neither is worth losing a finished run over.
+    own, since the two conversions share helpers and neither is worth losing
+    a finished run over.
     """
     from kaggle_benchmarks._config import config
 
@@ -715,10 +723,9 @@ def write_beside(
             return None
 
     atif_path, trial_path = paths_beside(run_path)
-    # Converted once and handed on. Converting a second one would log every
-    # warning again, and would warn that it has no subrun paths -- which only
-    # this caller ever had. None if it failed, and to_trial_result converts its
-    # own: a trajectory too broken to write can still hold usable totals.
+    # Converted once and handed on, so the warnings are logged once. None if
+    # it failed, and to_trial_result then converts its own, since a trajectory
+    # too broken to write can still hold usable totals.
     trajectory = write(atif_path, lambda: to_atif(run_json, subrun_paths=subrun_paths))
     write(
         trial_path,
