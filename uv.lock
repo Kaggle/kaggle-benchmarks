@@ -1881,11 +1881,9 @@ dependencies = [
     { name = "hishel", extra = ["httpx"] },
     { name = "joblib" },
     { name = "jupyter" },
-    { name = "nest-asyncio" },
     { name = "openai" },
     { name = "pandas" },
     { name = "panel" },
-    { name = "playwright" },
     { name = "protobuf" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -1895,6 +1893,10 @@ dependencies = [
 [package.optional-dependencies]
 kaggle-client = [
     { name = "jupytext" },
+]
+web-tools = [
+    { name = "nest-asyncio" },
+    { name = "playwright" },
 ]
 
 [package.dev-dependencies]
@@ -1908,7 +1910,7 @@ dev = [
     { name = "jupyter-lsp" },
     { name = "jupyter-server" },
     { name = "jupyterlab-lsp" },
-    { name = "kaggle-benchmarks", extra = ["kaggle-client"] },
+    { name = "kaggle-benchmarks", extra = ["kaggle-client", "web-tools"] },
     { name = "kagglehub" },
     { name = "moviepy" },
     { name = "mypy" },
@@ -1953,6 +1955,7 @@ kaggle = [
     { name = "jupyter-lsp" },
     { name = "jupyter-server" },
     { name = "jupyterlab-lsp" },
+    { name = "kaggle-benchmarks", extra = ["web-tools"] },
     { name = "kagglehub" },
     { name = "nbconvert" },
     { name = "nbdev" },
@@ -1979,17 +1982,17 @@ requires-dist = [
     { name = "joblib" },
     { name = "jupyter" },
     { name = "jupytext", marker = "extra == 'kaggle-client'" },
-    { name = "nest-asyncio", specifier = ">=1.6.0" },
+    { name = "nest-asyncio", marker = "extra == 'web-tools'", specifier = ">=1.6.0" },
     { name = "openai", specifier = ">=1.66" },
     { name = "pandas" },
     { name = "panel", specifier = ">=1.6.3" },
-    { name = "playwright", specifier = ">=1.50.0" },
+    { name = "playwright", marker = "extra == 'web-tools'", specifier = ">=1.50.0" },
     { name = "protobuf", specifier = ">=5.29.3,<6.0" },
     { name = "pydantic", specifier = ">=2.11.5" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "tqdm" },
 ]
-provides-extras = ["kaggle-client"]
+provides-extras = ["kaggle-client", "web-tools"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2003,6 +2006,7 @@ dev = [
     { name = "jupyter-server", specifier = "==2.12.5" },
     { name = "jupyterlab-lsp" },
     { name = "kaggle-benchmarks", extras = ["kaggle-client"] },
+    { name = "kaggle-benchmarks", extras = ["web-tools"] },
     { name = "kagglehub", specifier = ">=0.3.10" },
     { name = "moviepy", specifier = ">=2.2.1" },
     { name = "mypy" },
@@ -2047,6 +2051,7 @@ kaggle = [
     { name = "jupyter-lsp", specifier = "==1.5.1" },
     { name = "jupyter-server", specifier = "==2.12.5" },
     { name = "jupyterlab-lsp" },
+    { name = "kaggle-benchmarks", extras = ["web-tools"] },
     { name = "kagglehub", specifier = ">=0.3.10" },
     { name = "nbconvert", specifier = ">=6.5.1" },
     { name = "nbdev", specifier = ">=2.4.2" },
