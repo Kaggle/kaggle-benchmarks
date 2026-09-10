@@ -147,6 +147,11 @@ class Config:
     render_subruns: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("RENDER_SUBRUNS", "True"))
     )
+    # Whether each run also writes the .atif.json / .result.json pair harbor
+    # tooling reads. Off leaves the run.json untouched: it is the only input.
+    write_atif: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "True"))
+    )
 
     # Maximum length the host platform allows for `@kbench.task(...)` `name`
     # and `description` arguments. The Kaggle notebook runtime sets these to

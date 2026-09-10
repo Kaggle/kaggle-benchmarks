@@ -47,6 +47,7 @@ This is a **library-first codebase** organized by functional concerns:
 ### Documentation
 - **User-facing guides** → `documentation/quick_start.qmd`, `documentation/user_guide.qmd`
 - **Example code** → `documentation/examples/*.py`
+- **run.json → ATIF mapping** → `atif_mapping.md` (rules for `src/kaggle_benchmarks/kaggle/atif.py`)
 
 ## Critical Implementation Rules
 

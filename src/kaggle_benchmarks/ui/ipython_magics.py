@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 from IPython import core
+
+WORKING_DIR = Path("/kaggle/working")
 
 
 def autopilot(line):
@@ -128,7 +132,8 @@ def choose(line):
     *run.json and *task.json files from /kaggle/working.
     """
     import re
-    from pathlib import Path
+
+    from kaggle_benchmarks.kaggle import atif
 
     def _normalize_name(name: str) -> str:
         """Replaces special characters such as spaces and slashes in a name."""
@@ -161,7 +166,7 @@ def choose(line):
 
     normalized_task_name = _normalize_name(task_name)
 
-    working_dir = Path("/kaggle/working")
+    working_dir = WORKING_DIR
     if not working_dir.is_dir():
         print(f"Directory not found: {working_dir}")
         return
@@ -185,9 +190,19 @@ def choose(line):
         key=lambda f: f.stat().st_mtime,
     )
     if matching_run_files:
-        files_to_keep.add(matching_run_files[-1])  # Use the last run file
+        kept_run_file = matching_run_files[-1]  # Use the last run file
+        files_to_keep.add(kept_run_file)
+        # A run's trajectory files describe that run, so they follow it either
+        # way -- kept with the winner, deleted with everything else.
+        files_to_keep.update(atif.paths_beside(kept_run_file))
 
-    all_files_to_scan = set(all_run_files + all_task_files)
+    all_atif_files = [
+        f
+        for run_file in all_run_files
+        for f in atif.paths_beside(run_file)
+        if f.exists()
+    ]
+    all_files_to_scan = set(all_run_files + all_task_files + all_atif_files)
 
     for f in all_files_to_scan:
         if f not in files_to_keep:

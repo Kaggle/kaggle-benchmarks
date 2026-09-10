@@ -34,6 +34,7 @@ from kaggle_benchmarks import (
     utils,
 )
 from kaggle_benchmarks import messages as benchmark_messages
+from kaggle_benchmarks.kaggle import atif
 from kaggle_benchmarks.kaggle import benchmark_types_pb2 as types
 
 TASK_FILE_SUFFIX = ".task.json"
@@ -82,12 +83,20 @@ def get_runs_filenames(runs: runs.Runs) -> list[str]:
 
 
 def remove_runs_files(runs: runs.Runs) -> None:
+    from kaggle_benchmarks import client
+
+    # A bare name resolves against the process's cwd, which is the output
+    # directory only by luck. The client knows where it wrote.
+    directory = getattr(client, "directory", Path("."))
     for run in runs:
-        run_filename = generate_run_filename(run.task.name, run.cache_id)
+        run_filepath = directory / generate_run_filename(run.task.name, run.cache_id)
         try:
-            Path(run_filename).unlink()
+            run_filepath.unlink()
         except Exception as e:
-            logger.warning(f"Failed to remove file {run_filename}: {e}")
+            logger.warning(f"Failed to remove file {run_filepath}: {e}")
+        # The companions too, or a 500-row eval leaves 1000 files behind whose
+        # run.json is gone.
+        atif.remove_beside(run_filepath)
 
 
 def _get_source_code(func) -> str:
@@ -256,15 +265,23 @@ def _message_to_proto_content(message: benchmark_messages.Message) -> dict[str, 
     elif isinstance(message.content, str):  # text payload
         part_value["text"] = message.content
     else:  # payload of dict or more complicated objects
-        payload = message.payload
         try:
+            # Inside the try: `payload` itself serializes, so it can raise too,
+            # and an escaping error loses the whole run file rather than
+            # one message.
+            payload = message.payload
+            # Note `payload` is often already a JSON string, so this
+            # double-encodes. Kept: every run.json ever written has that shape,
+            # and nothing in the file marks which encoding it used, so changing
+            # it would split the corpus into two indistinguishable halves.
+            # Readers decode twice.
             json_text = json.dumps(payload)
         except TypeError:
             logger.warning(
                 f"Could not serialize message payload to JSON for message from {message.sender.name}. "
-                f"Payload type: {type(payload)}. Falling back to string representation."
+                f"Content type: {type(message.content)}. Falling back to string representation."
             )
-            json_text = str(payload)
+            json_text = str(message.text)
         part_value["text"] = json_text
 
     return {
@@ -331,7 +348,6 @@ def _prepare_conversations_data(
 
             # A request is formed when an assistant message is encountered.
             # The sender role is checked on the original message object.
-            # Any messages in after the last "assistant" message will be ignored.
             if item.sender.role == "assistant":
                 if (
                     current_request_contents
@@ -350,13 +366,14 @@ def _prepare_conversations_data(
                         ),
                     }
                     request_counter += 1
-                    current_conversation_requests.append(
-                        {
-                            "id": f"{chat.id}-req-{request_counter}",
-                            "contents": list(current_request_contents),
-                            "metrics": request_metrics,
-                        }
-                    )
+                    request = {
+                        "id": f"{chat.id}-req-{request_counter}",
+                        "contents": list(current_request_contents),
+                        "metrics": request_metrics,
+                    }
+                    if traces := item.reasoning_traces:
+                        request["reasoning_traces"] = traces
+                    current_conversation_requests.append(request)
                     current_request_contents.clear()
 
         elif isinstance(item, chats.Chat):
@@ -370,6 +387,17 @@ def _prepare_conversations_data(
             raise NotImplementedError(
                 f"Unhandled item type in chat history: {type(item)} for chat '{chat.name}'"
             )
+
+    # Messages after the last assistant reply still happened, so they are
+    # flushed as a trailing request. No metrics: no model was called.
+    if current_request_contents:
+        request_counter += 1
+        current_conversation_requests.append(
+            {
+                "id": f"{chat.id}-req-{request_counter}",
+                "contents": list(current_request_contents),
+            }
+        )
 
     conversation_metrics = {
         "input_tokens": 0,
@@ -469,6 +497,38 @@ def _prepare_assertions_data(
     return assertions_list_data
 
 
+def _merged_run_stub(run_data: dict[str, Any]) -> dict[str, Any]:
+    """Records that a run contributed to an aggregate, without its transcript."""
+    stub = {
+        field: run_data[field]
+        for field in ("pyRunId", "modelVersion", "state", "results")
+        if run_data.get(field) is not None
+    }
+    if task_version := run_data.get("taskVersion"):
+        # Name only: the merge has already checked every input shares it, so the
+        # aggregate's own taskVersion carries the source once instead of N times.
+        stub["taskVersion"] = {"name": task_version.get("name")}
+    return stub
+
+
+def _sibling_trajectories(
+    trajectories: dict[str, Path], output_filename: str | Path
+) -> dict[str, str]:
+    """The merged runs' trajectories, named the way a row's parent names its rows.
+
+    A bare filename, so the two kinds of parent read alike and a directory stays
+    movable. `output_directory` can put the aggregate somewhere else entirely,
+    and a ref that climbs out with `../` would break on the first move -- so
+    those are dropped, and the converter records that it could not point at them.
+    """
+    parent = Path(output_filename).parent
+    return {
+        run_id: path.name
+        for run_id, path in trajectories.items()
+        if path.parent == parent
+    }
+
+
 def merge_results_from_runfiles(
     run_files: list[str],
     aggregate_fn: Callable[[list[Any]], Union[bool, float, Tuple[float, float]]],
@@ -502,6 +562,12 @@ def merge_results_from_runfiles(
     first_model_slug = None
 
     all_individual_results = []
+    merged_run_stubs = []
+    # Where each merged run's trajectory sits, so the aggregate can point at the
+    # runs behind its number. Only this caller knows: a stub records the run id,
+    # never the file. Left empty when the inputs are about to be deleted -- a
+    # ref to a file we are removing is worse than no ref.
+    merged_run_trajectories: dict[str, Path] = {}
 
     first_run_data = None
     for run_file in run_files:
@@ -547,6 +613,11 @@ def merge_results_from_runfiles(
                     f"Could not find 'results' in file {run_file}. Malformed data. Error: {e}"
                 )
 
+            merged_run_stubs.append(_merged_run_stub(run_data))
+            trajectory, _ = atif.paths_beside(run_file)
+            if not delete_run_files and trajectory.exists():
+                merged_run_trajectories[run_data["pyRunId"]] = trajectory
+
     if not first_run_data:
         raise ValueError("No run data found in runfiles!")
 
@@ -556,8 +627,12 @@ def merge_results_from_runfiles(
     overall_run_data = copy.deepcopy(first_run_data)
     overall_run_data["pyRunId"] = f"{first_task_name}-{output_run_id}"
     overall_run_data["conversations"] = []
-    overall_run_data["subruns"] = []
     overall_run_data["assertions"] = []
+    # Stubs, so an aggregate can say which runs produced its number. Built
+    # field by field rather than copied: a whole subrun would duplicate the
+    # transcripts sitting beside it, and with delete_run_files the duplicate
+    # would be all that survived.
+    overall_run_data["subruns"] = merged_run_stubs
 
     match aggregated_result:
         case bool(value):
@@ -599,6 +674,14 @@ def merge_results_from_runfiles(
     with open(output_filename, "w") as f:
         json.dump(overall_run_data, f, indent=2)
 
+    # This path writes its own file rather than going through store_run, so
+    # without this the aggregate would be the one run with no trajectory.
+    atif.write_beside(
+        overall_run_data,
+        output_filename,
+        subrun_paths=_sibling_trajectories(merged_run_trajectories, output_filename),
+    )
+
     # Delete a list of files, e.g. if user decides to delete old non-aggregated runfiles after merging
     if delete_run_files:
         for file_path in run_files:
@@ -606,5 +689,6 @@ def merge_results_from_runfiles(
                 Path(file_path).unlink()
             except OSError as e:
                 raise OSError(f"Error: {file_path} : {e}")
+            atif.remove_beside(file_path)
 
     return str(output_filename)

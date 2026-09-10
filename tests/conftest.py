@@ -26,6 +26,11 @@ def context(monkeypatch):
         config.console_mode = False
         config.console_quiet = False
         config.console_color = None
+        # Pinned rather than inherited: a local .env that turns this on makes
+        # `contexts.enter` swallow exceptions at root, so an assertion that
+        # raises inside `chats.new(...)` passes locally and fails in CI. Tests
+        # that want it on set it themselves.
+        config.continue_with_exceptions = False
         events.manager.listeners = []
         config.ui_handler = None
         config.apply()

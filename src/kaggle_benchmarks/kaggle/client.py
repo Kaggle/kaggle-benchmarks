@@ -22,12 +22,23 @@ from google.protobuf import json_format
 
 from kaggle_benchmarks import clients, runs, tasks
 from kaggle_benchmarks._config import ExecutionMode, config
-from kaggle_benchmarks.kaggle import serialization
+from kaggle_benchmarks.kaggle import atif, serialization
 
 
 def save_proto(message: Any, path: Path):
     with open(path, "wt") as file:
         file.write(json_format.MessageToJson(message))
+
+
+def _source(run: runs.Run) -> str | None:
+    """The group this trial belongs to, which is how harbor collects a dataset.
+
+    A run with rows is the group and names itself; a row belongs to its
+    parent's. Both sides must agree, so neither reads its own task name.
+    """
+    if run.subruns:
+        return run.task.name
+    return parent.task.name if (parent := run.parent) else None
 
 
 class KaggleClient(clients.Client):
@@ -81,6 +92,34 @@ class KaggleClient(clients.Client):
             raise e
 
         save_proto(proto_message, json_file_path)
+
+        # After the run.json, and never allowed to fail: a converter bug must
+        # not cost someone a finished run.
+        atif.write_beside(
+            json_format.MessageToDict(proto_message),
+            json_file_path,
+            subrun_paths=self._subrun_paths(run),
+            source=_source(run),
+        )
+
+    def _subrun_paths(self, run: runs.Run) -> dict[str, str]:
+        """Maps each row of a dataset eval to its own trajectory file.
+
+        Only the live Run knows this: a row's filename comes from its cache_id,
+        which holds the dataset's index label, and the parent's run.json records
+        only the sequential pyRunId. Keyed by that id, never by position --
+        subruns are appended in completion order, so under n_jobs>1 the array
+        and the files disagree.
+
+        A row whose file is gone is left out, so `remove_run_files=True` gets a
+        warning rather than a ref to nothing. The parent still summarises it.
+        """
+        paths = {}
+        for subrun in run.subruns:
+            trajectory, _ = atif.paths_beside(self._get_run_filepath(subrun))
+            if trajectory.exists():
+                paths[f"{subrun.task.name}-{subrun.id}"] = trajectory.name
+        return paths
 
     def skips_cached_run(self, run: runs.Run) -> bool:
         """Determines whether to skip a run by checking for the config and a cached run file."""
