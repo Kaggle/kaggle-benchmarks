@@ -130,6 +130,15 @@ def guard_repr(cls: type) -> None:
     cls.__repr__ = safe  # type: ignore[assignment]
 
 
+def mask_scores(scores: "dict[Any, Any] | None") -> "dict[Any, Any] | None":
+    """Hides the private half of a split score, leaving the public one."""
+    from kaggle_benchmarks.runs import Split
+
+    if not scores or config.reveal_private:
+        return scores
+    return {k: (MASK if k is Split.PRIVATE else v) for k, v in scores.items()}
+
+
 def banner(hidden: int) -> str:
     """The notice shown above a listing that is hiding some of its rows."""
     rows = "row is" if hidden == 1 else "rows are"

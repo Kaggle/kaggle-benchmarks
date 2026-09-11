@@ -65,6 +65,9 @@ class Run(Generic[T]):
     # when the task was not split. Nested runs inherit it from the run they
     # are inside.
     split: Split | None = None
+    # One score per half, set on the run that called evaluate(). No entry
+    # for the overall figure: the run's own result is that.
+    split_scores: dict[Split, Any] | None = None
 
     def __post_init__(self):
         if self.id == "":
@@ -221,6 +224,8 @@ privacy.guard_repr(Run)
 @dataclasses.dataclass
 class Runs(Generic[T], abc.MutableSequence):
     runs: list[Run[T]] = dataclasses.field(default_factory=list)
+    # Set by `evaluate()` when the task was run over a public/private split.
+    split_scores: dict[Split, Any] | None = None
 
     def __setitem__(self, index, value):
         self.runs[index] = value
@@ -309,8 +314,11 @@ class Runs(Generic[T], abc.MutableSequence):
         """The params and result of one run, masked if it must not be shown.
 
         The result is left empty rather than marked, so the column keeps its
-        numeric dtype and still adds up. Params are marked instead: they show
-        that something is hidden, and nothing does arithmetic on them.
+        numeric dtype and still adds up. Note that a sum or a mean then covers
+        the public rows alone; the figure for each half is in `split_scores`.
+
+        Params are marked instead: they show that something is hidden, and
+        nothing does arithmetic on them.
         """
         if privacy.is_hidden(run):
             return {key: privacy.MASK for key in run.params} | {"result": None}
@@ -348,6 +356,12 @@ class Runs(Generic[T], abc.MutableSequence):
             groups.setdefault(run.display_param(by), {})[run.param_id] = run
 
         return panel.render_pivot(groups, mode=mode)
+
+    def __repr__(self) -> str:
+        # Written out rather than generated: the generated one prints the
+        # private half of the score. The runs guard their own reprs.
+        scores = privacy.mask_scores(self.split_scores)
+        return f"{type(self).__name__}(runs={self.runs!r}, split_scores={scores!r})"
 
     def __panel__(self):
         from kaggle_benchmarks.ui import panel

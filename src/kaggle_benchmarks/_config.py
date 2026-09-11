@@ -152,6 +152,15 @@ class Config:
     write_atif: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "True"))
     )
+    # Whether evaluate() accepts a private half. Off by default: the run
+    # file still holds private rows in full and nothing in it marks them, so
+    # only this SDK's rendering respects the split. Turn the default on when
+    # the backend enforces it, and remove the flag afterwards.
+    enable_private_splits: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(
+            os.environ.get("ENABLE_PRIVATE_SPLITS", "False")
+        )
+    )
     # Whether rows from a private evaluation split show their contents when
     # rendered. Off by default: rendered output is saved into the notebook and
     # shared with it. See kaggle_benchmarks/privacy.py.
