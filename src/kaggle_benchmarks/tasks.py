@@ -31,7 +31,7 @@ from typing import (
 
 import pandas as pd
 
-from kaggle_benchmarks import chats, events, results, utils
+from kaggle_benchmarks import chats, events, privacy, results, utils
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import runs
@@ -39,6 +39,14 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
+
+
+def _inherited_split() -> "runs.Split | None":
+    """The split of the run we are nested inside, if any."""
+    from kaggle_benchmarks import contexts
+
+    parent = contexts.get_current().run
+    return parent.split if parent is not None else None
 
 
 class NonRecoverableError(Exception):
@@ -128,7 +136,7 @@ class Task(Generic[T]):
                 # outcome (success or failure).
                 logger.warning(f"Failed to store run {run.id}: {store_exc}")
 
-    def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
+    def run(self, *args, _id=None, _split=None, **kwargs) -> "runs.Run[T]":
         from kaggle_benchmarks import contexts, runs
 
         # Internal flag set only by Task._evaluate_once() when
@@ -151,8 +159,13 @@ class Task(Generic[T]):
             result=results.PENDING,
             params=params,
             param_id=_id,
+            # A run nested inside a private row works on the same data, so
+            # it inherits the half. Passed through the enum because a marker
+            # passed via a DataFrame column comes back out as a plain string.
+            split=runs.Split(_split) if _split is not None else _inherited_split(),
         )
 
+        hidden_failure: str | None = None
         try:
             with contexts.enter(run=run) as ctx:
                 cached_run = self._handle_cached_run(run, ctx)
@@ -195,7 +208,11 @@ class Task(Generic[T]):
             # suppress the exception (for on_failure="continue").
             self._finalize_and_persist(run, ctx)
             if not _suppress_raise:
-                raise
+                # A private row's exception message usually quotes the row,
+                # and is about to be printed as a traceback.
+                if not privacy.is_hidden(run):
+                    raise
+                hidden_failure = f"{run.task.name} {run.id}: {privacy.FAILURE_BODY}"
         else:
             # No exception escaped contexts.enter. Two sub-cases:
             #  (a) Task succeeded → status=SUCCESS
@@ -203,6 +220,12 @@ class Task(Generic[T]):
             #      at root (batch mode, continue_with_exceptions) → status=FAILED
             # Either way, persist with the final status.
             self._finalize_and_persist(run, ctx)
+
+        # Raised outside the handler: raising inside it would attach the
+        # original as __context__, where something walking the chain could
+        # print it.
+        if hidden_failure is not None:
+            raise privacy.PrivateRunError(hidden_failure)
 
         return run
 

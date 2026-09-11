@@ -152,6 +152,14 @@ class Config:
     write_atif: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "True"))
     )
+    # Whether rows from a private evaluation split show their contents when
+    # rendered. Off by default: rendered output is saved into the notebook and
+    # shared with it. See kaggle_benchmarks/privacy.py.
+    reveal_private: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(
+            os.environ.get("REVEAL_PRIVATE", "False")
+        )
+    )
 
     # Maximum length the host platform allows for `@kbench.task(...)` `name`
     # and `description` arguments. The Kaggle notebook runtime sets these to
