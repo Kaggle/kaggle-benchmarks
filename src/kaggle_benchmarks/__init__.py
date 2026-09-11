@@ -14,6 +14,7 @@
 
 from kaggle_benchmarks import (
     actors,
+    aggregation,
     assertions,
     chats,
     clients,

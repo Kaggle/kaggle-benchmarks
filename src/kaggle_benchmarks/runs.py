@@ -18,7 +18,7 @@ import enum
 import threading
 import traceback
 from collections import abc
-from typing import Any, Generic, Literal, Self, TypeVar
+from typing import Any, Callable, Generic, Literal, Self, TypeVar
 
 import pandas as pd
 
@@ -256,6 +256,34 @@ class Runs(Generic[T], abc.MutableSequence):
         next attempt (with `enable_cache()` enabled).
         """
         return Runs([r for r in self.runs if r.status == utils.Status.FAILED])
+
+    def filter(self, split: Split | None) -> "Runs[T]":
+        """The runs from one half of a public/private evaluation."""
+        return Runs([r for r in self.runs if r.split is split])
+
+    @property
+    def public(self) -> "Runs[T]":
+        return self.filter(Split.PUBLIC)
+
+    @property
+    def private(self) -> "Runs[T]":
+        return self.filter(Split.PRIVATE)
+
+    def score(self, aggregate: "Callable[[Runs[T]], Any] | None" = None) -> Any:
+        """Reduces these runs to a single number.
+
+        With no `aggregate`, uses the default for the task's `result_type`: a
+        mean for numeric results, a pass rate for boolean ones. Result types
+        with no obvious reduction have no default and need one passed in.
+        Raises on an empty `Runs`.
+        """
+        from kaggle_benchmarks import aggregation
+
+        if aggregate is not None:
+            return aggregate(self)
+        if not self.runs:
+            raise ValueError("Cannot score an empty Runs.")
+        return aggregation.default_for(self.runs[0].task.result_type)(self)
 
     def as_dataframe(self) -> pd.DataFrame:
         """One row per run, indexed by run id.
