@@ -14,20 +14,32 @@
 
 import dataclasses
 import datetime
+import enum
 import threading
 import traceback
 from collections import abc
-from typing import Any, Generic, Literal, Self, TypeVar
+from typing import Any, Callable, Generic, Literal, Self, TypeVar
 
 import pandas as pd
 
-from kaggle_benchmarks import actors, assertions, chats, results, tasks, utils
+from kaggle_benchmarks import actors, assertions, chats, privacy, results, tasks, utils
 from kaggle_benchmarks.actors.llms import LLMChat
 
 T = TypeVar("T")
 
 _run_counters_lock = threading.Lock()
 _run_counters: dict[int, int] = {}
+
+
+class Split(enum.StrEnum):
+    """Which half of a public/private evaluation a run came from.
+
+    A run from a task that was not split is `None`, not PUBLIC: a row is
+    only public in contrast to a private half.
+    """
+
+    PUBLIC = "public"
+    PRIVATE = "private"
 
 
 @dataclasses.dataclass
@@ -49,6 +61,13 @@ class Run(Generic[T]):
     cached: bool = False
     # Details for status=FAILED
     error_message: str | None = None
+    # Which half of a public/private evaluation this run came from, or None
+    # when the task was not split. Nested runs inherit it from the run they
+    # are inside.
+    split: Split | None = None
+    # One score per half, set on the run that called evaluate(). No entry
+    # for the overall figure: the run's own result is that.
+    split_scores: dict[Split, Any] | None = None
 
     def __post_init__(self):
         if self.id == "":
@@ -109,9 +128,25 @@ class Run(Generic[T]):
 
     @property
     def name(self) -> str:
+        # This spells out the params and is the header of a collapsed row in
+        # the runs list, so hiding the body is not enough on its own. The run
+        # id stays, so rows can still be counted.
+        if privacy.is_hidden(self):
+            return f"{privacy.HIDDEN_LABEL}{f'/{self.id}' if self.id else ''}"
         return ", ".join(
             f"{k}={getattr(v, 'name', v)}" for k, v in self.params.items()
         ) + (f"/{self.id}" if self.id else "")
+
+    def display_param(self, key: str) -> str:
+        """One param as a label, masked if this run must not be shown.
+
+        group_by and pivot use a param as a row or column key, so the value
+        ends up as a table header. Masked whichever param it is: nothing here
+        can tell a model name from a column of the private data.
+        """
+        if privacy.is_hidden(self):
+            return privacy.MASK
+        return str(self.params[key])
 
     @property
     def parent(self) -> Self | None:
@@ -158,6 +193,11 @@ class Run(Generic[T]):
         )
 
     def format_result(self):
+        # Every renderer gets the result through this method, so one check
+        # here covers the result pane, row labels, the pivot and group
+        # tables, and the console.
+        if privacy.is_hidden(self):
+            return privacy.MASK
         if self.cached:
             return "✅ (cached)"
         if self.result is results.PENDING:
@@ -176,9 +216,16 @@ class Run(Generic[T]):
         return self.__panel__()._repr_mimebundle_(include, exclude)
 
 
+# Applied after the class is built, so the generated repr is kept for runs
+# that may be shown.
+privacy.guard_repr(Run)
+
+
 @dataclasses.dataclass
 class Runs(Generic[T], abc.MutableSequence):
     runs: list[Run[T]] = dataclasses.field(default_factory=list)
+    # Set by `evaluate()` when the task was run over a public/private split.
+    split_scores: dict[Split, Any] | None = None
 
     def __setitem__(self, index, value):
         self.runs[index] = value
@@ -215,17 +262,67 @@ class Runs(Generic[T], abc.MutableSequence):
         """
         return Runs([r for r in self.runs if r.status == utils.Status.FAILED])
 
+    def filter(self, split: Split | None) -> "Runs[T]":
+        """The runs from one half of a public/private evaluation."""
+        return Runs([r for r in self.runs if r.split is split])
+
+    @property
+    def public(self) -> "Runs[T]":
+        return self.filter(Split.PUBLIC)
+
+    @property
+    def private(self) -> "Runs[T]":
+        return self.filter(Split.PRIVATE)
+
+    def score(self, aggregate: "Callable[[Runs[T]], Any] | None" = None) -> Any:
+        """Reduces these runs to a single number.
+
+        With no `aggregate`, uses the default for the task's `result_type`: a
+        mean for numeric results, a pass rate for boolean ones. Result types
+        with no obvious reduction have no default and need one passed in.
+        Raises on an empty `Runs`.
+        """
+        from kaggle_benchmarks import aggregation
+
+        if aggregate is not None:
+            return aggregate(self)
+        if not self.runs:
+            raise ValueError("Cannot score an empty Runs.")
+        return aggregation.default_for(self.runs[0].task.result_type)(self)
+
     def as_dataframe(self) -> pd.DataFrame:
+        """One row per run, indexed by run id.
+
+        A run from a private split keeps its row, but its params are masked
+        and its result is empty. A `split` column says which half each row
+        came from when the task was split.
+        """
         if not self.runs:
             return pd.DataFrame().rename_axis("run_id")
         return pd.DataFrame(
             [
-                t.params
-                | {"run_id": t.id, "result": t.result}
+                self._row(t)
+                | {"run_id": t.id}
                 | ({"id": t.param_id} if t.param_id is not None else {})
+                | ({"split": str(t.split)} if t.split is not None else {})
                 for t in self.runs
             ]
         ).set_index("run_id")
+
+    @staticmethod
+    def _row(run: Run[T]) -> dict[str, Any]:
+        """The params and result of one run, masked if it must not be shown.
+
+        The result is left empty rather than marked, so the column keeps its
+        numeric dtype and still adds up. Note that a sum or a mean then covers
+        the public rows alone; the figure for each half is in `split_scores`.
+
+        Params are marked instead: they show that something is hidden, and
+        nothing does arithmetic on them.
+        """
+        if privacy.is_hidden(run):
+            return {key: privacy.MASK for key in run.params} | {"result": None}
+        return run.params | {"result": run.result}
 
     def group_by(self, by="llm"):
         from kaggle_benchmarks.ui import panel
@@ -239,9 +336,15 @@ class Runs(Generic[T], abc.MutableSequence):
 
         groups = {}
         for run in runs:
-            params = ", ".join(f"{k} = {v}" for k, v in run.params.items() if k != by)
+            # `name` is already masked for a hidden run, and unique per run,
+            # so two hidden rows do not share a key and overwrite each other.
+            params = (
+                run.name
+                if privacy.is_hidden(run)
+                else ", ".join(f"{k} = {v}" for k, v in run.params.items() if k != by)
+            )
             key = f"{run.task.name}\n{params}"
-            groups.setdefault(key, {})[str(run.params[by])] = run
+            groups.setdefault(key, {})[run.display_param(by)] = run
 
         return panel.render_groups(groups=groups)
 
@@ -250,9 +353,15 @@ class Runs(Generic[T], abc.MutableSequence):
 
         groups: dict[Any, dict[str, Run]] = {}
         for run in self.runs:
-            groups.setdefault(run.params[by], {})[run.param_id] = run
+            groups.setdefault(run.display_param(by), {})[run.param_id] = run
 
         return panel.render_pivot(groups, mode=mode)
+
+    def __repr__(self) -> str:
+        # Written out rather than generated: the generated one prints the
+        # private half of the score. The runs guard their own reprs.
+        scores = privacy.mask_scores(self.split_scores)
+        return f"{type(self).__name__}(runs={self.runs!r}, split_scores={scores!r})"
 
     def __panel__(self):
         from kaggle_benchmarks.ui import panel
