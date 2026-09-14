@@ -244,6 +244,36 @@ uv run --group test pytest tests/test_assertions.py
 uv run --group test pytest tests -v
 ```
 
+### Running tests & type checks in Docker
+
+When a full local dev environment isn't available (e.g. an automated/agent
+session), `cicd/Dockerfile.dev` provides a self-contained image with all
+third-party deps and the type-checking tools baked in from the lockfile. The
+project source is **not** baked in — mount it at run time and import it via
+`PYTHONPATH=src` (no editable install needed), so the same image is reusable
+across sessions and checkouts.
+
+```bash
+# Build once. --network=host lets the build reach PyPI (a plain build may
+# have no DNS). Rebuild only when uv.lock / pyproject.toml change.
+docker build --network=host -t kbench-dev -f cicd/Dockerfile.dev .
+
+# Start a container with the repo mounted.
+docker run -d --name kb-dev --network=host \
+  -v "$PWD":/work -w /work kbench-dev sleep infinity
+
+# Unit tests and type checks against the mounted source.
+docker exec -e PYTHONPATH=src kb-dev python -m pytest tests -q
+docker exec -e PYTHONPATH=src kb-dev mypy src/kaggle_benchmarks
+
+# Tear down when done.
+docker rm -f kb-dev
+```
+
+Expected: the browser-backed tests in `tests/tools/test_web.py` fail here
+(Playwright browsers are intentionally not installed); a few serialization/
+line-number tests also depend on the checkout path. Everything else passes.
+
 ---
 
 ## 5. Code Style & Tooling
