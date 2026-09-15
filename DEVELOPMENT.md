@@ -15,7 +15,7 @@ The source lives in `src/kaggle_benchmarks/`. Here are the main subsystems — b
 | Subsystem | Key Modules | Responsibility |
 |-----------|------------|----------------|
 | **Core primitives** | `tasks.py`, `messages.py`, `runs.py`, `results.py` | Task/benchmark decorators, message types, execution records |
-| **LLM interaction** | `actors/` (incl. `llms.py`), `chats.py`, `prompting.py` | LLM abstraction (`LLMChat`, `OpenAI`, `GoogleGenAI`), conversation management, schema processing |
+| **LLM interaction** | `actors/llms.py` (+ `actors/openai.py`, `actors/genai.py`), `chats.py`, `prompting.py` | LLM abstraction — base `LLMChat` (`llms.py`) with the `OpenAI` and `GoogleGenAI` backends in their own modules (re-exported from `llms`), conversation management, schema processing |
 | **Serialization** | `serializers/` | Translating messages to/from provider-specific API payloads |
 | **Content types** | `content_types/` | Provider-agnostic data models for images, audio, video |
 | **Configuration** | `_config.py` | Centralized `Config` dataclass, `ExecutionMode` enum |

@@ -19,7 +19,8 @@ import pytest
 from pydantic import BaseModel
 
 from kaggle_benchmarks import actors, chats
-from kaggle_benchmarks.actors.llms import LLMResponse, OpenAI, _parse_think_tags
+from kaggle_benchmarks.actors.llms import LLMResponse
+from kaggle_benchmarks.actors.openai import OpenAI, _parse_think_tags
 from kaggle_benchmarks.prompting import handler
 
 
