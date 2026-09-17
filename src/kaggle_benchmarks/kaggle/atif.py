@@ -96,8 +96,10 @@ class ConversionError(Exception):
 
 
 def _warn(warnings: Warnings, kind: str, detail: str) -> None:
-    # Also recorded in the file: a log line is gone once the notebook closes.
-    logger.warning(f"Converting to atif, {kind}: {detail}")
+    # The durable copy is the warning appended below; the log line only mirrors
+    # it, so it's debug-level to keep a per-row conversion quirk from flooding a
+    # dataset eval's notebook output.
+    logger.debug(f"Converting to atif, {kind}: {detail}")
     warnings.append({"kind": kind, "detail": detail})
 
 
