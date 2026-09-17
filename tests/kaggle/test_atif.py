@@ -1245,7 +1245,7 @@ def test_the_leaderboard_score_comes_out_in_front_and_only_numbers_come_at_all(c
         {"numericResult": {"value": 0.9}, "type": "AGGREGATED"},
         {"numericResult": {"value": 0.7}, "type": "PRIVATE"},
     ]
-    with caplog.at_level(logging.WARNING, logger=atif.logger.name):
+    with caplog.at_level(logging.DEBUG, logger=atif.logger.name):
         rewards = atif.to_trial_result(_run(results=results))["verifier_result"][
             "rewards"
         ]
