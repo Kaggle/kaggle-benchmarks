@@ -19,7 +19,7 @@ import sys
 import textwrap
 import threading
 
-from kaggle_benchmarks import assertions, chats, utils
+from kaggle_benchmarks import assertions, chats, privacy, utils
 
 _DEFAULT_MIN_WIDTH = 40
 _DEFAULT_MAX_WIDTH = 120
@@ -248,8 +248,10 @@ class ConsoleUI:
         c = self._c
         self._run_depth -= 1
 
-        # Assertion table
-        if run.assertion_results:
+        hidden = privacy.is_hidden(run)
+
+        # An assertion's expectation quotes the values it compared.
+        if run.assertion_results and not hidden:
             table = self._format_assertion_table(run.assertion_results)
             self._print(table)
 
@@ -260,7 +262,9 @@ class ConsoleUI:
                 self._print(f"\n{self._colorize('METRICS:', c.BOLD)}  {usage_str}")
 
         # Result or error
-        if run.status == utils.Status.FAILED:
+        if hidden:
+            self._print(f"{self._colorize('RESULT:', c.BOLD)}   {privacy.HIDDEN_LABEL}")
+        elif run.status == utils.Status.FAILED:
             error_msg = run.error_message or "Unknown Error"
             self._print(self._colorize(f"ERROR:    {error_msg}", c.RED))
         else:
@@ -278,6 +282,12 @@ class ConsoleUI:
             self._in_run = False
 
     def new_chat(self, chat):
+        # Caught before the dispatch below, because in quiet mode the chat
+        # prints itself. Every path here adds one to the depth and end_chat
+        # takes one back, so the count is kept even when nothing is printed.
+        if privacy.context_is_hidden():
+            self.depth += 1
+            return
         if self.quiet:
             self._quiet_new_chat(chat)
             return
@@ -314,6 +324,9 @@ class ConsoleUI:
         return "\n".join(wrapped_lines)
 
     def new_message(self, chat, message):
+        # Console output gets piped into files and CI logs.
+        if privacy.context_is_hidden():
+            return
         if self.quiet:
             self._quiet_new_message(chat, message)
             return
@@ -362,6 +375,8 @@ class ConsoleUI:
 
     def new_chunk(self, message, chunk):
         self._streamed_messages.add(id(message))
+        if privacy.context_is_hidden():
+            return
         if self.quiet:
             self._quiet_new_chunk(message, chunk)
             return

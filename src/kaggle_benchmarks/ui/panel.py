@@ -22,7 +22,7 @@ import pandas as pd
 import panel as pn
 from IPython import core, display
 
-from kaggle_benchmarks import chats, messages, runs, tasks, utils
+from kaggle_benchmarks import chats, messages, privacy, runs, tasks, utils
 from kaggle_benchmarks._config import config
 
 
@@ -200,6 +200,11 @@ def render_run(run: runs.Run, with_title: bool = True) -> pn.viewable.Viewable:
         else []
     )
 
+    # The params, transcript, result and traceback all quote the row.
+    if privacy.is_hidden(run):
+        objects.append(pn.pane.Markdown(privacy.HIDDEN_BODY))
+        return pn.Feed(objects=objects)
+
     if run.params:
         objects.append(json_pane(run.params, "Params:", depth=0))
 
@@ -221,12 +226,15 @@ def render_run(run: runs.Run, with_title: bool = True) -> pn.viewable.Viewable:
 
 
 def render_runs(runs: runs.Runs) -> pn.viewable.Viewable:
-    return pn.Accordion(
+    listing = pn.Accordion(
         *((f"{run.format_result()} {run.name}", run) for run in runs.runs),
         toggle=True,
         active=[],
         styles={"text-align": "left"},
     )
+    if hidden := privacy.count_hidden(runs):
+        return pn.Column(pn.pane.Markdown(privacy.banner(hidden)), listing)
+    return listing
 
 
 def render_pivot(pivots, mode):
@@ -240,11 +248,18 @@ def render_pivot(pivots, mode):
         return pn.widgets.Tabulator(
             (
                 df.rename(columns=lambda x: str(x))
-                .map(lambda x: x.format_result())
+                # A cell is empty wherever a column has no run for that row,
+                # which happens whenever the runs do not all share a value
+                # for `by`. Masked private rows are one way, not the only.
+                .map(lambda x: x.format_result() if isinstance(x, runs.Run) else x)
                 .reset_index(names=["ID"])
             ),
             row_content=lambda row: pn.Tabs(
-                objects=[(str(name), col[row["ID"]]) for name, col in pivots.items()],
+                objects=[
+                    (str(name), col[row["ID"]])
+                    for name, col in pivots.items()
+                    if row["ID"] in col
+                ],
             ),
             disabled=True,
             embed_content=True,
@@ -256,9 +271,10 @@ def render_groups(groups):
     df = pd.DataFrame(groups.values(), index=[t for t in groups])
 
     def content_fn(row):
+        group = groups[row["task"]]
         return pn.Tabs(
             objects=[
-                (str(k), groups[row["task"]][k]) for k, v in row.items() if k != "task"
+                (str(k), group[k]) for k in row.keys() if k != "task" and k in group
             ]
         )
 
@@ -387,6 +403,10 @@ class PanelUI:
 
         self.depth += 1
 
+        # Depth is still counted here, or end_chat would take it below zero.
+        if privacy.context_is_hidden():
+            return
+
         if self.depth == 1:
             self[chat] = pane = render_chat(chat, with_header=False)
             self.add_card(pn.Card(pane, title=f"🧵: {chat.name}"))
@@ -417,6 +437,11 @@ class PanelUI:
             self[chat].append(self.placeholder)
 
     def new_message(self, chat: chats.Chat, message: messages.Message | chats.Chat):
+        # Nothing is registered for a hidden run, so new_chunk,
+        # message_update and end_content find no pane and do nothing.
+        if privacy.context_is_hidden():
+            return
+
         if isinstance(message, chats.Chat):
             if chat in self:
                 self[message] = msg = render_chat_as_step(message)

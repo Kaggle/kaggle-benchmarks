@@ -31,7 +31,8 @@ from typing import (
 
 import pandas as pd
 
-from kaggle_benchmarks import chats, events, results, utils
+from kaggle_benchmarks import aggregation, chats, events, privacy, results, utils
+from kaggle_benchmarks._config import config
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import runs
@@ -39,6 +40,71 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
+
+# Column added to an evaluation frame to record which half a row came from.
+# Orchestration passes every column on as a keyword argument, so Task.run
+# removes this one before calling the task function.
+SPLIT_COLUMN = "__kbench_split__"
+
+
+def _inherited_split() -> "runs.Split | None":
+    """The split of the run we are nested inside, if any."""
+    from kaggle_benchmarks import contexts
+
+    parent = contexts.get_current().run
+    return parent.split if parent is not None else None
+
+
+def _merge_splits(public: Any, private: Any) -> pd.DataFrame:
+    """Combines the two halves into one frame, tagging each row with its half.
+
+    Each half gets its own `_id` before the join, because that id becomes the
+    run's cache filename. Numbering after the join would renumber the public
+    rows of a frame not indexed 0..n-1, and miss a cache an earlier run filled.
+
+    Private ids are prefixed rather than continuing the public range, so the
+    halves cannot collide whatever the caller indexed by.
+    """
+    from kaggle_benchmarks import runs
+
+    if not isinstance(private, pd.DataFrame):
+        raise TypeError(
+            "private_evaluation_data must be a pandas DataFrame, got "
+            f"{type(private).__name__}."
+        )
+    if not isinstance(public, pd.DataFrame):
+        raise ValueError(
+            "private_evaluation_data needs evaluation_data alongside it: a "
+            "split with no public half has no score anyone can see."
+        )
+
+    frames = {"evaluation_data": public, "private_evaluation_data": private}
+    for name, frame in frames.items():
+        if frame.empty:
+            raise ValueError(f"{name} is empty, so there is nothing to split.")
+        if SPLIT_COLUMN in frame.columns:
+            raise ValueError(
+                f"{name} has a column named {SPLIT_COLUMN!r}, which is "
+                "reserved for marking which half a row belongs to. Rename it."
+            )
+    if set(public.columns) != set(private.columns):
+        raise ValueError(
+            "evaluation_data and private_evaluation_data must have the same "
+            "columns, otherwise the missing ones reach the task as NaN. Only "
+            f"in evaluation_data: {sorted(set(public.columns) - set(private.columns))}; "
+            "only in private_evaluation_data: "
+            f"{sorted(set(private.columns) - set(public.columns))}."
+        )
+
+    halves = [
+        frame.reset_index(names=["_id"]).assign(**{SPLIT_COLUMN: split})
+        for frame, split in (
+            (public, runs.Split.PUBLIC),
+            (private, runs.Split.PRIVATE),
+        )
+    ]
+    halves[1]["_id"] = "private_" + halves[1]["_id"].astype(str)
+    return pd.concat(halves, ignore_index=True)
 
 
 class NonRecoverableError(Exception):
@@ -128,13 +194,19 @@ class Task(Generic[T]):
                 # outcome (success or failure).
                 logger.warning(f"Failed to store run {run.id}: {store_exc}")
 
-    def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
+    def run(self, *args, _id=None, _split=None, **kwargs) -> "runs.Run[T]":
         from kaggle_benchmarks import contexts, runs
 
         # Internal flag set only by Task._evaluate_once() when
         # on_failure="continue". Popped from kwargs (not added to the public
         # signature) to keep it out of inspect.signature() and IDE autocomplete.
         _suppress_raise = kwargs.pop("_suppress_raise", False)
+
+        # Removed before bind() so the task function never sees it. Named
+        # with an underscore for the same reason as `_id`: every column
+        # arrives here as a keyword argument, and datasets often have a
+        # `split` column.
+        _split = kwargs.pop(SPLIT_COLUMN, _split)
 
         signature = inspect.signature(self.func)
         bound_args = signature.bind(*args, **kwargs)
@@ -151,8 +223,13 @@ class Task(Generic[T]):
             result=results.PENDING,
             params=params,
             param_id=_id,
+            # A run nested inside a private row works on the same data, so
+            # it inherits the half. Passed through the enum because a marker
+            # passed via a DataFrame column comes back out as a plain string.
+            split=runs.Split(_split) if _split is not None else _inherited_split(),
         )
 
+        hidden_failure: str | None = None
         try:
             with contexts.enter(run=run) as ctx:
                 cached_run = self._handle_cached_run(run, ctx)
@@ -195,7 +272,11 @@ class Task(Generic[T]):
             # suppress the exception (for on_failure="continue").
             self._finalize_and_persist(run, ctx)
             if not _suppress_raise:
-                raise
+                # A private row's exception message usually quotes the row,
+                # and is about to be printed as a traceback.
+                if not privacy.is_hidden(run):
+                    raise
+                hidden_failure = f"{run.task.name} {run.id}: {privacy.FAILURE_BODY}"
         else:
             # No exception escaped contexts.enter. Two sub-cases:
             #  (a) Task succeeded → status=SUCCESS
@@ -204,12 +285,20 @@ class Task(Generic[T]):
             # Either way, persist with the final status.
             self._finalize_and_persist(run, ctx)
 
+        # Raised outside the handler: raising inside it would attach the
+        # original as __context__, where something walking the chain could
+        # print it.
+        if hidden_failure is not None:
+            raise privacy.PrivateRunError(hidden_failure)
+
         return run
 
     def evaluate(
         self,
         grid: dict[str, Iterable[Any]] | None = None,
         evaluation_data: pd.DataFrame | None = None,
+        private_evaluation_data: pd.DataFrame | None = None,
+        aggregate: "Callable[[runs.Runs[T]], Any] | None" = None,
         n_jobs: int = 1,
         timeout: float | None = None,
         stop_condition: Callable[["runs.Runs[T]"], bool] | None = None,
@@ -231,6 +320,30 @@ class Task(Generic[T]):
                 values to test.
             evaluation_data: An optional pandas DataFrame where each row
                              represents a separate evaluation to run.
+            private_evaluation_data: Rows making up the private half of the
+                             evaluation. They run just like `evaluation_data`
+                             and count toward the task's overall result, but
+                             they get their own score in `runs.split_scores`,
+                             and nothing about them is rendered, so they are
+                             never written into a notebook that might be
+                             shared. Must have the same columns as
+                             `evaluation_data`.
+
+                             The two scores reach the run file only when this
+                             is called from inside a task, since they are
+                             recorded on the calling run. Called at the top
+                             level they exist only on the returned `Runs`.
+
+                             Note that the rows themselves are still written
+                             to the run file in full, and nothing in that file
+                             marks them as private yet. What this gives you
+                             today is a score per half and an SDK that will
+                             not draw the private rows on screen.
+            aggregate: How to reduce a set of runs to the score for one half
+                             of the split. Defaults to a pass rate for boolean
+                             results and a mean for numeric ones. Tasks whose
+                             results have no obvious reduction, such as dicts,
+                             have to supply this.
             n_jobs: The number of jobs to run in parallel.
                     - If `n_jobs = 1` (default), runs sequentially in the main thread.
                     - If `n_jobs > 1`, runs in parallel using that many threads.
@@ -301,7 +414,30 @@ class Task(Generic[T]):
         else:
             grid |= kwargs
 
-        if isinstance(evaluation_data, pd.DataFrame):
+        split_eval = private_evaluation_data is not None
+        if aggregate is not None and not split_eval:
+            logger.warning(
+                "`aggregate` is only used to score the halves of a "
+                "public/private split, and no private_evaluation_data was "
+                "given, so it will be ignored."
+            )
+        if split_eval and not config.enable_private_splits:
+            raise NotImplementedError(
+                "private_evaluation_data is not ready to be relied on. The "
+                "run file still holds private rows in full and nothing in it "
+                "marks them, so only this SDK's rendering keeps them back; "
+                "anything reading the run file sees everything. Set "
+                "ENABLE_PRIVATE_SPLITS=1 if you are working on the feature."
+            )
+
+        if split_eval:
+            # Checked before any row runs.
+            if aggregate is None and not aggregation.has_default(self.result_type):
+                raise ValueError(
+                    aggregation.describe_missing_default(self.result_type, self.name)
+                )
+            evaluation_data = _merge_splits(evaluation_data, private_evaluation_data)
+        elif isinstance(evaluation_data, pd.DataFrame):
             evaluation_data = evaluation_data.reset_index(names=["_id"])
 
         def _evaluate_once():
@@ -338,9 +474,16 @@ class Task(Generic[T]):
                         if len(failures) == 1
                         else f"{len(failures)} of {len(all_runs)} runs failed."
                     )
+                    # This is printed to whoever ran the evaluation, and a
+                    # private row's traceback usually quotes its data.
+                    detail = (
+                        privacy.HIDDEN_BODY
+                        if privacy.is_hidden(first)
+                        else first.error_message
+                    )
                     msg = (
                         f"Task {self.name!r} run {first.id} failed:\n"
-                        f"{first.error_message}\n\n"
+                        f"{detail}\n\n"
                         f"({summary} Pass on_failure='continue' to collect "
                         "failures into results.errored_runs instead of "
                         "raising. For large evals with transient errors, "
@@ -411,10 +554,52 @@ class Task(Generic[T]):
                     "condition not met. Exiting."
                 )
 
+            if split_eval:
+                self._score_splits(all_runs, aggregate, ctx)
+
             return all_runs
         finally:
             if remove_run_files:
                 serialization.remove_runs_files(all_runs)
+
+    def _score_splits(
+        self,
+        all_runs: "runs.Runs[T]",
+        aggregate: "Callable[[runs.Runs[T]], Any] | None",
+        ctx,
+    ) -> None:
+        """Scores each half and records it on the runs and the calling run.
+
+        Serialization reads the calling run. Called at the top level there is
+        no calling run, so the scores live only on the returned `Runs` and
+        nothing is written.
+        """
+        from kaggle_benchmarks import runs as runs_module
+
+        scores: dict[runs_module.Split, Any] = {}
+        for split in runs_module.Split:
+            half = all_runs.filter(split)
+            if not half:
+                logger.warning(f"Nothing in the {split} half to score.")
+                continue
+            try:
+                scores[split] = half.score(aggregate)
+            except ValueError as e:
+                # One unscorable half should not cost the caller the other
+                # half or the runs.
+                logger.warning(f"Could not score the {split} split: {e}")
+
+        all_runs.split_scores = scores
+        if ctx.run is not None:
+            ctx.run.split_scores = scores
+
+        hidden = privacy.count_hidden(all_runs)
+        if hidden:
+            logger.info(
+                f"{hidden} private rows ran and are counted in the result, "
+                "but are hidden from rendered output. Call "
+                "kbench.reveal_private() to show them."
+            )
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):

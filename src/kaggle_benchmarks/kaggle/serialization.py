@@ -466,7 +466,39 @@ def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
         )
 
     result_data |= {"type": types.BenchmarkTaskRunResultType.AGGREGATED}
-    return [result_data]
+
+    # The run's own result stays first and keeps the AGGREGATED type: the
+    # cache loader in client.py and the ATIF converter both read results[0].
+    # The halves are appended after it, only when evaluate() scored them.
+    return [result_data] + _prepare_split_results(run)
+
+
+def _prepare_split_results(run: runs.Run) -> list[dict[str, Any]]:
+    """The public and private entries for a run that was scored over a split."""
+    from kaggle_benchmarks import runs as runs_module
+
+    if not run.split_scores:
+        return []
+
+    entries = []
+    for split, result_type in (
+        (runs_module.Split.PUBLIC, types.BenchmarkTaskRunResultType.PUBLIC),
+        (runs_module.Split.PRIVATE, types.BenchmarkTaskRunResultType.PRIVATE),
+    ):
+        if (score := run.split_scores.get(split)) is None:
+            continue
+        if _is_tuple_result(score):
+            value = {"value": score[0], "confidenceInterval": score[1]}
+        elif isinstance(score, bool) or not isinstance(score, (int, float)):
+            logger.warning(
+                f"Skipping the {split} score: {type(score).__name__} cannot be "
+                "shown on a leaderboard."
+            )
+            continue
+        else:
+            value = {"value": float(score)}
+        entries.append({"numeric_result": value, "type": result_type})
+    return entries
 
 
 def _prepare_assertions_data(
