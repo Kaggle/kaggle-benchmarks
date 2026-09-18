@@ -405,6 +405,51 @@ def test_pivot(duck, goose, mode):
     assert isinstance(pivot, pn.viewable.Viewable)
 
 
+@pytest.mark.parametrize("mode", ["tabs", "columns"])
+def test_pivot_with_ragged_data(duck, goose, mode):
+    """A pivot where not every (row, column) pair has a run.
+
+    Happens whenever the runs do not all share a value for `by` -- most
+    often when runs from separate evaluations are compared, as here.
+    """
+    first = bench.evaluate(
+        grid={"llm": [duck]},
+        evaluation_data=pd.DataFrame({"message": ["meow", "howl"]}, index=["a", "b"]),
+    )
+    second = bench.evaluate(
+        grid={"llm": [goose]},
+        evaluation_data=pd.DataFrame({"message": ["moo"]}, index=["c"]),
+    )
+    ragged = runs.Runs(list(first) + list(second))
+
+    pivot = ragged.pivot(by="llm", mode=mode)
+    assert isinstance(pivot, pn.viewable.Viewable)
+
+    if mode == "columns":
+        # Tabulator calls this per row only when one is expanded, so a
+        # missing cell raises long after the table itself rendered.
+        for _, row in pivot.value.iterrows():
+            assert isinstance(pivot.row_content(row), pn.viewable.Viewable)
+
+
+def test_group_by_with_ragged_data():
+    """Groups that do not all hold the same set of `by` values."""
+
+    @tasks.task()
+    def scores(x, y) -> bool:
+        return x == y
+
+    first = scores.evaluate(x=["a"], y=["a", "b"])
+    second = scores.evaluate(x=["b"], y=["b"])
+    ragged = runs.Runs(list(first) + list(second))
+
+    pane = ragged.group_by(by="y")
+    assert isinstance(pane, pn.widgets.Tabulator)
+
+    for _, row in pane.value.iterrows():
+        assert isinstance(pane.row_content(row), pn.viewable.Viewable)
+
+
 def test_group():
     @tasks.task()
     def a(x, y):
