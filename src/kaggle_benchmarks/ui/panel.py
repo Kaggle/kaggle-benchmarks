@@ -269,8 +269,8 @@ def render_groups(groups):
     df = pd.DataFrame(groups.values(), index=[t for t in groups])
 
     def content_fn(row):
-        # Same raggedness as render_pivot: a group holds no run for every
-        # column when the groups do not all share a set of `by` values.
+        # Same raggedness as render_pivot: a group holds no run for some
+        # columns when the groups do not all share a set of `by` values.
         group = groups[row["task"]]
         return pn.Tabs(
             objects=[
@@ -280,7 +280,7 @@ def render_groups(groups):
 
     return pn.widgets.Tabulator(
         df.map(
-            lambda x: x.format_result() if isinstance(x, runs.Run) else x
+            lambda x: x.format_result() if isinstance(x, runs.Run) else ""
         ).reset_index(names=["task"]),
         layout="fit_columns",
         sizing_mode="stretch_both",

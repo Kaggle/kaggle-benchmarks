@@ -446,6 +446,12 @@ def test_group_by_with_ragged_data():
     pane = ragged.group_by(by="y")
     assert isinstance(pane, pn.widgets.Tabulator)
 
+    # "x = b" was only evaluated against y = "b", so its "a" cell holds no run
+    # and must render blank rather than leaking the NaN pandas filled in.
+    cells = pane.value.drop(columns=["task"])
+    assert (cells == "").to_numpy().any(), "fixture is no longer ragged"
+    assert not cells.isna().to_numpy().any()
+
     for _, row in pane.value.iterrows():
         assert isinstance(pane.row_content(row), pn.viewable.Viewable)
 
