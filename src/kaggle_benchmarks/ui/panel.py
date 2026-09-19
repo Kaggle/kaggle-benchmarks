@@ -230,21 +230,34 @@ def render_runs(runs: runs.Runs) -> pn.viewable.Viewable:
 
 
 def render_pivot(pivots, mode):
+    # A pivot is ragged wherever a column holds no run for a row, which is
+    # the case whenever the runs do not all share a value for `by`. Pandas
+    # fills those cells with NaN, so each path below allows for a cell that
+    # is not a Run.
     df = pd.DataFrame(pivots)
 
     if mode == "tabs":
         return pn.Tabs(
-            objects=[(str(k), runs.Runs(list(v.values))) for k, v in df.iterrows()]
+            objects=[
+                (str(k), runs.Runs([v for v in row.values if isinstance(v, runs.Run)]))
+                for k, row in df.iterrows()
+            ]
         )
     else:
         return pn.widgets.Tabulator(
             (
                 df.rename(columns=lambda x: str(x))
-                .map(lambda x: x.format_result())
+                .map(lambda x: x.format_result() if isinstance(x, runs.Run) else "")
                 .reset_index(names=["ID"])
             ),
+            # Called only when a row is expanded, so a missing cell raises
+            # long after the table itself has rendered.
             row_content=lambda row: pn.Tabs(
-                objects=[(str(name), col[row["ID"]]) for name, col in pivots.items()],
+                objects=[
+                    (str(name), col[row["ID"]])
+                    for name, col in pivots.items()
+                    if row["ID"] in col
+                ],
             ),
             disabled=True,
             embed_content=True,
@@ -256,15 +269,18 @@ def render_groups(groups):
     df = pd.DataFrame(groups.values(), index=[t for t in groups])
 
     def content_fn(row):
+        # Same raggedness as render_pivot: a group holds no run for some
+        # columns when the groups do not all share a set of `by` values.
+        group = groups[row["task"]]
         return pn.Tabs(
             objects=[
-                (str(k), groups[row["task"]][k]) for k, v in row.items() if k != "task"
+                (str(k), group[k]) for k in row.keys() if k != "task" and k in group
             ]
         )
 
     return pn.widgets.Tabulator(
         df.map(
-            lambda x: x.format_result() if isinstance(x, runs.Run) else x
+            lambda x: x.format_result() if isinstance(x, runs.Run) else ""
         ).reset_index(names=["task"]),
         layout="fit_columns",
         sizing_mode="stretch_both",
