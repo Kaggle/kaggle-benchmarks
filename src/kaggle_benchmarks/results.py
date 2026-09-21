@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
 import pprint
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, get_args
 
@@ -106,6 +107,31 @@ class MetricWithCI(Result[tuple[float, float]]):
     @classmethod
     def format(cls, run) -> str:
         return f"{run.result[0]}(±{run.result[1]})"
+
+
+@dataclasses.dataclass(frozen=True)
+class SplitScores:
+    """Scores of a task evaluated over a public and a private set of rows.
+
+    Return it from the main task to write three results to its run file:
+    `overall` as AGGREGATED, then `public` as PUBLIC and `private` as PRIVATE.
+    The leaderboard reads the first. Each score is a number or a
+    `(value, confidence_interval)` tuple.
+    """
+
+    overall: float | tuple[float, float]
+    public: float | tuple[float, float]
+    private: float | tuple[float, float]
+
+
+class SplitScoresResult(Result[SplitScores]):
+    @classmethod
+    def format(cls, run: "runs.Run[SplitScores]") -> str:
+        scores = run.result
+        return (
+            f"overall {scores.overall}, public {scores.public}, "
+            f"private {scores.private}"
+        )
 
 
 class Dictionary(Result[dict]):
