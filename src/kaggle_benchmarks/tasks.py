@@ -128,7 +128,7 @@ class Task(Generic[T]):
                 # outcome (success or failure).
                 logger.warning(f"Failed to store run {run.id}: {store_exc}")
 
-    def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
+    def run(self, *args, _id=None, _label=None, **kwargs) -> "runs.Run[T]":
         from kaggle_benchmarks import contexts, runs
 
         # Internal flag set only by Task._evaluate_once() when
@@ -151,6 +151,7 @@ class Task(Generic[T]):
             result=results.PENDING,
             params=params,
             param_id=_id,
+            label=_label,
         )
 
         try:
@@ -210,6 +211,7 @@ class Task(Generic[T]):
         self,
         grid: dict[str, Iterable[Any]] | None = None,
         evaluation_data: pd.DataFrame | None = None,
+        label: str | None = None,
         n_jobs: int = 1,
         timeout: float | None = None,
         stop_condition: Callable[["runs.Runs[T]"], bool] | None = None,
@@ -231,6 +233,10 @@ class Task(Generic[T]):
                 values to test.
             evaluation_data: An optional pandas DataFrame where each row
                              represents a separate evaluation to run.
+            label: Prefix for this evaluation's run filenames. Needed when
+                   evaluating a task over several frames with the same row
+                   labels; otherwise the later evaluation overwrites the
+                   earlier run files. Does not change `param_id`.
             n_jobs: The number of jobs to run in parallel.
                     - If `n_jobs = 1` (default), runs sequentially in the main thread.
                     - If `n_jobs > 1`, runs in parallel using that many threads.
@@ -310,7 +316,9 @@ class Task(Generic[T]):
             # joblib worker. In "raise" mode, leave Task.run()'s behavior
             # untouched (it raises in dev, returns the failed Run in batch).
             runner = functools.partial(
-                self.run, _suppress_raise=(on_failure == "continue")
+                self.run,
+                _suppress_raise=(on_failure == "continue"),
+                _label=label,
             )
             all_runs = runs.Runs(
                 [

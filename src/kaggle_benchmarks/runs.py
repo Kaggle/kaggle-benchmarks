@@ -49,6 +49,9 @@ class Run(Generic[T]):
     cached: bool = False
     # Details for status=FAILED
     error_message: str | None = None
+    # Prefixes the run filename, so evaluations over frames with the same row
+    # labels don't overwrite each other's files. Set by `evaluate(label=...)`.
+    label: str | None = None
 
     def __post_init__(self):
         if self.id == "":
@@ -100,8 +103,9 @@ class Run(Generic[T]):
             actor_model = getattr(param, "model", None) or param.name
 
         actor_param_suffix = f"_{actor_model}" if actor_model else ""
+        label_prefix = f"{self.label}-" if self.label else ""
 
-        return (
+        return label_prefix + (
             f"run_param_id_{self.param_id}{actor_param_suffix}"
             if self.param_id is not None
             else f"run_id_{self.id}{actor_param_suffix}"
