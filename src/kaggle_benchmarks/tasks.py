@@ -467,14 +467,19 @@ class Task(Generic[T]):
         Each row is still written to its own run file, named with the prefix
         `public-` or `private-` (see `evaluate(label=...)`). In a notebook,
         `%choose <main task>` deletes those and keeps the main task's run
-        file, whose `results[0]` is the leaderboard score:
+        file, which holds its scores:
 
             @kbench.task(name="qa")
-            def qa(llm) -> float:
+            def qa(llm) -> kbench.SplitScores:
                 splits = qa_row.evaluate_splits(
                     public=public_df, private=private_df, llm=[llm]
                 )
-                return splits["private"].as_dataframe().result.mean()
+                mean = lambda frame: float(frame.result.mean())
+                return kbench.SplitScores(
+                    overall=mean(splits.as_dataframe(include_hidden=True)),
+                    public=mean(splits["public"].as_dataframe()),
+                    private=mean(splits["private"].as_dataframe()),
+                )
 
         Args:
             public: Rows displayed as usual.
