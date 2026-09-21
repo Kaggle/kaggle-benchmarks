@@ -14,6 +14,8 @@
 
 import functools
 
+from kaggle_benchmarks import privacy
+
 
 class EventManager:
     def __init__(self):
@@ -31,6 +33,11 @@ class EventManager:
             self.listeners.remove(listener)
 
     def dispatch(self, event, *args, **kwargs):
+        # Skips every listener, not only the UI, since any listener can print
+        # or save the row. Paired events such as new_run and end_run fire in
+        # the same context, so both are skipped together.
+        if privacy.output_hidden():
+            return
         for listener in list(self.listeners):
             if hasattr(listener, event):
                 getattr(listener, event)(*args, **kwargs)
