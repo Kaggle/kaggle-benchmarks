@@ -47,10 +47,29 @@ class Context:
     chat: chats.Chat = dataclasses.field(default_factory=chats.Chat)
     run: runs.Run | None = None
     parent: Self | None = None
+    # True inside `hidden()`. See privacy.py.
+    hidden: bool = False
 
 
 _global = Context(chat=chats.GoldfishChat())
 _current: ContextVar[Context] = ContextVar("current", default=_global)
+
+
+@contextlib.contextmanager
+def hidden() -> Iterator[None]:
+    """Hides runs started in this scope. See privacy.py.
+
+    Lives on `Context` because `evaluate_function` hands the context to worker
+    threads; a separate ContextVar would not reach them. `enter()` can't set
+    it: `enter()` dispatches a `new_<field>` event and sets `.status` on each
+    value it is given.
+    """
+    current = _current.get()
+    token = _current.set(dataclasses.replace(current, hidden=True))
+    try:
+        yield
+    finally:
+        _current.reset(token)
 
 
 @contextlib.contextmanager
