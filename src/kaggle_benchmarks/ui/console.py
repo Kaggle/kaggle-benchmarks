@@ -19,7 +19,7 @@ import sys
 import textwrap
 import threading
 
-from kaggle_benchmarks import assertions, chats, core
+from kaggle_benchmarks import assertions, chats, utils
 
 _DEFAULT_MIN_WIDTH = 40
 _DEFAULT_MAX_WIDTH = 120
@@ -212,7 +212,7 @@ class ConsoleUI:
             return
         print(
             message.__str__(indent=" " * (self.depth * self.tab_size)),
-            end="" if message.status == core.Status.RUNNING else "\n",
+            end="" if message.status == utils.Status.RUNNING else "\n",
             file=self._output,
         )
 
@@ -260,7 +260,7 @@ class ConsoleUI:
                 self._print(f"\n{self._colorize('METRICS:', c.BOLD)}  {usage_str}")
 
         # Result or error
-        if run.status == core.Status.FAILED:
+        if run.status == utils.Status.FAILED:
             error_msg = run.error_message or "Unknown Error"
             self._print(self._colorize(f"ERROR:    {error_msg}", c.RED))
         else:

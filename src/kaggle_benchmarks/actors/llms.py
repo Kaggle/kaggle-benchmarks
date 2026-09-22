@@ -94,7 +94,7 @@ import dataclasses
 import inspect
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Literal, TypeVar
 
-from kaggle_benchmarks import actors, chats, core, messages, prompting
+from kaggle_benchmarks import actors, chats, messages, prompting, utils
 from kaggle_benchmarks._config import config
 from kaggle_benchmarks.content_types import audios, images, videos
 from kaggle_benchmarks.tools import base as tool_utils
@@ -292,7 +292,7 @@ class LLMChat(actors.Actor):
         response = messages.Message(
             sender=sender or self,
             content="",
-            _status=core.Status.RUNNING,
+            _status=utils.Status.RUNNING,
         )
 
         raw_messages = [
@@ -319,7 +319,7 @@ class LLMChat(actors.Actor):
                 response._meta["tool_calls"] = None
             response._meta.update(invoke_response.meta)
             response._meta["reasoning_traces"] = invoke_response.reasoning_traces
-            response.status = core.Status.SUCCESS
+            response.status = utils.Status.SUCCESS
             chat.append(response)
         elif isinstance(invoke_response, Iterator):
             # Append before streaming so UIs see new_event (with empty
@@ -327,7 +327,7 @@ class LLMChat(actors.Actor):
             # render the message header before tokens stream in.
             chat.append(response)
             response.stream(invoke_response)
-            response.status = core.Status.SUCCESS
+            response.status = utils.Status.SUCCESS
         elif isinstance(invoke_response, llm_messages.LLMMessage):
             response = invoke_response
             # Set sender before append: chat.append fires the new_event
@@ -353,7 +353,7 @@ class LLMChat(actors.Actor):
                     sender=actors.system,
                 )
             )
-            response.status = core.Status.FAILED
+            response.status = utils.Status.FAILED
             raise e
 
         except StopIteration as e:

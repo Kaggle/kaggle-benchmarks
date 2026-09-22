@@ -24,7 +24,6 @@ from IPython import core, display
 
 from kaggle_benchmarks import chats, messages, runs, tasks, utils
 from kaggle_benchmarks._config import config
-from kaggle_benchmarks.core import Status
 
 
 def json_pane(data, title: str = "Object", **kwargs):
@@ -80,7 +79,7 @@ def render_message(message: messages.Message, **kwargs) -> pn.chat.ChatMessage:
         user=message.sender.name,
         avatar=message.sender.avatar,
         show_reaction_icons=False,
-        show_activity_dot=message.status == Status.RUNNING,
+        show_activity_dot=message.status == utils.Status.RUNNING,
         # show_activity_dot=False,
         show_copy_icon=False,
         show_edit_icon=False,
@@ -161,7 +160,7 @@ def render_chat_as_step(chat: chats.Chat, **kwargs) -> pn.chat.ChatStep | None:
         status=chat._status,
         min_width=400,
         objects=chat.history,
-        collapsed=chat.status != Status.RUNNING,
+        collapsed=chat.status != utils.Status.RUNNING,
         collapsed_on_success=True,
         **kwargs,
     )
@@ -213,9 +212,9 @@ def render_run(run: runs.Run, with_title: bool = True) -> pn.viewable.Viewable:
         objects.append(render_chat(run.chat, with_header=False))
 
     match run.status:
-        case Status.SUCCESS:
+        case utils.Status.SUCCESS:
             objects.append(render_result(run))
-        case Status.FAILED:
+        case utils.Status.FAILED:
             objects.append(render_error(run))
 
     return pn.Feed(objects=objects)
@@ -454,15 +453,15 @@ class PanelUI:
         if self.depth == 0:
             self.add_card(pn.Card(pane, title=f"✉️: {message.sender.name}"))
 
-    def message_update(self, message: messages.Message, status: Status):
-        if status == Status.SUCCESS and message in self:
+    def message_update(self, message: messages.Message, status: utils.Status):
+        if status == utils.Status.SUCCESS and message in self:
             self[message].object = render_message_content(message.content)
             self[message].show_activity_dot = False
 
     def chat_update(self, chat, status):
         if chat in self:
             self[chat].status = status
-            self[chat].collapsed = status != Status.RUNNING
+            self[chat].collapsed = status != utils.Status.RUNNING
 
     def new_chunk(self, message, chunk):
         if message in self:
