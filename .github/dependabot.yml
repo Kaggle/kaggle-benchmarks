@@ -1,10 +1,49 @@
 version: 2
+
 updates:
   - package-ecosystem: "uv"
     directory: "/"
+
+    # At most one run per week. Security updates ignore this schedule by
+    # design: they fire when an advisory is published, not on a cadence.
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+
+    # One open version-update PR at a time. Dependabot refreshes that branch
+    # on later runs instead of stacking another PR next to it.
+    open-pull-requests-limit: 1
+
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+
+    # Only packages declared in pyproject.toml. Without this, every transitive
+    # entry in uv.lock (tornado, pygments, ...) is its own upgrade candidate.
+    allow:
+      - dependency-type: "direct"
+
+    ignore:
+      # Deliberate pins, see the comments next to them in pyproject.toml.
+      # NOTE: ignoring a package also suppresses its security-update PRs.
+      - dependency-name: "jupyter-lsp"     # b/276358430
+      - dependency-name: "jupyter-server"  # b/333854354
+      - dependency-name: "traitlets"
+      # Majors need a human anyway (protobuf <6.0 is pinned in pyproject.toml).
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
     groups:
       uv-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      # Without a security group, each advisory opens its own PR and bypasses
+      # both the schedule and the group above.
+      uv-security:
+        applies-to: security-updates
         patterns:
           - "*"
