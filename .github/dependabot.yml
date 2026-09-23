@@ -12,6 +12,13 @@ updates:
       time: "06:00"
       timezone: "Etc/UTC"
 
+    # Let a release sit for a week before we pick it up, the same posture as
+    # `exclude-newer` in pyproject.toml. Version updates only; security
+    # updates are never held back. Dependabot's own default is 3 days, which
+    # zizmor's dependabot-cooldown audit rejects.
+    cooldown:
+      default-days: 7
+
     # One open version-update PR at a time. Dependabot refreshes that branch
     # on later runs instead of stacking another PR next to it.
     open-pull-requests-limit: 1
