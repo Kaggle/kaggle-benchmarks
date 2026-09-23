@@ -161,7 +161,7 @@ def prepare_run(run: runs.Run) -> dict[str, Any]:
             "definition": _get_source_code(run.task.func),
         },
         "model_version": model_version,
-        "state": _get_run_state_proto(run.status),
+        "state": _run_state(run),
         "start_time": _format_timestamp(run.start_time),
         "end_time": _format_timestamp(run.end_time),
         "conversations": conversation_entries,
@@ -226,6 +226,18 @@ def _get_run_state_proto(run_status: utils.Status | str) -> types.BenchmarkTaskR
     return RUN_STATUS_MAP.get(
         run_status, types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_UNSPECIFIED
     )
+
+
+def _run_state(run: runs.Run) -> types.BenchmarkTaskRunState:
+    """The wire state for a run, which is not always a function of its status.
+
+    An unmeasured run reached the end, so its status is SUCCESS, but there is
+    no verdict to report. The wire has only COMPLETED and ERRORED, and sending
+    COMPLETED with no result would read as a pass, so it goes out as ERRORED.
+    """
+    if run.result is results.UNMEASURED:
+        return types.BenchmarkTaskRunState.BENCHMARK_TASK_RUN_STATE_ERRORED
+    return _get_run_state_proto(run.status)
 
 
 def _message_to_proto_content(message: benchmark_messages.Message) -> dict[str, Any]:
@@ -450,6 +462,10 @@ def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
                 "confidenceInterval": run.result[1],
             }
         }
+    elif run.result is results.UNMEASURED:
+        # No verdict to send. `_run_state` marks the run ERRORED; reporting a
+        # boolean here would turn "nobody found out" into a pass or a fail.
+        return []
     elif run.result is None:
         result_data = {"boolean_result": run.passed}
     elif run.result is results.FAILED:

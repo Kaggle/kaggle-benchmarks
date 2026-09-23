@@ -47,6 +47,19 @@ class NonRecoverableError(Exception):
     pass
 
 
+class Unmeasured(Exception):
+    """Raised by a task that cannot produce a verdict.
+
+    Use it when something outside the model's control stopped the task from
+    reaching an answer — the provider was down, a quota ran out. The run ends
+    with ``results.UNMEASURED`` rather than a pass or a fail, and unlike other
+    exceptions it does not propagate, so the tasks around it still run.
+
+    Raise it only when the model never got a fair chance. A model that answers
+    badly has been measured, and belongs in the score.
+    """
+
+
 @dataclasses.dataclass(frozen=True)
 class Task(Generic[T]):
     func: Callable[..., T]
@@ -177,6 +190,12 @@ class Task(Generic[T]):
                     # This allows users to write/track native Python asserts within a task.
                     except AssertionError as e:
                         run.handle_assertion_exception(e)
+                    # The task said it could not produce a verdict. Record that
+                    # and let the run end normally: swallowing it here is the
+                    # whole point, so a provider outage in one task does not
+                    # take its siblings down with it.
+                    except Unmeasured as e:
+                        run.mark_unmeasured(str(e))
                     # Let KeyboardInterrupt propagate to stop execution.
                     except (NonRecoverableError, KeyboardInterrupt):
                         raise

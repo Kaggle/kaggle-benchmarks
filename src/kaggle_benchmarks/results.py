@@ -50,14 +50,34 @@ class Result(Generic[T]):
 
 
 class Unknown(Result[object]):
-    """Special type for a result that has not yet been computed."""
+    """A stand-in for a result there is no value for.
+
+    Carries a label so the sentinels below print as themselves rather than as
+    an object address, which is what reaches a DataFrame or a log line.
+    """
+
+    def __init__(self, label: str = "UNKNOWN"):
+        self.label = label
 
     def __bool__(self):
         return False
 
+    def __repr__(self) -> str:
+        return self.label
 
-PENDING = Unknown()
-FAILED = Unknown()
+    __str__ = __repr__
+
+
+PENDING = Unknown("PENDING")
+FAILED = Unknown("FAILED")
+
+# The task ran but produced no verdict — the provider was down, a quota ran
+# out, something outside the model's control got in the way. Distinct from
+# FAILED, which means the model was asked and got it wrong. Scoring a run like
+# this as a failure understates the model; scoring it as a pass overstates it.
+# The only honest thing is to leave it out of the denominator, which is what
+# `Runs.score` does.
+UNMEASURED = Unknown("UNMEASURED")
 
 
 class PassFail(Result[type(None) | Unknown]):

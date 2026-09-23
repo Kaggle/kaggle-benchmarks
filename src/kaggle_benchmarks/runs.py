@@ -30,6 +30,27 @@ _run_counters_lock = threading.Lock()
 _run_counters: dict[int, int] = {}
 
 
+@dataclasses.dataclass(frozen=True)
+class Score:
+    """A pass rate and how many runs it was computed over.
+
+    ``value`` is None when nothing could be measured.
+    """
+
+    value: float | None
+    measured: int
+    total: int
+
+    @property
+    def complete(self) -> bool:
+        return self.measured == self.total
+
+    def __str__(self) -> str:
+        if self.value is None:
+            return f"no measurements (0/{self.total})"
+        return f"{self.value:.2f} over {self.measured}/{self.total} measured"
+
+
 @dataclasses.dataclass
 class Run(Generic[T]):
     task: tasks.Task[T]
@@ -84,6 +105,15 @@ class Run(Generic[T]):
 
         raise e
 
+    def mark_unmeasured(self, reason: str | None = None):
+        """Records that the run finished without a verdict.
+
+        The status stays SUCCESS: the run did reach the end, it just has
+        nothing to score. ``Runs.score`` leaves it out of the denominator.
+        """
+        self.result = results.UNMEASURED
+        self.error_message = reason
+
     @property
     def cache_id(self) -> str:
         """Gets a unique ID for a run, primarily for caching purposes.
@@ -124,6 +154,17 @@ class Run(Generic[T]):
                 return context.run
 
     @property
+    def measured(self) -> bool:
+        """Whether this run produced a verdict at all.
+
+        False once :meth:`mark_unmeasured` has been called. ``passed`` is
+        still a plain bool and still reads False for such a run — a bool has
+        no third state — so anything averaging results should filter on this
+        first, or use :meth:`Runs.score`.
+        """
+        return self.result is not results.UNMEASURED
+
+    @property
     def passed(self):
         # Reject known-bad first: a run whose task body raised an exception.
         # Without this guard, result_type.passed() would return True for most
@@ -162,6 +203,9 @@ class Run(Generic[T]):
             return "✅ (cached)"
         if self.result is results.PENDING:
             return "..."
+        elif self.result is results.UNMEASURED:
+            # Deliberately not ❌: nobody found out whether this one passes.
+            return "⚠️"
         elif self.result is results.FAILED:
             return "❌"
 
@@ -214,6 +258,24 @@ class Runs(Generic[T], abc.MutableSequence):
         next attempt (with `enable_cache()` enabled).
         """
         return Runs([r for r in self.runs if r.status == utils.Status.FAILED])
+
+    @property
+    def measured_runs(self) -> "Runs[T]":
+        """Runs that produced a verdict — everything except the unmeasured."""
+        return Runs([r for r in self.runs if r.measured])
+
+    def score(self) -> "Score":
+        """The pass rate over the runs that produced a verdict.
+
+        Returns the count alongside the rate on purpose. A rate on its own
+        hides how much of the suite it covers, and 1.0 from one measured task
+        reads exactly like 1.0 from twenty.
+        """
+        measured = self.measured_runs
+        value = (
+            sum(run.passed for run in measured) / len(measured) if measured else None
+        )
+        return Score(value=value, measured=len(measured), total=len(self.runs))
 
     def as_dataframe(self) -> pd.DataFrame:
         if not self.runs:
