@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -23,6 +24,13 @@ from google.protobuf import json_format
 from kaggle_benchmarks import clients, runs, tasks
 from kaggle_benchmarks._config import ExecutionMode, config
 from kaggle_benchmarks.kaggle import atif, serialization
+
+
+def _params_fingerprint(run: runs.Run) -> str:
+    """Hashes a run's params to detect two different runs writing one file."""
+    return hashlib.sha256(
+        repr(sorted(run.params.items(), key=str)).encode("utf-8", "replace")
+    ).hexdigest()
 
 
 def save_proto(message: Any, path: Path):
@@ -49,6 +57,8 @@ class KaggleClient(clients.Client):
         use_cache: bool = False,
     ):
         self.directory = Path(directory)
+        # Run file path -> params fingerprint of the run that wrote it.
+        self._written: dict[Path, str] = {}
         self.registry: dict[str, tasks.Task] = {}
         self.format = format
         self.use_cache = use_cache
@@ -82,6 +92,17 @@ class KaggleClient(clients.Client):
         self.directory.mkdir(parents=True, exist_ok=True)
 
         json_file_path = self._get_run_filepath(run)
+
+        # Warn when a different run already wrote this file. A retry of the
+        # same row has the same fingerprint and stays silent.
+        fingerprint = _params_fingerprint(run)
+        if self._written.get(json_file_path, fingerprint) != fingerprint:
+            logging.warning(
+                f"Overwriting {json_file_path.name}, written earlier by a "
+                "different run. Pass a distinct `label=` to each `evaluate()` "
+                "call to keep their run files apart."
+            )
+        self._written[json_file_path] = fingerprint
 
         try:
             proto_message = serialization.dump_run(run)

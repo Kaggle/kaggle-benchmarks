@@ -436,8 +436,29 @@ def _is_tuple_result(value: Any) -> bool:
     )
 
 
+def _numeric_result(value: Any, result_type: int) -> dict[str, Any]:
+    """A numeric results entry for a number or a `(value, ci)` tuple."""
+    if _is_tuple_result(value):
+        numeric = {"value": value[0], "confidence_interval": value[1]}
+    else:
+        numeric = {"value": float(value)}
+    return {"numeric_result": numeric, "type": result_type}
+
+
 def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
     """Helper function to prepare the 'results' list for a BenchmarkTaskRun."""
+    if isinstance(run.result, results.SplitScores):
+        # AGGREGATED first: the leaderboard and the cache loader read results[0].
+        return [
+            _numeric_result(
+                run.result.overall, types.BenchmarkTaskRunResultType.AGGREGATED
+            ),
+            _numeric_result(run.result.public, types.BenchmarkTaskRunResultType.PUBLIC),
+            _numeric_result(
+                run.result.private, types.BenchmarkTaskRunResultType.PRIVATE
+            ),
+        ]
+
     result_data: dict[str, Any]
     # We cannot use run.task.result_type to decide here since the run result could be
     # loaded from the cache, where its task.result_type information is lost.

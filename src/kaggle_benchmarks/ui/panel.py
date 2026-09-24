@@ -220,6 +220,20 @@ def render_run(run: runs.Run, with_title: bool = True) -> pn.viewable.Viewable:
     return pn.Feed(objects=objects)
 
 
+def render_splits(splits) -> pn.viewable.Viewable:
+    """Renders shown splits in full and hidden splits as a run count."""
+    objects: list[pn.viewable.Viewable | str] = []
+    for name, runs_ in splits.splits.items():
+        if splits.is_hidden(name):
+            objects.append(
+                pn.pane.Markdown(f"🔒 **{name}**: {len(runs_)} runs, hidden.")
+            )
+        else:
+            objects.append(pn.pane.Markdown(f"### {name}: {len(runs_)} runs"))
+            objects.append(runs_.__panel__())
+    return pn.Column(*objects)
+
+
 def render_runs(runs: runs.Runs) -> pn.viewable.Viewable:
     return pn.Accordion(
         *((f"{run.format_result()} {run.name}", run) for run in runs.runs),

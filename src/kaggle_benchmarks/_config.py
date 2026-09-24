@@ -152,6 +152,10 @@ class Config:
     write_atif: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "True"))
     )
+    # Shows the output of hidden rows while they run. See privacy.py.
+    reveal_hidden: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(os.environ.get("REVEAL_HIDDEN", "False"))
+    )
 
     # Maximum length the host platform allows for `@kbench.task(...)` `name`
     # and `description` arguments. The Kaggle notebook runtime sets these to
