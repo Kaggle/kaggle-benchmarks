@@ -12,62 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable, Literal, TypeVar
+"""Concrete actors.
 
-from kaggle_benchmarks import utils
-from kaggle_benchmarks.messages import Message
+The abstract ``Actor`` base class lives in :mod:`kaggle_benchmarks.core`
+(alongside the other core objects) and is re-exported here. This module
+defines the concrete actor types and singletons.
+"""
 
-T = TypeVar("T")
+from kaggle_benchmarks.core import Actor
 
-
-class Actor:
-    def __init__(
-        self,
-        name: str | None = None,
-        role: Literal["system", "user", "assistant", "developer", "tool"] = "assistant",
-        avatar: str = "",
-        id: str | None = None,
-    ):
-        self.name = type(self).__name__ if name is None else name
-        self.id = id or name
-        self.role = role
-        self.avatar = avatar
-
-    def send(
-        self, message: T | Message[T], is_visible_to_llm: bool = True
-    ) -> Message[T]:
-        return self._send(message, is_visible_to_llm)
-
-    def _send(self, message: T | Message[T], is_visible_to_llm: bool) -> Message[T]:
-        from kaggle_benchmarks import chats
-
-        if isinstance(message, Message):
-            message.is_visible_to_llm = is_visible_to_llm
-        else:
-            message = Message(
-                sender=self, content=message, is_visible_to_llm=is_visible_to_llm
-            )
-
-        chats.send(message)
-        return message
-
-    def stream(self, content: Iterable[str]) -> Message[str]:
-        msg = Message(content="", sender=self, _status=utils.Status.RUNNING)
-        self.send(msg)
-        msg.stream(content)
-        msg.status = utils.Status.SUCCESS
-        return msg
-
-    def as_dict(self) -> dict[str, str]:
-        """Returns a dictionary representation of the agent."""
-        return dict(id=self.id, name=self.name, role=self.role, avatar=self.avatar)
-
-    def __repr__(self) -> str:
-        cls = type(self)
-        return f"{cls.__name__}(name={self.name!r}, avatar={self.avatar!r})"
-
-    def __str__(self) -> str:
-        return f"{self.avatar} {self.name}"
+__all__ = ["Actor", "Tool", "assertion", "system", "user"]
 
 
 class Tool(Actor):

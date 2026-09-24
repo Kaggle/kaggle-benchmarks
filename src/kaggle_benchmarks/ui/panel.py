@@ -408,7 +408,7 @@ class PanelUI:
             self.add_card(pn.Card(pane, title=f"🧵: {chat.name}"))
 
         elif parent is None:
-            # handled in new_message
+            # handled in new_event
             return
 
         elif context.run:
@@ -432,7 +432,7 @@ class PanelUI:
             self[chat].awaiting = True
             self[chat].append(self.placeholder)
 
-    def new_message(self, chat: chats.Chat, message: messages.Message | chats.Chat):
+    def new_event(self, chat: chats.Chat, message: messages.Message | chats.Chat):
         if isinstance(message, chats.Chat):
             if chat in self:
                 self[message] = msg = render_chat_as_step(message)
