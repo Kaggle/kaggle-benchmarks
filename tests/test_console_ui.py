@@ -303,7 +303,7 @@ class TestLLMResponseRendering:
         """LLMResponse path in quiet mode must terminate each message with \\n.
 
         Regression: an earlier version swapped chat.append/status order so
-        new_message fired with status=RUNNING, causing _quiet_new_message to
+        new_event fired with status=RUNNING, causing _quiet_new_event to
         omit the trailing newline and glue messages together.
         """
         handler, output = _make_handler(quiet=True)
@@ -317,7 +317,7 @@ class TestLLMResponseRendering:
         assert "alpha  " not in captured  # not followed by next message inline
 
     def test_streaming_header_before_chunks_in_rich_mode(self):
-        """Streaming path must dispatch new_message BEFORE chunks stream in,
+        """Streaming path must dispatch new_event BEFORE chunks stream in,
         so the rich UI's [RESPONSE: name] header appears above the tokens."""
         handler, output = _make_handler()
 
@@ -338,7 +338,7 @@ class TestLLMResponseRendering:
 
     def test_streaming_no_duplicate_body(self):
         """Streamed text should appear exactly once, not also re-printed by
-        a later new_message dispatch."""
+        a later new_event dispatch."""
         handler, output = _make_handler()
 
         @tasks.task(name="StreamDup", store_task=False, store_run=False)
@@ -388,7 +388,7 @@ class TestLLMResponseRendering:
 
     def test_streaming_does_not_double_print(self):
         """If a message is streamed and *then* appended (the inverse of the
-        canonical order), new_message should still print the role header but
+        canonical order), new_event should still print the role header but
         skip the body since chunks already rendered it."""
         from kaggle_benchmarks import actors, messages, utils
 
@@ -477,18 +477,18 @@ class TestLLMResponseRendering:
         assert console_handler not in events.manager.listeners
         assert isinstance(cfg.ui_handler, panel_ui.PanelUI)
 
-    def test_llm_message_branch_dispatches_new_message_once(self):
+    def test_llm_message_branch_dispatches_new_event_once(self):
         """LLMMessage returned from invoke() should produce exactly one
-        new_message event for the response (the chat.append in respond()).
+        new_event event for the response (the chat.append in respond()).
 
         Guards against future regressions if invoke() starts using
-        LLMMessage.from_chunks (which dispatches new_message itself) — that
+        LLMMessage.from_chunks (which dispatches new_event itself) — that
         would need chat.history.append, not chat.append, to avoid a duplicate.
         """
         events_seen = []
 
         class Spy:
-            def new_message(self, chat, message):
+            def new_event(self, chat, message):
                 events_seen.append(message)
 
         events.manager.listeners = []
