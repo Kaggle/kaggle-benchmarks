@@ -24,6 +24,7 @@ from kaggle_benchmarks import (
     prompting,
     rooms,
     tasks,
+    testing,
     tools,
     ui,
     utils,
