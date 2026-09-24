@@ -418,12 +418,15 @@ class Task(Generic[T]):
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):
-            result_df = self.evaluate(
+            # Count per-row verdicts via `Run.passed` so pass/fail tasks,
+            # recorded assertion failures and raising rows are all handled;
+            # a raising row counts as a failure instead of aborting the run.
+            evaluated = self.evaluate(
                 evaluation_data=df,
                 grid={k: [v] for k, v in kwargs.items()},
-            ).as_dataframe()
-
-            return int(result_df.result.sum()), len(result_df)
+                on_failure="continue",
+            )
+            return sum(run.passed for run in evaluated), len(evaluated)
 
         kwargs = (
             dataclasses.asdict(self)
