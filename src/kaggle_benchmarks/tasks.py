@@ -417,6 +417,14 @@ class Task(Generic[T]):
                 serialization.remove_runs_files(all_runs)
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
+        # A PassCount needs a per-row verdict. Other result types (e.g.
+        # numeric scores) would count every row as passed.
+        if not issubclass(self.result_type, (results.Boolean, results.PassFail)):
+            raise TypeError(
+                f"bind_dataframe requires a pass/fail or bool task, but "
+                f"{self.name!r} returns {self.result_type.__name__}."
+            )
+
         def func(**kwargs):
             # Count per-row verdicts via `Run.passed` so pass/fail tasks and
             # recorded assertion failures are handled. Other exceptions still

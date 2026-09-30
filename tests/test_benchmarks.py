@@ -414,6 +414,18 @@ def test_bind_dataframe_counts_recorded_assertion_failures():
     assert run.result == (2, 3)
 
 
+@pytest.mark.parametrize("return_type", [int, float])
+def test_bind_dataframe_rejects_tasks_without_verdict(return_type):
+    def func(x):
+        return return_type(x)
+
+    func.__annotations__["return"] = return_type
+    task = tasks.task()(func)
+
+    with pytest.raises(TypeError, match="pass/fail or bool"):
+        task.bind_dataframe(pd.DataFrame({"x": [0, 1, 1]}))
+
+
 def test_bind_dataframe_propagates_row_errors():
     @tasks.task()
     def task(x) -> bool:
