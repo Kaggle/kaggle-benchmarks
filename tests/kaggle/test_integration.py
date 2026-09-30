@@ -14,6 +14,7 @@
 
 import tempfile
 
+import pandas as pd
 import pytest
 
 from kaggle_benchmarks import (
@@ -283,6 +284,50 @@ def test_load_failed_cached_run_reruns(client, monkeypatch, duck):
     assert not run2.cached  # Should not be loaded from cache.
     assert run2.passed  # Should succeed on the second attempt.
     assert call_count == 2  # Should have been called again.
+
+
+def test_bind_dataframe_counts_cached_boolean_failures(client):
+    call_count = 0
+
+    @task()
+    def row_task(x) -> bool:
+        nonlocal call_count
+        call_count += 1
+        return x != 2
+
+    bound = row_task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    assert bound.run().result == (2, 3)
+    assert call_count == 3
+
+    client.use_cache = True
+    run = bound.run()
+    assert not run.cached
+    assert len(run.subruns) == 3
+    assert all(subrun.cached for subrun in run.subruns)
+    assert call_count == 3
+    assert run.result == (2, 3)
+
+
+def test_bind_dataframe_counts_cached_pass_fail_failures(client):
+    call_count = 0
+
+    @task()
+    def row_task(x):
+        nonlocal call_count
+        call_count += 1
+        assertions.assert_true(x != 2, "x should not be 2")
+
+    bound = row_task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    assert bound.run().result == (2, 3)
+    assert call_count == 3
+
+    client.use_cache = True
+    run = bound.run()
+    assert not run.cached
+    assert len(run.subruns) == 3
+    assert all(subrun.cached for subrun in run.subruns)
+    assert call_count == 3
+    assert run.result == (2, 3)
 
 
 def test_evaluate_retries_only_failed_samples_with_cache(client, monkeypatch, duck):
