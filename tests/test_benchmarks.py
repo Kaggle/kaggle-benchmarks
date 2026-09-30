@@ -414,7 +414,7 @@ def test_bind_dataframe_counts_recorded_assertion_failures():
     assert run.result == (2, 3)
 
 
-def test_bind_dataframe_counts_raising_row_as_failure():
+def test_bind_dataframe_propagates_row_errors():
     @tasks.task()
     def task(x) -> bool:
         if x == 2:
@@ -422,8 +422,8 @@ def test_bind_dataframe_counts_raising_row_as_failure():
         return True
 
     bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
-    run = bound.run()
-    assert run.result == (2, 3)
+    with pytest.raises(Exception, match="boom"):
+        bound.run()
 
 
 @pytest.mark.parametrize("mode", ["tabs", "columns"])
