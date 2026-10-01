@@ -18,7 +18,7 @@ import pandas as pd
 import panel as pn
 import pytest
 
-from kaggle_benchmarks import chats, clients, config, runs, tasks, utils
+from kaggle_benchmarks import assertions, chats, clients, config, runs, tasks, utils
 
 
 @tasks.task()
@@ -391,6 +391,71 @@ def test_bind_dataframe():
     bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]}))
     run = bound.run(op=operator.add)
     assert run.result == (2, 3)
+
+
+def test_bind_dataframe_pass_fail_task():
+    @tasks.task()
+    def task(x):
+        assertions.assert_true(x != 2, "x should not be 2")
+
+    bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    run = bound.run()
+    assert run.result == (2, 3)
+
+
+def test_bind_dataframe_counts_recorded_assertion_failures():
+    @tasks.task()
+    def task(x) -> bool:
+        assertions.assert_true(x != 2, "x should not be 2")
+        return True
+
+    bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    run = bound.run()
+    assert run.result == (2, 3)
+
+
+def test_bind_dataframe_counts_none_from_bool_task_as_failure():
+    @tasks.task()
+    def task(x) -> bool:
+        if x != 2:
+            return True
+
+    bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    run = bound.run()
+    assert run.result == (2, 3)
+
+
+def test_bind_dataframe_counts_native_assert_in_bool_task_as_failure():
+    @tasks.task()
+    def task(x) -> bool:
+        assert x != 2
+        return True
+
+    bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    run = bound.run()
+    assert run.result == (2, 3)
+
+
+def test_bind_dataframe_sums_numeric_results():
+    @tasks.task()
+    def task(x) -> int:
+        return x
+
+    bound = task.bind_dataframe(pd.DataFrame({"x": [0, 1, 0]}))
+    run = bound.run()
+    assert run.result == (1, 3)
+
+
+def test_bind_dataframe_propagates_row_errors():
+    @tasks.task()
+    def task(x) -> bool:
+        if x == 2:
+            raise ValueError("boom")
+        return True
+
+    bound = task.bind_dataframe(pd.DataFrame({"x": [1, 2, 3]}))
+    with pytest.raises(Exception, match="boom"):
+        bound.run()
 
 
 @pytest.mark.parametrize("mode", ["tabs", "columns"])

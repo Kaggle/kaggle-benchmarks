@@ -418,12 +418,23 @@ class Task(Generic[T]):
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):
-            result_df = self.evaluate(
+            evaluated = self.evaluate(
                 evaluation_data=df,
                 grid={k: [v] for k, v in kwargs.items()},
-            ).as_dataframe()
+            )
 
-            return int(result_df.result.sum()), len(result_df)
+            # PassFail results are None on success, so summing them always
+            # gives 0; count per-row verdicts, which also include assertions.
+            # Run.passed is always True for cached runs, but their loaded
+            # result is the stored boolean verdict, so use that instead.
+            # Boolean.passed returns the raw result (e.g. None), hence bool().
+            if self.result_type in (results.PassFail, results.Boolean):
+                passes = sum(
+                    bool(run.result if run.cached else run.passed) for run in evaluated
+                )
+            else:
+                passes = int(evaluated.as_dataframe().result.sum())
+            return passes, len(evaluated)
 
         kwargs = (
             dataclasses.asdict(self)
