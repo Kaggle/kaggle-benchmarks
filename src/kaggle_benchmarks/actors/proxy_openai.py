@@ -94,6 +94,7 @@ class OpenAI(LLMChat):
             "openai/gpt-6-astra",
             "openai/gpt-6-luna",
             "openai/gpt-6-sol",
+            "openai/gpt-6.1-sol",
         )
         if any(self.model.startswith(prefix) for prefix in unsupported_prefixes):
             return True
