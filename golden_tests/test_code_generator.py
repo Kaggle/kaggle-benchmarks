@@ -39,6 +39,14 @@ import kaggle_benchmarks as kbench
 from kaggle_benchmarks.tools import python as python_tool
 from kaggle_benchmarks.utils import task_autopilot
 
+# This suite generates code with a real model, so it only runs against a live
+# provider. Skip cleanly when none is configured, so `pytest golden_tests` works
+# without credentials (the rest of the suite runs offline against scripted models).
+pytestmark = pytest.mark.skipif(
+    not kbench.kaggle.is_configured(),
+    reason="needs a live model provider (MODEL_PROXY_URL / MODEL_PROXY_API_KEY)",
+)
+
 # Number of consecutive successful runs required for a test to pass.
 # Note: For >1 runs, ensure server-side model caching is disabled to receive fresh samples.
 NUM_RUNS = int(os.environ.get("CODE_GEN_NUM_RUNS", "3"))
