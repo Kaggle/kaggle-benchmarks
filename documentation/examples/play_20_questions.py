@@ -82,8 +82,8 @@ play_20.run(llm, llm, category="an animal", target="dog")
 
 play_20.evaluate(
     llm=[
-        llms["google/gemini-2.0-flash"],
-        llms["google/gemini-1.5-pro"],
+        llms["google/gemini-3.8-flash"],
+        llms["google/gemini-3.1-pro-preview"],
     ],
     judge_llm=[judge_llm],
     evaluation_data=pd.DataFrame(
