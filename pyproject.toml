@@ -29,8 +29,6 @@ dependencies = [
   "jupyter",
   "docker>=7.1.0",
   "panel>=1.6.3",
-  "playwright>=1.50.0",
-  "nest-asyncio>=1.6.0",
   "hishel[httpx]>1.1.8",
   "pydantic>=2.11.5",
   "joblib",
@@ -40,6 +38,10 @@ dependencies = [
 [project.optional-dependencies]
 kaggle-client = [
   "jupytext",
+]
+web-tools = [
+  "playwright>=1.50.0",
+  "nest-asyncio>=1.6.0",
 ]
 
 # Configuration for the build backend to find the version file
@@ -63,6 +65,7 @@ test = [
     "kaggle_benchmarks[kaggle-client]",
 ]
 kaggle = [
+  "kaggle_benchmarks[web-tools]",
   "kagglehub>=0.3.10",
   "pip>=25.0.1",
   "nbdev>=2.4.2",
