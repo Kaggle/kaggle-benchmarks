@@ -1503,3 +1503,25 @@ def test_choose_keeps_or_drops_a_runs_three_files_together(client, duck, monkeyp
         "T-run_id_Run_2_Duck.result.json",
         "T-run_id_Run_2_Duck.run.json",
     ]
+
+
+def test_choose_keeps_the_named_tasks_run_not_a_row_tasks(client, duck, monkeypatch):
+    """A benchmark task and the row task it evaluates are usually named `T` and
+    `T_row`. Picking the run file by name prefix matches both, and the newest
+    wins, so the row's run would be published as the benchmark's result."""
+    _ran(duck, lambda llm: bool(llm.prompt("Hi")), "T")
+    _ran(duck, lambda llm: bool(llm.prompt("Hi")), "T_row")
+    monkeypatch.setattr(ipython_magics, "WORKING_DIR", Path(client.directory))
+    monkeypatch.setattr(
+        ipython_magics.core.getipython,
+        "get_ipython",
+        lambda: SimpleNamespace(user_ns={}),
+    )
+
+    ipython_magics.choose("T")
+
+    assert _names(client) == [
+        "T-run_id_Run_1_Duck.atif.json",
+        "T-run_id_Run_1_Duck.result.json",
+        "T-run_id_Run_1_Duck.run.json",
+    ]

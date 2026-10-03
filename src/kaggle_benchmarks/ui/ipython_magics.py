@@ -131,6 +131,7 @@ def choose(line):
     IPython line magic to choose a benchmark task and remove all other
     *run.json and *task.json files from /kaggle/working.
     """
+    import json
     import re
 
     from kaggle_benchmarks.kaggle import atif
@@ -181,11 +182,22 @@ def choose(line):
     ]
     files_to_keep.update(task_files_to_keep)
 
+    def _run_task_name(path) -> str:
+        """Reads the task a run file records."""
+        try:
+            with open(path, "r") as f:
+                return json.load(f).get("taskVersion", {}).get("name", "")
+        except (OSError, ValueError, AttributeError):
+            return ""
+
+    # Matched on the recorded task, not the filename: a file is named
+    # `<task>-<run id>.run.json`, so task `qa` would also match every
+    # `qa_row-...` file and could keep a row's run instead of the benchmark's.
     matching_run_files = sorted(
         (
             f
             for f in all_run_files
-            if re.fullmatch(f"{normalized_task_name}.*\\.run\\.json", f.name)
+            if _normalize_name(_run_task_name(f)) == normalized_task_name
         ),
         key=lambda f: f.stat().st_mtime,
     )
