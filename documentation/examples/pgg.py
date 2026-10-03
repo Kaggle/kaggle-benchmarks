@@ -152,7 +152,7 @@ participants = dict(
         players,
         [
             ModelProxy(name="google/gemini-1.5-flash"),
-            ModelProxy(name="google/gemini-2.0-flash"),
+            ModelProxy(name="google/gemini-3.8-flash"),
             ModelProxy(name="google/gemini-1.5-pro"),
         ],
     )
