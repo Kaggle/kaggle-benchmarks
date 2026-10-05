@@ -538,7 +538,8 @@ def assert_tool_was_invoked(
                 if _find_in_chat(item):
                     return True
             elif (
-                isinstance(item.content, tool_utils.ToolInvocationResult)
+                isinstance(item, chats.Message)
+                and isinstance(item.content, tool_utils.ToolInvocationResult)
                 and item.content.name == tool_name
             ):
                 return True

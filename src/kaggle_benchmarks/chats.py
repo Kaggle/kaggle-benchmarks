@@ -12,39 +12,83 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Core classes and functions for representing and managing chats."""
+"""The ``Chat`` type and helpers for creating and managing chats.
+
+``Chat`` is a concrete :class:`kaggle_benchmarks.core.Session` — an ordered
+list of events (messages and nested chats). ``Session`` is re-exported here
+for convenience, and ``Message`` is re-exported so that ``chats.Message``
+keeps resolving.
+"""
+
+from __future__ import annotations
 
 import contextlib
-import dataclasses
 import functools
 import uuid
-from typing import Any, Iterator, Self
+from collections.abc import Iterable
+from typing import Iterator
 
-from kaggle_benchmarks import actors, events, utils
+from kaggle_benchmarks import actors, events
+from kaggle_benchmarks.core import Actor, Event, Session, Status
 from kaggle_benchmarks.messages import Message
 from kaggle_benchmarks.usage import Usage
 
+__all__ = [
+    "Chat",
+    "GoldfishChat",
+    "Message",
+    "Session",
+    "emits_message",
+    "fork",
+    "get_current_chat",
+    "last_reasoning_traces",
+    "new",
+    "send",
+]
 
-@dataclasses.dataclass
-class Chat:
+
+class Chat(Session):
     """Represents a thread of messages in a chat."""
 
-    history: list[Message | Self] = dataclasses.field(default_factory=list)
-    name: str = "chat"
-    _id_suffix: str = dataclasses.field(
-        default_factory=lambda: uuid.uuid4().hex[:8], init=False
-    )
-    sender: actors.Actor = actors.system  # added to mach Message's structural type
+    # Name dispatched by Event.status setter when this chat's status changes.
+    _status_event = "chat_update"
 
-    _status: utils.Status = utils.Status.PENDING
-
-    @property
-    def id(self) -> str:
-        return f"{self.name}-{self._id_suffix}"
+    def __init__(
+        self,
+        *,
+        history: Iterable[Event] = (),
+        name: str = "chat",
+        sender: Actor | None = None,
+        status: Status = Status.PENDING,
+        id: str | None = None,
+    ):
+        super().__init__(
+            history=history,
+            name=name,
+            # A chat carries a sender so it matches Message's structural type
+            # when it sits (nested) in another chat's history.
+            sender=actors.system if sender is None else sender,
+            status=status,
+            id=id,
+        )
+        # Preserve the historical name-derived id format ("<name>-<hex8>") for
+        # backward compatibility (e.g. serialized conversation ids). Event's
+        # __init__ assigns a bare uuid; override it when no explicit id is given.
+        if id is None:
+            self.id = f"{self.name}-{uuid.uuid4().hex[:8]}"
 
     @property
     def messages(self) -> list[Message]:
         return [m for m in self.history if isinstance(m, Message)]
+
+    def to_dict(self) -> dict:
+        """Returns a dictionary representation of the chat.
+
+        Emits the legacy ``messages`` key alongside the ``history`` key so that
+        consumers written before the Event refactor keep working.
+        """
+        serialized = [obj.to_dict() for obj in self.history]
+        return dict(messages=serialized, history=serialized, name=self.name)
 
     @property
     def usage(self) -> Usage:
@@ -54,15 +98,6 @@ class Chat:
             if m.sender.role == "assistant":
                 total = total + m.usage
         return total
-
-    @property
-    def status(self):
-        return self._status
-
-    @status.setter
-    def status(self, value):
-        events.manager.dispatch("chat_update", self, value)
-        self._status = value
 
     def __panel__(self):
         from kaggle_benchmarks.ui import panel
@@ -74,26 +109,12 @@ class Chat:
 
         return panel.render_chat(self)._repr_mimebundle_(include, exclude)
 
-    @events.manager.event_dispatcher("new_message")
-    def append(self, item: Message | Self) -> Message | Self:
-        """Adds a message to the chat."""
-        self.history.append(item)
-        return item
-
-    def to_dict(self) -> dict[str, Any]:
-        """Returns a dictionary representation of the thread."""
-        return dict(messages=[obj.to_dict() for obj in self.history], name=self.name)
-
-    def __str__(self, indent: str = "") -> str:
-        messages = "\n".join(m.__str__(indent + "  ") for m in self.history)
-        return f"{indent}🧵{self.name or ''}:\n{messages}"
-
 
 class GoldfishChat(Chat):
     """A chat that keeps only the last message (useful for interactive mode)."""
 
-    @events.manager.event_dispatcher("new_message")
-    def append(self, item: Message | Self) -> Message | Self:
+    @events.manager.event_dispatcher("new_event", "new_message")
+    def append(self, item: Event) -> Event:
         self.history = [item]
         return item
 

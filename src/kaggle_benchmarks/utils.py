@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import difflib
-import enum
 import inspect
 import json
 import re
@@ -24,12 +23,8 @@ import hishel.httpx
 import httpx
 import pydantic
 
-
-class Status(enum.StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
+# Re-exported for backward compatibility; ``Status`` now lives in ``core``.
+from kaggle_benchmarks.core import Status  # noqa: F401
 
 
 class JSONEncoder(json.encoder.JSONEncoder):

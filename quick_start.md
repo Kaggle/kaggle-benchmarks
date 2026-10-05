@@ -68,11 +68,13 @@ Here are some core concepts for using the library effectively:
 - **`LLM`**: An object representing a large language model you can
   interact with. You can access available Kaggle models via
   `kbench.llms["vendor/model-name"]`.
-- **`Chat` and `Actor`**: The library represents interactions as a
-  conversation. When you call `llm.prompt()` or `kbench.user.send()`, a
-  `Message` is added to the current `Chat`. The `Actor` (e.g.,
-  `kbench.user` or an `LLM` instance) defines who is sending the
-  message.
+- **`Chat`, `Message`, and `Actor`**: The library represents interactions
+  as a conversation. When you call `llm.prompt()` or `kbench.user.send()`, a
+  `Message` is added to the current `Chat` — an ordered list of events that
+  can also contain nested chats. The `Actor` (e.g., `kbench.user` or an
+  `LLM` instance) defines who is sending the message. (Under the hood a
+  `Chat` is a `Session` and a `Message` is an `Event`; a session is a list
+  of events, and both live in `kaggle_benchmarks.core`.)
 - **`Assertion`**: A check to verify the model’s output. If an assertion
   fails, it’s recorded in the run results. You can make assertions using
   `kbench.assertions.assert_that(..., expectation)`, where `expectation`
