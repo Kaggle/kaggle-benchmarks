@@ -241,10 +241,12 @@ def test_nested_chat_id():
         with contexts.enter(chat=sub):
             llm.prompt("Hi")
 
+        sub_id = sub.id
         sub.name += " - analysis"
 
     assert root.history[0] is sub
-    assert sub.id.startswith("sub - analysis-")
+    # A chat's id is a stable identifier, unaffected by later name changes.
+    assert sub.id == sub_id
     assert len(sub.history) == 2
 
 
@@ -345,9 +347,9 @@ def test_invoke_llmmessage():
     assert mocked_chat.invocations[0][1] == {"temperature": 0.5}
 
 
-def test_panel_ui_tolerates_message_update_before_new_message():
+def test_panel_ui_tolerates_message_update_before_new_event():
     """PanelUI.message_update must not crash on messages it hasn't
-    registered via new_message yet.
+    registered via new_event yet.
 
     We call message_update directly rather than going through
     llm.prompt() because contexts.enter() swallows exceptions when
@@ -358,12 +360,12 @@ def test_panel_ui_tolerates_message_update_before_new_message():
     handler = panel_ui.PanelUI()
     msg = Message(content="test", sender=actors.user, _status=utils.Status.RUNNING)
 
-    # Must not raise KeyError for messages not yet seen via new_message.
+    # Must not raise KeyError for messages not yet seen via new_event.
     handler.message_update(msg, utils.Status.SUCCESS)
 
 
 def test_panel_ui_tolerates_unregistered_keys():
-    """Companion to test_panel_ui_tolerates_message_update_before_new_message
+    """Companion to test_panel_ui_tolerates_message_update_before_new_event
     for the other handlers. Under n_jobs > 1, joblib's threading backend
     dispatches lifecycle events from worker threads through the global
     events.manager, and PanelUI.new_chat can hit its `elif parent is None`
@@ -451,7 +453,7 @@ def test_panel_ui_concurrent_prompts():
 
 def test_panel_ui_streaming_with_bound_handler():
     """The streaming path must append the message (registering it in
-    PanelUI.shadows via new_message) before calling response.stream()
+    PanelUI.shadows via new_event) before calling response.stream()
     (which dispatches new_chunk). This test locks in that ordering."""
     from kaggle_benchmarks.ui import panel as panel_ui
 

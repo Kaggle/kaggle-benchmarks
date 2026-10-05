@@ -664,7 +664,7 @@ def test_meta_llm_response_path():
 
 def test_sender_is_participant_at_event_time_llm_message():
     """Message sender must be the Participant (not the backing LLMChat)
-    at the moment new_message fires — not patched after the fact."""
+    at the moment new_event fires — not patched after the fact."""
     from kaggle_benchmarks import events
 
     alice_mock = MockedChat.from_contents(["hi"], name="Alice", cycle=True)
@@ -674,7 +674,7 @@ def test_sender_is_participant_at_event_time_llm_message():
     captured_senders = []
 
     class SenderCapture:
-        def new_message(self, chat, message):
+        def new_event(self, chat, message):
             captured_senders.append(message.sender)
 
     capture = SenderCapture()
@@ -705,7 +705,7 @@ def test_sender_is_participant_at_event_time_llm_response():
     captured_senders = []
 
     class SenderCapture:
-        def new_message(self, chat, message):
+        def new_event(self, chat, message):
             captured_senders.append(message.sender)
 
     capture = SenderCapture()
