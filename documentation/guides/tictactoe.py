@@ -184,8 +184,8 @@ What is the best next move (0-indexed)?:\n```\n{game}\n```
 # We can test the `play_tic_tac_toe` task with two LLM instances.
 # %%
 play_tic_tac_toe.run(
-    ModelProxy(name="google/gemini-2.0-flash"),
-    ModelProxy(name="google/gemini-1.5-pro"),
+    ModelProxy(name="google/gemini-3.8-flash"),
+    ModelProxy(name="google/gemini-3.1-pro-preview"),
 )
 
 # %% [markdown] The Benchmark: `tic_tac_toe`
@@ -218,9 +218,9 @@ def tic_tac_toe(llms, n_rounds: int = 3) -> dict[str, float]:
 
 
 llms = [
-    ModelProxy(name="google/gemini-2.0-flash"),
-    ModelProxy(name="google/gemini-1.5-pro"),
-    ModelProxy(name="google/gemini-1.5-flash"),
+    ModelProxy(name="google/gemini-3.8-flash"),
+    ModelProxy(name="google/gemini-3.1-pro-preview"),
+    ModelProxy(name="google/gemini-3.1-flash-lite-preview"),
 ]
 
 tic_tac_toe.run(llms)
