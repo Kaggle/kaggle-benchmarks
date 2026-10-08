@@ -13,13 +13,14 @@
 # limitations under the License.
 
 import io
+import json
 
 import pandas as pd
 import pytest
 
 import kaggle_benchmarks as kbench
 from kaggle_benchmarks import assertions, contexts, events, kaggle, privacy, runs, tasks
-from kaggle_benchmarks.kaggle import atif
+from kaggle_benchmarks.kaggle import serialization
 from kaggle_benchmarks.llm_messages import LLMMessage
 from kaggle_benchmarks.ui import panel as ui_panel
 from kaggle_benchmarks.ui.console import ConsoleUI
@@ -52,11 +53,15 @@ def llm():
 
 
 @pytest.fixture()
-def run_dir(tmp_path, monkeypatch):
+def run_dir(tmp_path, monkeypatch, cfg):
+    """The published directory. `config.private_directory` is outside it."""
+    working = tmp_path / "working"
+    working.mkdir()
     monkeypatch.setattr(
-        "kaggle_benchmarks.client", kaggle.KaggleClient(directory=tmp_path)
+        "kaggle_benchmarks.client", kaggle.KaggleClient(directory=working)
     )
-    return tmp_path
+    cfg.private_directory = tmp_path / "private"
+    return working
 
 
 @tasks.task()
@@ -108,10 +113,24 @@ def test_row_labels_are_unchanged(llm):
     assert list(splits["private"].as_dataframe()["id"]) == [0, 1]
 
 
-def test_run_files_do_not_collide(run_dir, llm):
-    echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
+@pytest.mark.parametrize("n_jobs", [1, 4])
+def test_private_rows_write_no_files(run_dir, llm, cfg, n_jobs):
+    echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm], n_jobs=n_jobs)
 
-    assert len(list(run_dir.glob("*.run.json"))) == len(PUBLIC) + len(PRIVATE)
+    assert len(list(run_dir.glob("*.run.json"))) == len(PUBLIC)
+    assert not any(CANARY in path.read_text() for path in run_dir.iterdir())
+    assert not cfg.private_directory.exists()
+
+
+def test_private_rows_are_not_cached(run_dir, llm):
+    from kaggle_benchmarks import client
+
+    with client.enable_cache():
+        echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
+        splits = echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
+
+    assert all(run.cached for run in splits["public"])
+    assert not any(run.cached for run in splits["private"])
 
 
 def test_as_dataframe_excludes_hidden_by_default(llm):
@@ -197,17 +216,69 @@ def test_parent_run_leaves_out_private_rows(llm):
     assert CANARY not in rendered(ui_panel.render_run(run))
 
 
-def test_choose_leaves_no_private_rows_on_disk(run_dir, llm):
+def test_run_directory_never_holds_private_rows(run_dir, llm):
     main.run(llm=llm)
 
-    # What %choose keeps: the main task file, its latest run and its trajectory.
-    kept = max(run_dir.glob("main*.run.json"), key=lambda p: p.stat().st_mtime)
-    keep = {run_dir / "main.task.json", kept, *atif.paths_beside(kept)}
-    for path in run_dir.glob("*.json"):
-        if path not in keep:
-            path.unlink()
-
     assert not any(CANARY in path.read_text() for path in run_dir.glob("*"))
+
+
+def test_private_rows_are_written_outside_the_run_directory(run_dir, llm, cfg):
+    run = main.run(llm=llm)
+
+    path = serialization.private_run_path(
+        kaggle.KaggleClient(directory=run_dir)._get_run_filepath(run)
+    )
+    assert path.parent == cfg.private_directory
+    # Never under the directory a notebook publishes.
+    assert not path.is_relative_to(run_dir)
+
+    content = path.read_text()
+    assert len(json.loads(content)["subruns"]) == len(PRIVATE)
+    assert CANARY in content
+    assert "public-a" not in content
+
+
+def test_private_file_holds_the_whole_private_half(run_dir, llm, cfg):
+    main.run(llm=llm)
+
+    [path] = cfg.private_directory.iterdir()
+    subruns = json.loads(path.read_text())["subruns"]
+    assert len(subruns) == len(PRIVATE)
+    assert all(subrun["conversations"] for subrun in subruns)
+
+
+def test_private_file_is_written_when_the_main_task_fails(run_dir, llm, cfg):
+    @tasks.task(name="failing_main")
+    def failing_main(llm) -> float:
+        echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
+        raise RuntimeError("after the splits")
+
+    with pytest.raises(RuntimeError):
+        failing_main.run(llm=llm)
+
+    [path] = cfg.private_directory.iterdir()
+    assert len(json.loads(path.read_text())["subruns"]) == len(PRIVATE)
+
+
+def test_private_file_is_not_a_run_file(run_dir, llm, cfg):
+    """The platform takes the first output path that ends in `run.json`.
+
+    A second one would race with the real run file, so the private file must
+    not end in that suffix.
+    """
+    main.run(llm=llm)
+
+    written = list(cfg.private_directory.iterdir())
+    assert written, "expected a private file"
+    for path in written:
+        assert path.name.endswith(serialization.PRIVATE_FILE_SUFFIX)
+        assert not path.name.endswith(serialization.RUN_FILE_SUFFIX)
+
+
+def test_nothing_written_without_a_calling_run(run_dir, llm, cfg):
+    echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
+
+    assert not cfg.private_directory.exists()
 
 
 def test_reveal_hidden_does_not_reattach_private_rows(cfg, llm):
@@ -286,7 +357,7 @@ def test_hand_built_splits_hide_only_the_display(llm):
 def test_first_call_warns_once(cfg, llm, monkeypatch):
     monkeypatch.setattr(privacy, "_warned", False)
 
-    with pytest.warns(UserWarning, match="%choose") as caught:
+    with pytest.warns(UserWarning, match="private_directory") as caught:
         echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
         echo.evaluate_splits(public=PUBLIC, private=PRIVATE, llm=[llm])
 

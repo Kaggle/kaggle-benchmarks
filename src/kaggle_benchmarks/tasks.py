@@ -461,13 +461,11 @@ class Task(Generic[T]):
         `"private"` hidden. Rows of the private set print nothing while they
         run, raise `HiddenRunError` instead of their own error, and are left
         out of the calling run. This hides output only; it is not access
-        control. `splits["private"]` returns the private rows, and their run
-        files hold them until deleted.
+        control. `splits["private"]` returns the private rows.
 
-        Each row is still written to its own run file, named with the prefix
-        `public-` or `private-` (see `evaluate(label=...)`). In a notebook,
-        `%choose <main task>` deletes those and keeps the main task's run
-        file, which holds its scores:
+        Private rows don't write anything and are not cached. The calling task's
+        run writes them as one file to `config.private_directory`; outside a
+        task, nothing is written. The usual shape is therefore a wrapping task:
 
             @kbench.task(name="qa")
             def qa(llm) -> kbench.SplitScores:
@@ -487,7 +485,7 @@ class Task(Generic[T]):
             **kwargs: Passed to `evaluate()`. A task parameter named `public`
                 or `private` must go in `grid={...}`.
         """
-        from kaggle_benchmarks import contexts
+        from kaggle_benchmarks import contexts, runs
         from kaggle_benchmarks import splits as splits_module
 
         if clash := sorted({"evaluation_data", "label"} & kwargs.keys()):
@@ -520,6 +518,16 @@ class Task(Generic[T]):
         shown = self.evaluate(evaluation_data=public, label="public", **kwargs)
         with contexts.hidden():
             hidden = self.evaluate(evaluation_data=private, label="private", **kwargs)
+        # The only record of the private rows; see `Run.private`.
+        if (caller := contexts.get_current().run) is not None:
+            caller.private = runs.Run(
+                task=self,
+                id="private",
+                params=hidden[0].params,  # Source of the model slug.
+                result=all(run.passed for run in hidden),
+                status=utils.Status.SUCCESS,
+                subruns=hidden,
+            )
 
         return splits_module.Splits(
             splits={"public": shown, "private": hidden}, hidden=frozenset({"private"})

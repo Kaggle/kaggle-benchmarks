@@ -18,7 +18,9 @@ While such a row runs:
 - no event reaches a listener, so UI handlers print nothing for it;
 - a failure raises `HiddenRunError` instead of the original error;
 - the run is not attached to its parent run, so displaying or serializing
-  the parent leaves it out.
+  the parent leaves it out;
+- it doesn't write anything and is not cached. The calling run writes all its
+  hidden rows as one file to `config.private_directory` (see `Run.private`).
 
 `contexts.hidden()` opens the scope; `Task.evaluate_splits` is the supported
 way to use it.
@@ -34,16 +36,16 @@ logger = logging.getLogger(__name__)
 
 FAILURE_MESSAGE = (
     "A row of a hidden split failed. The error is withheld because it usually "
-    "contains the row. See `run.error_message` or the run file, or call "
+    "contains the row. See `run.error_message`, or call "
     "`kbench.reveal_hidden()` and run again."
 )
 
 _REVEAL_WARNING = "Hidden rows will be displayed and saved in the notebook."
 
 FIRST_USE_WARNING = (
-    "Hidden splits are experimental. Private rows don't appear in output or in "
-    "the main task's run file, but each still writes its own run file to the "
-    "working directory. Run `%choose <main task>` before publishing to delete them."
+    "Hidden splits are experimental. Private rows are not shown, cached, or "
+    "written to the working directory; the calling task writes them to one "
+    "file under `kbench.config.private_directory`."
 )
 
 _warned = False

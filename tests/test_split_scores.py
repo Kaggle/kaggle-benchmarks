@@ -19,7 +19,6 @@ import pytest
 
 import kaggle_benchmarks as kbench
 from kaggle_benchmarks import kaggle, privacy, results, tasks
-from kaggle_benchmarks.kaggle import atif
 from kaggle_benchmarks.llm_messages import LLMMessage
 from tests.mocks import MockedChat
 
@@ -103,15 +102,9 @@ def test_format_lists_every_score(llm):
     )
 
 
-def test_choose_leaves_scores_but_no_private_rows(run_dir, llm):
+def test_run_directory_has_scores_but_no_private_rows(run_dir, llm):
     scored.run(llm=llm)
 
-    # What %choose keeps: the main task file, its latest run and its trajectory.
-    kept = latest_run_file(run_dir)
-    keep = {run_dir / "scored.task.json", kept, *atif.paths_beside(kept)}
-    for path in run_dir.glob("*.json"):
-        if path not in keep:
-            path.unlink()
-
+    # No cleanup step: the published directory is private-free as written.
     assert not any(CANARY in path.read_text() for path in run_dir.glob("*"))
-    assert len(json.loads(kept.read_text())["results"]) == 3
+    assert len(json.loads(latest_run_file(run_dir).read_text())["results"]) == 3

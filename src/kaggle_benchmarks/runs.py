@@ -52,6 +52,10 @@ class Run(Generic[T]):
     # Prefixes the run filename, so evaluations over frames with the same row
     # labels don't overwrite each other's files. Set by `evaluate(label=...)`.
     label: str | None = None
+    # The rows of a hidden split this run evaluated, kept out of `subruns` and
+    # of the repr. Written as one file to `config.private_directory`. Set by
+    # `evaluate_splits`.
+    private: "Run | None" = dataclasses.field(default=None, repr=False)
 
     def __post_init__(self):
         if self.id == "":

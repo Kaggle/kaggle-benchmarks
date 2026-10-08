@@ -39,6 +39,10 @@ from kaggle_benchmarks.kaggle import benchmark_types_pb2 as types
 
 TASK_FILE_SUFFIX = ".task.json"
 RUN_FILE_SUFFIX = ".run.json"
+# Deliberately not ending in RUN_FILE_SUFFIX. The platform finds a session's
+# run file by taking the first output path that ends in "run.json", so a second
+# one would race with it.
+PRIVATE_FILE_SUFFIX = ".private.json"
 TASK_RUN_FILENAME_DELIMITER = "-"
 _OPTIONAL_AGGREGATED_METRICS = (
     "input_tokens_cost_nanodollars",
@@ -76,6 +80,19 @@ def generate_run_filename(task_name: str, run_id: str) -> str:
     normalized_task_name = utils.normalize_name(task_name)
     normalized_run_id = utils.normalize_name(run_id)
     return f"{normalized_task_name}{TASK_RUN_FILENAME_DELIMITER}{normalized_run_id}{RUN_FILE_SUFFIX}"
+
+
+def private_run_path(run_path: Path) -> Path:
+    """Where the private split rows of the run at `run_path` are written.
+
+    Named after the run file but placed in `config.private_directory`, not
+    beside it: the run directory is a notebook's working directory, and
+    everything in there is published with the notebook.
+    """
+    from kaggle_benchmarks._config import config
+
+    stem = Path(run_path).name.removesuffix(RUN_FILE_SUFFIX)
+    return config.private_directory / f"{stem}{PRIVATE_FILE_SUFFIX}"
 
 
 def get_runs_filenames(runs: runs.Runs) -> list[str]:

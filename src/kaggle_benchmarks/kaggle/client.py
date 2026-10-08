@@ -89,6 +89,12 @@ class KaggleClient(clients.Client):
         save_proto(proto_message, filepath)
 
     def store_run(self, run: runs.Run):
+        from kaggle_benchmarks import contexts
+
+        # Hidden rows don't write anything; the calling run writes them (see below).
+        if contexts.get_current().hidden:
+            return
+
         self.directory.mkdir(parents=True, exist_ok=True)
 
         json_file_path = self._get_run_filepath(run)
@@ -113,6 +119,12 @@ class KaggleClient(clients.Client):
             raise e
 
         save_proto(proto_message, json_file_path)
+
+        # Outside the run directory, so it is not published with the notebook.
+        if run.private is not None:
+            private_path = serialization.private_run_path(json_file_path)
+            private_path.parent.mkdir(parents=True, exist_ok=True)
+            save_proto(serialization.dump_run(run.private), private_path)
 
         # After the run.json, and never allowed to fail: a converter bug must
         # not cost someone a finished run.
@@ -144,7 +156,10 @@ class KaggleClient(clients.Client):
 
     def skips_cached_run(self, run: runs.Run) -> bool:
         """Determines whether to skip a run by checking for the config and a cached run file."""
-        if not self.use_cache:
+        from kaggle_benchmarks import contexts
+
+        # Hidden rows have no run file to find.
+        if not self.use_cache or contexts.get_current().hidden:
             return False
         filepath = self._get_run_filepath(run)
         if not filepath.exists():
