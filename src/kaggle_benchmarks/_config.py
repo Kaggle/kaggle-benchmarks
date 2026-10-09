@@ -148,9 +148,11 @@ class Config:
         default_factory=lambda: string_to_bool(os.environ.get("RENDER_SUBRUNS", "True"))
     )
     # Whether each run also writes the .atif.json / .result.json pair harbor
-    # tooling reads. Off leaves the run.json untouched: it is the only input.
+    # tooling reads. Opt-in (set WRITE_ATIF=True to enable): nothing reads the
+    # pair yet, and the trajectory is about as large as the run.json. Either
+    # way the run.json is untouched: it is the only input.
     write_atif: bool = dataclasses.field(
-        default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "True"))
+        default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "False"))
     )
 
     # Maximum length the host platform allows for `@kbench.task(...)` `name`
