@@ -18,7 +18,7 @@ Every stored run produces three files, side by side in the same directory:
 
 ATIF is harbor's trajectory format. It has no score field, which is why the result is a second file.
 
-The pair is written by `atif.write_beside()` after the run.json is saved. Set `WRITE_ATIF=False` to skip it; the run.json is unaffected either way.
+The pair is written by `atif.write_beside()` after the run.json is saved, and only when `WRITE_ATIF=True` — it is off by default. The run.json is unaffected either way.
 
 We emit **`ATIF-v1.7`**. That matters in exactly one place — see [§4.7](#47-media-atif-cannot-hold).
 
@@ -454,7 +454,7 @@ You opened an `.atif.json` and something looks off. Start here.
 | No `reasoning_content` on a thinking model | The reply was streamed, or the provider returned none. |
 | `extra.kbench.conversion_warnings` | Something was skipped. `kind` says what. |
 | A score you expected is missing | Its leaf was not a number. Check the warnings for `reward_leaf_unusable`. |
-| No `.atif.json` at all | `WRITE_ATIF=False`, or conversion failed — check the logs for `Could not write`. |
+| No `.atif.json` at all | `WRITE_ATIF` is not set to `True` (it is off by default), or conversion failed — check the logs for `Could not write`. |
 
 ---
 

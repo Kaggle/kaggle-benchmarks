@@ -36,6 +36,7 @@ import pytest
 
 from kaggle_benchmarks import (
     ExecutionMode,
+    _config,
     actors,
     assertions,
     chats,
@@ -66,6 +67,8 @@ def client(monkeypatch):
         # recorded and moved past. A developer shell defaults to the opposite,
         # so the errored shapes would raise out of the run instead.
         monkeypatch.setattr(config, "continue_with_exceptions", True)
+        # Writing is opt-in, and every test here reads what it writes.
+        monkeypatch.setattr(config, "write_atif", True)
         # Keyed by id(task), and CPython reuses the addresses of collected
         # tasks, which would make run filenames flaky.
         runs._run_counters.clear()
@@ -1412,6 +1415,12 @@ def test_writing_can_be_turned_off(client, duck, monkeypatch):
     monkeypatch.setattr(config, "write_atif", False)
     _ran(duck, lambda llm: bool(llm.prompt("Hi")))
     assert _names(client) == ["T-run_id_Run_1_Duck.run.json"]
+
+
+def test_writing_is_off_by_default(monkeypatch):
+    """Nothing reads the pair yet, so an unconfigured run is the off case above."""
+    monkeypatch.delenv("WRITE_ATIF", raising=False)
+    assert _config.Config().write_atif is False
 
 
 def test_an_eval_writes_three_files_per_row_and_the_parent_names_them(client, duck):
