@@ -17,6 +17,17 @@ from pathlib import Path
 import pytest
 import yaml
 
+import kaggle_benchmarks as kbench
+from kaggle_benchmarks import ExecutionMode, clients, config
+
+# Run as tests, not as a benchmark: the default client serializes every task and
+# run to JSON in the working directory, which litters the tree (and the CI
+# workspace) with hundreds of files. This has to happen at import time — conftest
+# is imported before the test modules, and @kbench.task registers, and would
+# store, each task as soon as its module is imported.
+config.execution_mode = ExecutionMode.TESTING
+kbench.client = clients.InMemoryClient()
+
 module_reports = {}
 
 
@@ -86,5 +97,11 @@ def pytest_runtest_makereport(item, call):
         module_report = module_reports.setdefault(module_name, [])
 
         llm = item.funcargs["llm"]
-        api = item.funcargs["api"]
-        module_report.append((llm, api, report))
+        module_report.append((llm, _api_of(llm), report))
+
+
+def _api_of(llm) -> str:
+    """Names the backend an LLM talks to, for the report's `<api>://<model>` key."""
+    return {"OpenAI": "openai", "GoogleGenAI": "genai"}.get(
+        type(llm).__name__, type(llm).__name__.lower()
+    )

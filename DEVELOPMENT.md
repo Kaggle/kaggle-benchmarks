@@ -216,20 +216,41 @@ tests/test_openai_client.py
 
 ### Golden Tests
 
-Golden tests (in `golden_tests/test_cookbook_examples.py`) validate end-to-end behavior against real LLM APIs. They are **not** part of the standard CI/CD pipeline (they require API keys).
+Golden tests (in `golden_tests/`, one file per theme: `test_structured.py`,
+`test_tools.py`, `test_chatroom.py`, …) validate end-to-end behavior. Each file
+holds its benchmark tasks and, at the bottom, the tests that run them.
 
-If your change touches serializers, actors, or the prompt pipeline, verify that golden tests still pass:
+Every test is parametrized over a model pool from `golden_tests/models.py`
+(`ALL_MODELS`, `VISION_MODELS`, `AUDIO_MODELS`, …) plus, where the scenario can
+be faked, a `scripted(...)` entry — a `ScriptedLLM` replaying canned responses.
+So the same assertions run against real models and offline:
 
 ```bash
-# Run all golden tests
-uv run pytest golden_tests/test_cookbook_examples.py
+# Offline — no API key. Live pools are empty, so only the scripted entries run
+# and live-only tests skip. This is what CI runs.
+uv run --group test pytest golden_tests
 
-# Run and update the report
-uv run pytest golden_tests/test_cookbook_examples.py --generate-report
+# Against real models (needs MODEL_PROXY_URL / MODEL_PROXY_API_KEY)
+uv run pytest golden_tests
 
-# Filter by API
-uv run pytest golden_tests/test_cookbook_examples.py -k "genai"
+# Filter by API or feature, and update the per-file report
+uv run pytest golden_tests -k "genai"
+uv run pytest golden_tests --generate-report
 ```
+
+If your change touches serializers, actors, or the prompt pipeline, run the
+offline suite; run it against real models before changing model-facing behavior.
+
+To add a case, write the task in the matching file and a test beneath it:
+
+```python
+@pytest.mark.parametrize("llm", ALL_MODELS + [scripted([{"value": 1969}])])
+def test_extract_int(llm):
+    assert extract_int.run(llm).passed
+```
+
+Use `fake([...])` directly for a scripted-only test (e.g. asserting a failure —
+a real model may legitimately answer correctly).
 
 ### Running Unit Tests
 
