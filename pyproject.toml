@@ -109,7 +109,8 @@ dev = [
 # To upgrade packages: bump this date to ~2 days before today, then run `uv lock --upgrade`.
 # This is a fixed date (not a rolling window) and must be bumped periodically.
 # See: https://docs.astral.sh/uv/reference/settings/#exclude-newer
-exclude-newer = "2026-09-20T00:00:00Z"
+# Do not move earlier than 2026-10-20T02:24Z: certifi 2026.10.19 (GHSA-6q48-6c7w-9gw2 fix) was published then.
+exclude-newer = "2026-10-20T03:00:00Z"
 
 [tool.mypy]
 warn_unused_configs = true
