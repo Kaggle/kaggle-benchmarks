@@ -64,7 +64,7 @@ test = [
 ]
 kaggle = [
   "kagglehub>=0.3.10",
-  "pip>=25.0.1",
+  "pip>=26.2.2",
   "nbdev>=2.4.2",
   "papermill>=2.6.0",
   # b/276358430: pin jupyter-lsp to 1.5.1 to match docker-python; newer versions freeze the server
@@ -109,8 +109,8 @@ dev = [
 # To upgrade packages: bump this date to ~2 days before today, then run `uv lock --upgrade`.
 # This is a fixed date (not a rolling window) and must be bumped periodically.
 # See: https://docs.astral.sh/uv/reference/settings/#exclude-newer
-# Do not move earlier than 2026-10-20T02:24Z: certifi 2026.10.19 (GHSA-6q48-6c7w-9gw2 fix) was published then.
-exclude-newer = "2026-10-20T03:00:00Z"
+# Do not move earlier than 2026-10-20T16:36Z: pip 26.2.2 and certifi 2026.10.19 (GHSA-6q48-6c7w-9gw2 fixes) need it.
+exclude-newer = "2026-10-20T17:00:00Z"
 
 [tool.mypy]
 warn_unused_configs = true
