@@ -86,7 +86,7 @@ class ConsoleUI:
         self._in_run = False
         self._run_depth = 0
         # Tracks message ids whose body was already rendered via new_chunk
-        # events; new_message skips the eager body print for these so the
+        # events; new_event skips the eager body print for these so the
         # text isn't duplicated. Stores id(message) to avoid pinning Message
         # objects in memory.
         self._streamed_messages: set[int] = set()
@@ -204,7 +204,7 @@ class ConsoleUI:
     def _quiet_end_chat(self, chat):
         self.depth -= 1
 
-    def _quiet_new_message(self, chat, message):
+    def _quiet_new_event(self, chat, message):
         if isinstance(message, chats.Chat):
             return
         # If this message was streamed, chunks already rendered the body.
@@ -313,14 +313,14 @@ class ConsoleUI:
                 wrapped_lines.append(line)
         return "\n".join(wrapped_lines)
 
-    def new_message(self, chat, message):
+    def new_event(self, chat, message):
         if self.quiet:
-            self._quiet_new_message(chat, message)
+            self._quiet_new_event(chat, message)
             return
         if isinstance(message, chats.Chat):
             return
         if not self._in_run:
-            self._quiet_new_message(chat, message)
+            self._quiet_new_event(chat, message)
             return
 
         # Skip assertion result messages -- they're shown in the assertion
