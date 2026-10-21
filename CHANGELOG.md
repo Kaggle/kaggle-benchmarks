@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.6.2 (Oct 21st, 2026)
 
-* **Security: require patched certifi:** Added a `certifi>=2026.10.19` floor to the package dependencies so `pip install kaggle-benchmarks` no longer leaves a certifi bundle that trusts the compromised emSign/eMudhra roots ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)).
+* **Security: require patched certifi:** Added a `certifi>=2026.10.19` floor to the package dependencies so `pip install kaggle-benchmarks` no longer leaves a certifi bundle that trusts the compromised emSign/eMudhra roots ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)). (#236)
 
 ## v0.6.1 (Jun 17th, 2026)
 
