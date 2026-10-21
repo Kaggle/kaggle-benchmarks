@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kaggle_benchmarks.tools import container, functions, native, python, search, web
+from kaggle_benchmarks.tools import container, functions, native, python, search
+
+try:
+    from kaggle_benchmarks.tools import web
+except ImportError:
+    web = None  # type: ignore[assignment]
+
 from kaggle_benchmarks.tools.base import (
     ModelResponse,
     ToolCallModel,
