@@ -13,3 +13,22 @@
 # limitations under the License.
 
 from kaggle_benchmarks.ui import console
+
+# ``viz`` pulls in bokeh/panel, so import it lazily (mirroring the lazy
+# ``panel`` imports elsewhere) to keep ``import kaggle_benchmarks`` cheap and
+# avoid import-time failures in headless/plotting-free environments.
+_LAZY_SUBMODULES = {"viz"}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_SUBMODULES:
+        import importlib
+
+        module = importlib.import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | _LAZY_SUBMODULES)
