@@ -31,10 +31,11 @@ from typing import (
 
 import pandas as pd
 
-from kaggle_benchmarks import chats, events, results, utils
+from kaggle_benchmarks import chats, events, privacy, results, utils
 
 if TYPE_CHECKING:
     from kaggle_benchmarks import runs
+    from kaggle_benchmarks import splits as splits_module
 
 T = TypeVar("T")
 
@@ -95,7 +96,7 @@ class Task(Generic[T]):
                 run.cached = True
                 run.status = utils.Status.SUCCESS
                 run.result = client.load_run_result(run)
-                if ctx.parent and ctx.parent.run:
+                if ctx.parent and ctx.parent.run and not ctx.hidden:
                     ctx.parent.run.subruns.append(run)
                 return run
             except Exception as e:
@@ -117,7 +118,15 @@ class Task(Generic[T]):
 
         run.end_time = datetime.datetime.now(datetime.timezone.utc)
 
-        if ctx.parent and ctx.parent.run and run not in ctx.parent.run.subruns:
+        # A hidden run stays out of its parent, so displaying or serializing
+        # the parent can't show it. Ignores reveal_hidden(), which only
+        # affects live output.
+        if (
+            ctx.parent
+            and ctx.parent.run
+            and not ctx.hidden
+            and run not in ctx.parent.run.subruns
+        ):
             ctx.parent.run.subruns.append(run)
 
         if self.store_run:
@@ -128,13 +137,16 @@ class Task(Generic[T]):
                 # outcome (success or failure).
                 logger.warning(f"Failed to store run {run.id}: {store_exc}")
 
-    def run(self, *args, _id=None, **kwargs) -> "runs.Run[T]":
+    def run(self, *args, _id=None, _label=None, **kwargs) -> "runs.Run[T]":
         from kaggle_benchmarks import contexts, runs
 
         # Internal flag set only by Task._evaluate_once() when
         # on_failure="continue". Popped from kwargs (not added to the public
         # signature) to keep it out of inspect.signature() and IDE autocomplete.
         _suppress_raise = kwargs.pop("_suppress_raise", False)
+
+        # Set when a hidden row fails; raised after the handler.
+        hidden_failure: str | None = None
 
         signature = inspect.signature(self.func)
         bound_args = signature.bind(*args, **kwargs)
@@ -151,6 +163,7 @@ class Task(Generic[T]):
             result=results.PENDING,
             params=params,
             param_id=_id,
+            label=_label,
         )
 
         try:
@@ -195,7 +208,9 @@ class Task(Generic[T]):
             # suppress the exception (for on_failure="continue").
             self._finalize_and_persist(run, ctx)
             if not _suppress_raise:
-                raise
+                if not privacy.output_hidden():
+                    raise
+                hidden_failure = f"{run.task.name} {run.id}: {privacy.FAILURE_MESSAGE}"
         else:
             # No exception escaped contexts.enter. Two sub-cases:
             #  (a) Task succeeded → status=SUCCESS
@@ -204,12 +219,18 @@ class Task(Generic[T]):
             # Either way, persist with the final status.
             self._finalize_and_persist(run, ctx)
 
+        # Raise outside the except block, so the original error isn't
+        # attached as __context__ and printed with the traceback.
+        if hidden_failure is not None:
+            raise privacy.HiddenRunError(hidden_failure)
+
         return run
 
     def evaluate(
         self,
         grid: dict[str, Iterable[Any]] | None = None,
         evaluation_data: pd.DataFrame | None = None,
+        label: str | None = None,
         n_jobs: int = 1,
         timeout: float | None = None,
         stop_condition: Callable[["runs.Runs[T]"], bool] | None = None,
@@ -231,6 +252,10 @@ class Task(Generic[T]):
                 values to test.
             evaluation_data: An optional pandas DataFrame where each row
                              represents a separate evaluation to run.
+            label: Prefix for this evaluation's run filenames. Needed when
+                   evaluating a task over several frames with the same row
+                   labels; otherwise the later evaluation overwrites the
+                   earlier run files. Does not change `param_id`.
             n_jobs: The number of jobs to run in parallel.
                     - If `n_jobs = 1` (default), runs sequentially in the main thread.
                     - If `n_jobs > 1`, runs in parallel using that many threads.
@@ -310,7 +335,9 @@ class Task(Generic[T]):
             # joblib worker. In "raise" mode, leave Task.run()'s behavior
             # untouched (it raises in dev, returns the failed Run in batch).
             runner = functools.partial(
-                self.run, _suppress_raise=(on_failure == "continue")
+                self.run,
+                _suppress_raise=(on_failure == "continue"),
+                _label=label,
             )
             all_runs = runs.Runs(
                 [
@@ -338,9 +365,15 @@ class Task(Generic[T]):
                         if len(failures) == 1
                         else f"{len(failures)} of {len(all_runs)} runs failed."
                     )
+                    # The error message usually contains the row.
+                    detail = (
+                        privacy.FAILURE_MESSAGE
+                        if privacy.output_hidden()
+                        else first.error_message
+                    )
                     msg = (
                         f"Task {self.name!r} run {first.id} failed:\n"
-                        f"{first.error_message}\n\n"
+                        f"{detail}\n\n"
                         f"({summary} Pass on_failure='continue' to collect "
                         "failures into results.errored_runs instead of "
                         "raising. For large evals with transient errors, "
@@ -415,6 +448,82 @@ class Task(Generic[T]):
         finally:
             if remove_run_files:
                 serialization.remove_runs_files(all_runs)
+
+    def evaluate_splits(
+        self,
+        public: pd.DataFrame,
+        private: pd.DataFrame,
+        **kwargs: Any,
+    ) -> "splits_module.Splits":
+        """Evaluates this task over a public and a private set of rows.
+
+        Runs `evaluate()` once per set and returns a `Splits` with
+        `"private"` hidden. Rows of the private set print nothing while they
+        run, raise `HiddenRunError` instead of their own error, and are left
+        out of the calling run. This hides output only; it is not access
+        control. `splits["private"]` returns the private rows, and their run
+        files hold them until deleted.
+
+        Each row is still written to its own run file, named with the prefix
+        `public-` or `private-` (see `evaluate(label=...)`). In a notebook,
+        `%choose <main task>` deletes those and keeps the main task's run
+        file, which holds its scores:
+
+            @kbench.task(name="qa")
+            def qa(llm) -> kbench.SplitScores:
+                splits = qa_row.evaluate_splits(
+                    public=public_df, private=private_df, llm=[llm]
+                )
+                mean = lambda frame: float(frame.result.mean())
+                return kbench.SplitScores(
+                    overall=mean(splits.as_dataframe(include_hidden=True)),
+                    public=mean(splits["public"].as_dataframe()),
+                    private=mean(splits["private"].as_dataframe()),
+                )
+
+        Args:
+            public: Rows displayed as usual.
+            private: Rows hidden from output.
+            **kwargs: Passed to `evaluate()`. A task parameter named `public`
+                or `private` must go in `grid={...}`.
+        """
+        from kaggle_benchmarks import contexts
+        from kaggle_benchmarks import splits as splits_module
+
+        if clash := sorted({"evaluation_data", "label"} & kwargs.keys()):
+            raise TypeError(f"evaluate_splits sets {clash} itself.")
+
+        # Check both sets first; otherwise the public set runs and writes its
+        # files before a bad private set fails.
+        for name, frame in (("public", public), ("private", private)):
+            if not isinstance(frame, pd.DataFrame):
+                hint = (
+                    f" A task parameter named {name!r} goes in grid={{...}}."
+                    if isinstance(frame, (list, tuple, range))
+                    else ""
+                )
+                raise TypeError(
+                    f"{name} must be a pandas DataFrame, got "
+                    f"{type(frame).__name__}.{hint}"
+                )
+            if frame.empty:
+                raise ValueError(f"{name} is empty.")
+        if set(public.columns) != set(private.columns):
+            raise ValueError(
+                "public and private must have the same columns. Only in "
+                f"public: {sorted(set(public.columns) - set(private.columns))}; "
+                f"only in private: "
+                f"{sorted(set(private.columns) - set(public.columns))}."
+            )
+
+        privacy.warn_first_use()
+        shown = self.evaluate(evaluation_data=public, label="public", **kwargs)
+        with contexts.hidden():
+            hidden = self.evaluate(evaluation_data=private, label="private", **kwargs)
+
+        return splits_module.Splits(
+            splits={"public": shown, "private": hidden}, hidden=frozenset({"private"})
+        )
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):
