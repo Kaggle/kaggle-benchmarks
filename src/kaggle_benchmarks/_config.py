@@ -17,6 +17,7 @@ import enum
 import logging
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Self, overload
 
@@ -117,6 +118,20 @@ class Config:
         )
     )
 
+    # Where the rows of a hidden split are written. Deliberately outside the
+    # run directory: a notebook publishes the files in its working directory,
+    # so anything written there is public the moment the notebook is. Defaults
+    # under the system temp directory, which is writable everywhere we run and
+    # is never part of a notebook's output. See privacy.py.
+    private_directory: Path = dataclasses.field(
+        default_factory=lambda: Path(
+            os.environ.get(
+                "PRIVATE_DIRECTORY",
+                Path(tempfile.gettempdir()) / "kaggle_benchmarks_private",
+            )
+        )
+    )
+
     cache_timeout_seconds: int = dataclasses.field(
         default_factory=lambda: _parse_int_env(
             "CACHE_TIMEOUT_SECONDS", 7 * 24 * 60 * 60
@@ -153,6 +168,10 @@ class Config:
     # way the run.json is untouched: it is the only input.
     write_atif: bool = dataclasses.field(
         default_factory=lambda: string_to_bool(os.environ.get("WRITE_ATIF", "False"))
+    )
+    # Shows the output of hidden rows while they run. See privacy.py.
+    reveal_hidden: bool = dataclasses.field(
+        default_factory=lambda: string_to_bool(os.environ.get("REVEAL_HIDDEN", "False"))
     )
 
     # Maximum length the host platform allows for `@kbench.task(...)` `name`

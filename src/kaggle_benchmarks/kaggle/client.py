@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -23,6 +24,13 @@ from google.protobuf import json_format
 from kaggle_benchmarks import clients, runs, tasks
 from kaggle_benchmarks._config import ExecutionMode, config
 from kaggle_benchmarks.kaggle import atif, serialization
+
+
+def _params_fingerprint(run: runs.Run) -> str:
+    """Hashes a run's params to detect two different runs writing one file."""
+    return hashlib.sha256(
+        repr(sorted(run.params.items(), key=str)).encode("utf-8", "replace")
+    ).hexdigest()
 
 
 def save_proto(message: Any, path: Path):
@@ -49,6 +57,8 @@ class KaggleClient(clients.Client):
         use_cache: bool = False,
     ):
         self.directory = Path(directory)
+        # Run file path -> params fingerprint of the run that wrote it.
+        self._written: dict[Path, str] = {}
         self.registry: dict[str, tasks.Task] = {}
         self.format = format
         self.use_cache = use_cache
@@ -79,9 +89,26 @@ class KaggleClient(clients.Client):
         save_proto(proto_message, filepath)
 
     def store_run(self, run: runs.Run):
+        from kaggle_benchmarks import contexts
+
+        # Hidden rows don't write anything; the calling run writes them (see below).
+        if contexts.get_current().hidden:
+            return
+
         self.directory.mkdir(parents=True, exist_ok=True)
 
         json_file_path = self._get_run_filepath(run)
+
+        # Warn when a different run already wrote this file. A retry of the
+        # same row has the same fingerprint and stays silent.
+        fingerprint = _params_fingerprint(run)
+        if self._written.get(json_file_path, fingerprint) != fingerprint:
+            logging.warning(
+                f"Overwriting {json_file_path.name}, written earlier by a "
+                "different run. Pass a distinct `label=` to each `evaluate()` "
+                "call to keep their run files apart."
+            )
+        self._written[json_file_path] = fingerprint
 
         try:
             proto_message = serialization.dump_run(run)
@@ -92,6 +119,12 @@ class KaggleClient(clients.Client):
             raise e
 
         save_proto(proto_message, json_file_path)
+
+        # Outside the run directory, so it is not published with the notebook.
+        if run.private is not None:
+            private_path = serialization.private_run_path(json_file_path)
+            private_path.parent.mkdir(parents=True, exist_ok=True)
+            save_proto(serialization.dump_run(run.private), private_path)
 
         # After the run.json, and never allowed to fail: a converter bug must
         # not cost someone a finished run.
@@ -123,7 +156,10 @@ class KaggleClient(clients.Client):
 
     def skips_cached_run(self, run: runs.Run) -> bool:
         """Determines whether to skip a run by checking for the config and a cached run file."""
-        if not self.use_cache:
+        from kaggle_benchmarks import contexts
+
+        # Hidden rows have no run file to find.
+        if not self.use_cache or contexts.get_current().hidden:
             return False
         filepath = self._get_run_filepath(run)
         if not filepath.exists():
