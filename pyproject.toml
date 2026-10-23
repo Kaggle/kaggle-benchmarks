@@ -78,7 +78,7 @@ kaggle = [
   "jupyterlab-lsp",
   "jedi",
   "notebook>=6.5.4",
-  "nbconvert>=6.5.1",
+  "nbconvert>=7.17.2",
   "traitlets==5.9.0",
   "jupyter-bokeh>=4.0.5",
 ]
