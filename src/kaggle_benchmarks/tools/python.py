@@ -14,6 +14,7 @@
 
 import queue
 import re
+import time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -154,11 +155,13 @@ class IPythonREPL(actors.Actor):
         self, code: str, timeout: int = -1, input: str | None = None
     ) -> CellOutput:
         code = extract_code(code)
-        self.client.execute(code)
+        msg_id = self.client.execute(code)
 
         if input:
             self.client.input(input)
-        msgs = list(self._collect_iopub_messages())
+
+        iopub_timeout = None if timeout <= 0 else float(timeout)
+        msgs = list(self._collect_iopub_messages(msg_id, timeout=iopub_timeout))
 
         result = None
         for msg in msgs:
@@ -172,8 +175,15 @@ class IPythonREPL(actors.Actor):
             if m["msg_type"] == "error"
         ).strip()
 
-        # shell_msg = self.client.get_shell_msg(timeout=timeout)["content"]
-        # status = shell_msg["status"] is unrealiable
+        # Clean up the shell channel for this execution to prevent message leakage
+        while True:
+            try:
+                shell_msg = self.client.get_shell_msg(timeout=0.1)
+                if shell_msg.get("parent_header", {}).get("msg_id") == msg_id:
+                    break
+            except queue.Empty:
+                break
+
         status = "error" if traceback else "ok"
 
         return CellOutput(
@@ -185,11 +195,35 @@ class IPythonREPL(actors.Actor):
             traceback=traceback or None,
         )
 
-    def _collect_iopub_messages(self):
+    def _collect_iopub_messages(self, msg_id: str, timeout: float | None = None):
+        start_time = time.time()
         while True:
+            poll_timeout = 1.0
+            if timeout is not None:
+                elapsed = time.time() - start_time
+                remaining = timeout - elapsed
+                if remaining <= 0:
+                    break
+                poll_timeout = min(poll_timeout, remaining)
+
             try:
-                yield self.client.get_iopub_msg(timeout=1)
+                msg = self.client.get_iopub_msg(timeout=poll_timeout)
             except queue.Empty:
+                if timeout is not None and (time.time() - start_time) >= timeout:
+                    break
+                if not self.km.is_alive():
+                    raise RuntimeError("Kernel died during execution")
+                continue
+
+            if msg.get("parent_header", {}).get("msg_id") != msg_id:
+                continue
+
+            yield msg
+
+            if (
+                msg.get("msg_type") == "status"
+                and msg.get("content", {}).get("execution_state") == "idle"
+            ):
                 break
 
     def respond(self, **kwargs) -> CellOutput:

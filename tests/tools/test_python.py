@@ -157,3 +157,38 @@ print(y)
 
     assert out.status == "ok"
     assert out.stdout.strip() == "20"
+    repl.stop()
+
+
+def test_repl_long_running_sleep():
+    """Test that long-running executions with inactivity sleep do not terminate prematurely."""
+    repl = python.IPythonREPL()
+    try:
+        # Sleep for 1.5 seconds, which exceeds the old 1s timeout
+        out = repl.run_code("import time; time.sleep(1.5); print('done')")
+        assert out.status == "ok"
+        assert out.stdout.strip() == "done"
+    finally:
+        repl.stop()
+
+
+def test_repl_no_stale_message_pollution():
+    """Test that stale messages from a previous slow command do not contaminate a subsequent command."""
+    import time
+
+    repl = python.IPythonREPL()
+    try:
+        # This will time out on old code, returning immediately but leaving messages in the queue
+        # On fixed code, it blocks for 1.5s and returns 'first'
+        out1 = repl.run_code("import time; time.sleep(1.5); print('first')", timeout=1)
+        assert out1.stdout == ""
+
+        # Give it a moment to make sure the first execution actually prints 'first' if it was running in bg
+        time.sleep(1.0)
+
+        # Second run should only return 'second', and not include 'first'
+        out2 = repl.run_code("print('second')")
+        assert "first" not in out2.stdout
+        assert out2.stdout.strip() == "second"
+    finally:
+        repl.stop()
