@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import uuid
+from unittest import mock
 
 import pytest
+from docker.types import Mount
 
 from kaggle_benchmarks.envs import docker, local
 
@@ -57,6 +59,37 @@ def test_read_write(cls, params, path):
 
         with pytest.raises(FileNotFoundError):
             env["cage"]
+
+
+@pytest.mark.parametrize(("cls", "params"), envs)
+def test_shared_working_dir(cls, params):
+    """Files cross between the host side (env[...]) and commands run in the env."""
+    with cls(**params) as env:
+        env["from_host.txt"] = "host"
+        assert env.run(["cat", "from_host.txt"]).stdout == "host"
+
+        env.run(["sh", "-c", "mkdir sub && echo env > sub/from_env.txt"])
+        assert env["sub/from_env.txt"] == "env\n"
+        temp_dir = env.temp_dir
+
+    # Files created by the env must not block cleanup of the temporary folder.
+    temp_dir.cleanup()
+
+
+def test_docker_mounts():
+    """Regression test for Kaggle/kaggle-benchmarks#231."""
+    env = docker.DockerEnvironment(
+        image="python:3.11",
+        mounts={"/data": "/host/data", "/cache": "named-volume"},
+        working_dir="/workspace",
+        client=mock.MagicMock(),
+    )
+
+    assert env.mounts == [
+        Mount("/data", "/host/data", type="bind"),
+        Mount("/cache", "named-volume", type="volume"),
+        Mount("/workspace", str(env.directory), type="bind"),
+    ]
 
 
 @pytest.mark.parametrize(("cls", "params"), envs)

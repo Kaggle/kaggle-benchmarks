@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import shlex
 
 import docker
@@ -44,15 +45,19 @@ class DockerEnvironment(mixins.TemporalDirectoryMixin):
         self.image = image
         self.working_dir = working_dir
 
+        # `mounts` maps container paths to host paths or named volumes.
         self.mounts = [
-            docker.types.Mount(target, source)
+            docker.types.Mount(
+                target, source, type="bind" if os.path.isabs(source) else "volume"
+            )
             for target, source in (mounts or {}).items()
         ]
 
-        # mount working dir to local temporary folder for easier filesystem operations
+        # Bind the local temporary folder (host) to the working dir (container)
+        # for easier filesystem operations.
         self.mounts.append(
             docker.types.Mount(
-                target=str(self.directory), source=str(self.working_dir), type="bind"
+                target=str(self.working_dir), source=str(self.directory), type="bind"
             )
         )
 
@@ -83,8 +88,22 @@ class DockerEnvironment(mixins.TemporalDirectoryMixin):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self.container:
+            self._release_working_dir()
             self.container.stop()
             self.container.remove()
+
+    def _release_working_dir(self):
+        """Hands files created in the container back to the host user.
+
+        The container (often running as root) writes into the host temporary
+        folder; without this, the host cannot remove those files on cleanup.
+        """
+        if not hasattr(os, "getuid"):  # Windows hosts have no uid to map to.
+            return
+        self.container.exec_run(
+            ["chown", "-R", f"{os.getuid()}:{os.getgid()}", self.working_dir],
+            user="root",
+        )
 
     def run(
         self, command: str | list[str], input: str | None = None
