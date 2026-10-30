@@ -536,7 +536,17 @@ def test_cache_id_uses_model_over_name(client):
     assert call_count == 1  # Should not have been called again.
 
 
-def test_unreadable_cached_subrun_reruns_and_is_rewritten(client, duck):
+@pytest.mark.parametrize(
+    "contents",
+    [
+        # Passes the state check in skips_cached_run, then fails to load.
+        '{"state": "BENCHMARK_TASK_RUN_STATE_COMPLETED", "results": []}',
+        "",
+        '{"state": "BENCHMARK_TASK_RUN_STATE_COMPLETED", "resu',
+    ],
+    ids=["no_results", "empty", "half_written"],
+)
+def test_unreadable_cached_subrun_reruns_and_is_rewritten(client, duck, contents):
     @task()
     def child(llm) -> bool:
         return True
@@ -549,10 +559,7 @@ def test_unreadable_cached_subrun_reruns_and_is_rewritten(client, duck):
     parent_file = client.directory / "Parent-run_param_id_p_Duck.run.json"
     child_file = client.directory / "Child-run_param_id_c_Duck.run.json"
     parent_file.unlink()
-    # Passes the state check in skips_cached_run, then fails to load.
-    child_file.write_text(
-        '{"state": "BENCHMARK_TASK_RUN_STATE_COMPLETED", "results": []}'
-    )
+    child_file.write_text(contents)
 
     with client.enable_cache():
         run = parent.run(duck, _id="p")
