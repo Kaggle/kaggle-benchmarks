@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import uuid
+from unittest import mock
 
 import pytest
+from docker.types import Mount
 
 from kaggle_benchmarks.envs import docker, local
 
@@ -57,6 +59,25 @@ def test_read_write(cls, params, path):
 
         with pytest.raises(FileNotFoundError):
             env["cage"]
+
+
+def test_docker_mounts():
+    """Regression test for Kaggle/kaggle-benchmarks#231.
+
+    Host paths are bind-mounted, and nothing else (in particular not host
+    `/tmp` or the local temporary folder) is mounted into the container.
+    """
+    env = docker.DockerEnvironment(
+        image="python:3.11",
+        mounts={"/data": "/host/data", "/cache": "named-volume"},
+        working_dir="/workspace",
+        client=mock.MagicMock(),
+    )
+
+    assert env.mounts == [
+        Mount("/data", "/host/data", type="bind"),
+        Mount("/cache", "named-volume", type="volume"),
+    ]
 
 
 @pytest.mark.parametrize(("cls", "params"), envs)

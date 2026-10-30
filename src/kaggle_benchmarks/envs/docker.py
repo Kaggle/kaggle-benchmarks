@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import shlex
 
 import docker
@@ -44,17 +45,16 @@ class DockerEnvironment(mixins.TemporalDirectoryMixin):
         self.image = image
         self.working_dir = working_dir
 
+        # `mounts` maps container paths to host paths or named volumes.
         self.mounts = [
-            docker.types.Mount(target, source)
+            docker.types.Mount(
+                target, source, type="bind" if os.path.isabs(source) else "volume"
+            )
             for target, source in (mounts or {}).items()
         ]
-
-        # mount working dir to local temporary folder for easier filesystem operations
-        self.mounts.append(
-            docker.types.Mount(
-                target=str(self.directory), source=str(self.working_dir), type="bind"
-            )
-        )
+        # The local temporary folder is not mounted into the container: bind
+        # sources resolve on the Docker daemon's host, which may not see it
+        # (e.g. when running inside a container against the host's socket).
 
         if client is None:
             client = docker.from_env()
