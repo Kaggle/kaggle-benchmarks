@@ -128,11 +128,15 @@ class KaggleClient(clients.Client):
         filepath = self._get_run_filepath(run)
         if not filepath.exists():
             return False
-        with open(filepath, "r") as f:
-            run_data = json.load(f)
-            if run_data.get("state") != "BENCHMARK_TASK_RUN_STATE_COMPLETED":
-                return False
-        return True
+        # An empty or half-written file (e.g. from an interrupted run) means
+        # the run never completed, so re-run it rather than crash.
+        try:
+            with open(filepath, "r") as f:
+                run_data = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logging.warning(f"Ignoring unreadable cached run file {filepath}: {e}")
+            return False
+        return run_data.get("state") == "BENCHMARK_TASK_RUN_STATE_COMPLETED"
 
     def _get_run_filepath(self, run: runs.Run) -> Path:
         """Gets the filepath for a given run's output file."""

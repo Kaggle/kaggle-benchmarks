@@ -92,9 +92,12 @@ class Task(Generic[T]):
                 logger.info(
                     f"Skipping run {run.id} for task {self.name} as its output file already exists."
                 )
+                run.result = client.load_run_result(run)
+                # Only after the load succeeds: a run left marked cached is
+                # skipped by _finalize_and_persist, so its re-run would write
+                # no file and never be linked to its parent.
                 run.cached = True
                 run.status = utils.Status.SUCCESS
-                run.result = client.load_run_result(run)
                 if ctx.parent and ctx.parent.run:
                     ctx.parent.run.subruns.append(run)
                 return run
