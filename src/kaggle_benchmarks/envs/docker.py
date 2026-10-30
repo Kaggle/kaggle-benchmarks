@@ -52,14 +52,9 @@ class DockerEnvironment(mixins.TemporalDirectoryMixin):
             )
             for target, source in (mounts or {}).items()
         ]
-
-        # Bind the local temporary folder (host) to the working dir (container)
-        # for easier filesystem operations.
-        self.mounts.append(
-            docker.types.Mount(
-                target=str(self.working_dir), source=str(self.directory), type="bind"
-            )
-        )
+        # The local temporary folder is not mounted into the container: bind
+        # sources resolve on the Docker daemon's host, which may not see it
+        # (e.g. when running inside a container against the host's socket).
 
         if client is None:
             client = docker.from_env()
@@ -88,22 +83,8 @@ class DockerEnvironment(mixins.TemporalDirectoryMixin):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self.container:
-            self._release_working_dir()
             self.container.stop()
             self.container.remove()
-
-    def _release_working_dir(self):
-        """Hands files created in the container back to the host user.
-
-        The container (often running as root) writes into the host temporary
-        folder; without this, the host cannot remove those files on cleanup.
-        """
-        if not hasattr(os, "getuid"):  # Windows hosts have no uid to map to.
-            return
-        self.container.exec_run(
-            ["chown", "-R", f"{os.getuid()}:{os.getgid()}", self.working_dir],
-            user="root",
-        )
 
     def run(
         self, command: str | list[str], input: str | None = None
