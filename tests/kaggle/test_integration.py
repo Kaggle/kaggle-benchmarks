@@ -534,3 +534,28 @@ def test_cache_id_uses_model_over_name(client):
     assert run2.cached
     assert run2.result is True
     assert call_count == 1  # Should not have been called again.
+
+
+def test_unreadable_cached_subrun_reruns_and_is_rewritten(client, duck):
+    @task()
+    def child(llm) -> bool:
+        return True
+
+    @task()
+    def parent(llm) -> bool:
+        return child.run(llm, _id="c").result
+
+    parent.run(duck, _id="p")
+    parent_file = client.directory / "Parent-run_param_id_p_Duck.run.json"
+    child_file = client.directory / "Child-run_param_id_c_Duck.run.json"
+    parent_file.unlink()
+    # Passes the state check in skips_cached_run, then fails to load.
+    child_file.write_text(
+        '{"state": "BENCHMARK_TASK_RUN_STATE_COMPLETED", "results": []}'
+    )
+
+    with client.enable_cache():
+        run = parent.run(duck, _id="p")
+
+    assert [r.cached for r in run.subruns] == [False]
+    assert '"booleanResult": true' in child_file.read_text()
