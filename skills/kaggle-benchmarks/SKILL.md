@@ -1236,7 +1236,7 @@ class PoemScore:
 
 @kbench.task(name="judge_poem")
 def judge_poem(llm, question: str) -> float:
-    judge1 = kbench.llms["google/gemini-3.1-pro-preview"]
+    judge1 = kbench.llms["google/gemini-4-argon"]
     judge2 = kbench.llms["anthropic/claude-sonnet-5-5@default"]
 
     with kbench.chats.new("writing"):
