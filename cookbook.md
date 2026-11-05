@@ -355,12 +355,10 @@ However, if you need to compare models directly within your notebook
 LLMs to `.evaluate()` to run them all.
 
 ``` python
-models = [
-    kbench.llms["google/gemini-2.5-flash"],
-    kbench.llms["meta/llama-3.1-70b"]
-]
+# Every model available in the environment
+models = kbench.llms.values()
 
-# Runs the evaluation for BOTH models
+# Runs the evaluation for ALL of these models
 results = solve_question.evaluate(llm=models, evaluation_data=df)
 ```
 

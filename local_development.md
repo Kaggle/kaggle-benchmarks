@@ -32,9 +32,9 @@ Local Development is for internal team (kaggle) only. For local development, you
     ```env
     MODEL_PROXY_URL=https://mp-staging.kaggle.net/models/openapi
     MODEL_PROXY_API_KEY={your_token}
-    LLM_DEFAULT=google/gemini-2.5-flash
-    LLM_DEFAULT_EVAL=google/gemini-2.5-pro
-    LLMS_AVAILABLE=anthropic/claude-sonnet-4,google/gemini-2.5-flash,meta/llama-3.1-70b,google/gemini-2.5-pro
+    LLM_DEFAULT=google/gemini-3.8-flash
+    LLM_DEFAULT_EVAL=google/gemini-3.1-pro-preview
+    LLMS_AVAILABLE=anthropic/claude-sonnet-5-5@default,google/gemini-3.8-flash,google/gemini-3.1-pro-preview
     PYTHONPATH=src
     ```
 

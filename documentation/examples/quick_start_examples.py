@@ -98,7 +98,7 @@ def describe_image(llm, image_url: str, question: str, answer: str):
 
 describe_image.run(
     # You can also specify a model directly.
-    llm=kbench.llms["google/gemini-2.5-flash"],
+    llm=kbench.llms["google/gemini-3.8-flash"],
     image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Cute_dog.jpg/320px-Cute_dog.jpg",
     question="What is the breed of the dog?",
     answer="Cavalier King Charles Spaniel",
@@ -117,7 +117,7 @@ def describe_video(llm, video_url: str, question: str, answer: str):
 
 
 describe_video.run(
-    llm=kbench.llms["google/gemini-2.5-flash"],
+    llm=kbench.llms["google/gemini-3.8-flash"],
     video_url="https://www.youtube.com/watch?v=aqz-KE-bpKQ",
     question="What is this video about?",
     answer="bunny",
@@ -141,10 +141,10 @@ def judge_poem(question: str) -> float:
     and returns the average score.
     """
     # The model to write poem
-    gemini = kbench.llms["google/gemini-2.5-flash"]
+    gemini = kbench.llms["google/gemini-3.8-flash"]
 
     # two models to act as the judge
-    judge_llm = kbench.llms["google/gemini-2.5-pro"]
+    judge_llm = kbench.llms["google/gemini-3.1-pro-preview"]
     judge_llm2 = kbench.llms["meta/llama-3.1-70b"]
 
     # Generate poem

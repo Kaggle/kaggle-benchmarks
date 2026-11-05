@@ -20,7 +20,7 @@ import kaggle_benchmarks as kbench
 | `kbench.task` / `kbench.benchmark` | Decorator to define a benchmark task |
 | `kbench.llm` | Default LLM actor (available when Kaggle is configured) |
 | `kbench.judge_llm` | Judge LLM for evaluation |
-| `kbench.llms` | Dict of all available models (e.g. `kbench.llms["google/gemini-2.5-flash"]`) |
+| `kbench.llms` | Dict of all available models (e.g. `kbench.llms["google/gemini-3.8-flash"]`) |
 | `kbench.assertions` | Module with all assertion functions |
 | `kbench.chats` | Conversation/chat context management |
 | `kbench.ChatRoom` / `kbench.Participant` | Multi-agent conversation room with perspective-aware history |
@@ -381,10 +381,8 @@ How it works:
 ### Multi-Model Comparison
 
 ```python
-models = [
-    kbench.llms["google/gemini-2.5-flash"],
-    kbench.llms["meta/llama-3.1-70b"],
-]
+# Every model available in the environment
+models = kbench.llms.values()
 
 # When using stop_condition with multiple models, account for all combinations:
 n_total = len(models) * df.shape[0]
@@ -983,13 +981,13 @@ kbench.llm          # Default model
 kbench.judge_llm    # Judge model
 
 # 2. Named model from available models
-kbench.llms["google/gemini-2.5-flash"]
+kbench.llms["google/gemini-3.8-flash"]
 kbench.llms["meta/llama-3.1-70b"]
 
 # 3. Direct ModelProxy (for explicit API control)
 from kaggle_benchmarks.kaggle import model_proxy
-llm = model_proxy.ModelProxy(model="google/gemini-2.5-flash", api="genai")
-llm = model_proxy.ModelProxy(model="google/gemini-2.5-flash", api="openai")
+llm = model_proxy.ModelProxy(model="google/gemini-3.8-flash", api="genai")
+llm = model_proxy.ModelProxy(model="google/gemini-3.8-flash", api="openai")
 ```
 
 **When to use which:**
@@ -1238,7 +1236,7 @@ class PoemScore:
 
 @kbench.task(name="judge_poem")
 def judge_poem(llm, question: str) -> float:
-    judge1 = kbench.llms["google/gemini-2.5-pro"]
+    judge1 = kbench.llms["google/gemini-3.1-pro-preview"]
     judge2 = kbench.llms["meta/llama-3.1-70b"]
 
     with kbench.chats.new("writing"):
