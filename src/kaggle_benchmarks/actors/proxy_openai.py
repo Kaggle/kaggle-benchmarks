@@ -35,26 +35,18 @@ logger = logging.getLogger(__name__)
 
 _THINK_TAG_PATTERN = re.compile(r"<think>\n?(.*?)\n?</think>\n*", re.DOTALL)
 
-# First (major, minor) release of each model family that rejects the `seed`
-# parameter through Model Proxy. The minor version is only read from a literal
-# "." right after the major, so dated slugs such as
-# "openai/gpt-5-mini-2025-08-07" parse as (5, 0).
-_MIN_SEEDLESS_VERSIONS: dict[str, tuple[int, int]] = {
-    "xai/grok": (4, 5),
-    "openai/gpt": (5, 6),
-}
-_SEEDLESS_FAMILY_VERSION_RE = re.compile(
-    rf"^({'|'.join(map(re.escape, _MIN_SEEDLESS_VERSIONS))})-(\d+)(?:\.(\d+))?"
-)
+_GROK_VERSION_RE = re.compile(r"^xai/grok-(\d+)(?:\.(\d+))?")
+# Grok 4.5 is the first release to reject the `seed` parameter through Model Proxy.
+_MIN_SEEDLESS_GROK_VERSION = (4, 5)
 
 
-def _is_seedless_by_version(model: str) -> bool:
-    """Reports whether a model is a release new enough to reject `seed`."""
-    match = _SEEDLESS_FAMILY_VERSION_RE.match(model)
+def _is_seedless_grok(model: str) -> bool:
+    """Reports whether a Grok model is new enough to reject `seed`."""
+    match = _GROK_VERSION_RE.match(model)
     if not match:
         return False
-    family, major, minor = match.groups()
-    return (int(major), int(minor or 0)) >= _MIN_SEEDLESS_VERSIONS[family]
+    major, minor = match.groups()
+    return (int(major), int(minor or 0)) >= _MIN_SEEDLESS_GROK_VERSION
 
 
 def _parse_think_tags(content: str) -> tuple[str, str | None]:
@@ -97,12 +89,17 @@ class OpenAI(LLMChat):
     def _should_remove_seed(self) -> bool:
         unsupported_prefixes = (
             "google/",
-            # GPT 5.4 itself supports `seed`; only the pro variant rejects it.
             "openai/gpt-5.4-pro",
+            "openai/gpt-5.6",
+            "openai/gpt-6-astra",
+            "openai/gpt-6-luna",
+            "openai/gpt-6-sol",
+            "openai/gpt-6.1-sol",
+            "openai/gpt-6.1-terra",
         )
         if any(self.model.startswith(prefix) for prefix in unsupported_prefixes):
             return True
-        return _is_seedless_by_version(self.model)
+        return _is_seedless_grok(self.model)
 
     def invoke(
         self,
