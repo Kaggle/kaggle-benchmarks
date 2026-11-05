@@ -982,7 +982,7 @@ kbench.judge_llm    # Judge model
 
 # 2. Named model from available models
 kbench.llms["google/gemini-3.8-flash"]
-kbench.llms["meta/llama-3.1-70b"]
+kbench.llms["anthropic/claude-sonnet-5-5@default"]
 
 # 3. Direct ModelProxy (for explicit API control)
 from kaggle_benchmarks.kaggle import model_proxy
@@ -1237,7 +1237,7 @@ class PoemScore:
 @kbench.task(name="judge_poem")
 def judge_poem(llm, question: str) -> float:
     judge1 = kbench.llms["google/gemini-3.1-pro-preview"]
-    judge2 = kbench.llms["meta/llama-3.1-70b"]
+    judge2 = kbench.llms["anthropic/claude-sonnet-5-5@default"]
 
     with kbench.chats.new("writing"):
         poem = llm.prompt(question)

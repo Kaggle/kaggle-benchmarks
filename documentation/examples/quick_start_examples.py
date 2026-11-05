@@ -145,7 +145,7 @@ def judge_poem(question: str) -> float:
 
     # two models to act as the judge
     judge_llm = kbench.llms["google/gemini-3.1-pro-preview"]
-    judge_llm2 = kbench.llms["meta/llama-3.1-70b"]
+    judge_llm2 = kbench.llms["anthropic/claude-sonnet-5-5@default"]
 
     # Generate poem
     with kbench.chats.new("gemini_chat"):
