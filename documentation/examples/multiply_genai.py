@@ -23,7 +23,7 @@ from kaggle_benchmarks import actors, assertions, task
 from kaggle_benchmarks.kaggle import load_model
 
 llm = load_model(
-    model_name="google/gemini-2.5-pro",
+    model_name="google/gemini-3.1-pro-preview",
     api="genai",
 )
 

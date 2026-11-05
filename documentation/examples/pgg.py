@@ -151,7 +151,7 @@ participants = dict(
     zip(
         players,
         [
-            ModelProxy(name="google/gemini-3.1-flash-lite-preview"),
+            ModelProxy(name="google/gemini-3.5-flash-lite"),
             ModelProxy(name="google/gemini-3.8-flash"),
             ModelProxy(name="google/gemini-3.1-pro-preview"),
         ],

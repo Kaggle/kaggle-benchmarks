@@ -220,7 +220,7 @@ def tic_tac_toe(llms, n_rounds: int = 3) -> dict[str, float]:
 llms = [
     ModelProxy(name="google/gemini-3.8-flash"),
     ModelProxy(name="google/gemini-3.1-pro-preview"),
-    ModelProxy(name="google/gemini-3.1-flash-lite-preview"),
+    ModelProxy(name="google/gemini-3.5-flash-lite"),
 ]
 
 tic_tac_toe.run(llms)

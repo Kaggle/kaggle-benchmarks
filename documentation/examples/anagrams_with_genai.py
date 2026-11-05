@@ -21,11 +21,11 @@ from kaggle_benchmarks import assertions, chats, task
 from kaggle_benchmarks.kaggle import model_proxy
 
 llm_with_openai_api = model_proxy.ModelProxy(
-    model="google/gemini-2.5-flash",
+    model="google/gemini-3.8-flash",
     api="openai",
 )
 llm_with_genai_api = model_proxy.ModelProxy(
-    model="google/gemini-2.5-pro",
+    model="google/gemini-3.1-pro-preview",
     api="genai",
 )
 
