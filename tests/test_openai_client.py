@@ -475,6 +475,7 @@ def test_reasoning_extra_body_only_for_google_models():
         ("openai/gpt-6-luna", True),
         ("openai/gpt-6-sol", True),
         ("openai/gpt-6.1-sol", True),
+        ("openai/gpt-6.1-terra", True),
         ("xai/grok-4.5", True),
         ("xai/grok-4.6", True),
         ("xai/grok-4.9-fast", True),
