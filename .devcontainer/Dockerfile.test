@@ -32,7 +32,7 @@
 # browser is missing, so the suite still comes out green here.
 FROM mcr.microsoft.com/devcontainers/python:1-3.11-bullseye
 
-COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
