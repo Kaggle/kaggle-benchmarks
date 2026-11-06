@@ -35,12 +35,20 @@ class EventManager:
             if hasattr(listener, event):
                 getattr(listener, event)(*args, **kwargs)
 
-    def event_dispatcher(self, event):
+    def event_dispatcher(self, *events):
+        """Wraps a method so that, after it runs, each named event is dispatched.
+
+        Multiple event names may be given; they are dispatched in order with the
+        same arguments. This is used to emit a legacy alias alongside the
+        canonical event name (e.g. ``"new_event"`` and ``"new_message"``).
+        """
+
         def decorator(func):
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 result = func(*args, **kwargs)
-                self.dispatch(event, *args, **kwargs)
+                for event in events:
+                    self.dispatch(event, *args, **kwargs)
                 return result
 
             return wrapper
