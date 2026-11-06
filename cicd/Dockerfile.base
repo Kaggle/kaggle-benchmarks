@@ -2,7 +2,7 @@
 # BASE LAYER: Contains OS, system deps, and third-party libraries.
 FROM python:3.11
 
-COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
 WORKDIR /benchmarks
 
