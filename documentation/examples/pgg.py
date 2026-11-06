@@ -153,7 +153,7 @@ participants = dict(
         [
             ModelProxy(name="google/gemini-3.5-flash-lite"),
             ModelProxy(name="google/gemini-3.8-flash"),
-            ModelProxy(name="google/gemini-3.1-pro-preview"),
+            ModelProxy(name="google/gemini-4-argon"),
         ],
     )
 )

@@ -25,7 +25,7 @@ llm_with_openai_api = model_proxy.ModelProxy(
     api="openai",
 )
 llm_with_genai_api = model_proxy.ModelProxy(
-    model="google/gemini-3.1-pro-preview",
+    model="google/gemini-4-argon",
     api="genai",
 )
 
