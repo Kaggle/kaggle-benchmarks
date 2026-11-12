@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.3 (Nov 12th, 2026)
+
+* **Fix import failure with hishel 2.0:** Added a `<2` upper bound to the `hishel[httpx]` dependency. hishel 2.0.0 removed `hishel.BaseFilter`, so `import kaggle_benchmarks` raised `AttributeError` after a fresh `pip install kaggle-benchmarks`. (#253, #255)
+
 ## v0.6.2 (Oct 21st, 2026)
 
 * **Security: require patched certifi:** Added a `certifi>=2026.10.19` floor to the package dependencies so `pip install kaggle-benchmarks` no longer leaves a certifi bundle that trusts the compromised emSign/eMudhra roots ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)). (#236)
