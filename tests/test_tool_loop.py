@@ -337,6 +337,158 @@ def test_assert_tool_was_invoked_by_name():
         assert not assertions.assert_tool_was_invoked("_multiply").passed
 
 
+def test_assert_tool_was_invoked_require_success_when_successful():
+    """assert_tool_was_invoked with require_success=True passes when tool succeeded."""
+    tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
+    final_response = LLMMessage(sender=None, content="3")
+
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response, final_response])
+        llm.prompt("1+2?", tools=[_add])
+
+        # Default mode (backward compatibility)
+        assert assertions.assert_tool_was_invoked(_add).passed
+        assert assertions.assert_tool_was_invoked(_add, require_success=False).passed
+
+        # Strict mode
+        result_callable = assertions.assert_tool_was_invoked(_add, require_success=True)
+        assert result_callable.passed
+        assert result_callable.expectation == "Expected tool `_add` to be invoked"
+
+        result_str = assertions.assert_tool_was_invoked("_add", require_success=True)
+        assert result_str.passed
+
+        custom_result = assertions.assert_tool_was_invoked(
+            _add, expectation="Custom success expectation", require_success=True
+        )
+        assert custom_result.passed
+        assert custom_result.expectation == "Custom success expectation"
+
+
+def test_assert_tool_was_invoked_require_success_when_failed():
+    """assert_tool_was_invoked with require_success=True fails when tool errored."""
+    tool_response = _make_tool_call_response("_always_fails", {})
+    final_response = LLMMessage(sender=None, content="The tool failed.")
+
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response, final_response])
+        llm.prompt("Call failing tool", tools=[_always_fails])
+
+        # Default mode preserves backward compatibility (invocation recorded)
+        assert assertions.assert_tool_was_invoked(_always_fails).passed
+        assert assertions.assert_tool_was_invoked(
+            _always_fails, require_success=False
+        ).passed
+
+        # Strict mode fails because error is set
+        assert not assertions.assert_tool_was_invoked(
+            _always_fails, require_success=True
+        ).passed
+        assert not assertions.assert_tool_was_invoked(
+            "_always_fails", require_success=True
+        ).passed
+
+
+def test_assert_tool_was_invoked_require_success_invalid_arguments():
+    """assert_tool_was_invoked with require_success=True fails on invalid arguments."""
+    # Pass unparseable string arguments causing invoke_tool to record an error
+    tool_response = _make_tool_call_response("_add", arguments='{"a": 1, "b":')
+    final_response = LLMMessage(sender=None, content="Argument error.")
+
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response, final_response])
+        llm.prompt("1+2?", tools=[_add])
+
+        # Default mode still passes since invocation was recorded
+        assert assertions.assert_tool_was_invoked(_add).passed
+        # Strict mode fails because invocation errored
+        assert not assertions.assert_tool_was_invoked(_add, require_success=True).passed
+
+
+def test_assert_tool_was_invoked_missing_tool():
+    """assert_tool_was_invoked fails when the tool was never invoked."""
+    tool_response = _make_tool_call_response("_add", {"a": 1, "b": 2})
+    final_response = LLMMessage(sender=None, content="3")
+
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response, final_response])
+        llm.prompt("1+2?", tools=[_add])
+
+        assert not assertions.assert_tool_was_invoked("_non_existent").passed
+        assert not assertions.assert_tool_was_invoked(
+            "_non_existent", require_success=True
+        ).passed
+
+
+def test_assert_tool_was_invoked_nested_chat():
+    """assert_tool_was_invoked inspects nested chats under both default and strict modes."""
+    # 1. Nested chat with successful tool invocation
+    with chats.new("Main"):
+        with chats.fork("Nested"):
+            tool_response = _make_tool_call_response("_add", {"a": 2, "b": 3})
+            final_response = LLMMessage(sender=None, content="5")
+            llm = MockedChat(responses=[tool_response, final_response])
+            llm.prompt("2+3?", tools=[_add])
+
+        assert assertions.assert_tool_was_invoked(_add).passed
+        assert assertions.assert_tool_was_invoked(_add, require_success=True).passed
+
+    # 2. Nested chat with failed tool invocation
+    with chats.new("Main"):
+        with chats.fork("Nested"):
+            tool_response = _make_tool_call_response("_always_fails", {})
+            final_response = LLMMessage(sender=None, content="Failed")
+            llm = MockedChat(responses=[tool_response, final_response])
+            llm.prompt("fail", tools=[_always_fails])
+
+        assert assertions.assert_tool_was_invoked(_always_fails).passed
+        assert not assertions.assert_tool_was_invoked(
+            _always_fails, require_success=True
+        ).passed
+
+
+def test_assert_tool_was_invoked_multiple_calls_same_tool():
+    """strict mode passes if any call succeeded, and fails if all calls failed."""
+    # First call fails, second call succeeds
+    tool_response1 = _make_tool_call_response("_always_fails", {}, call_id="call_fail")
+    tool_response2 = _make_tool_call_response(
+        "_add", {"a": 10, "b": 20}, call_id="call_success"
+    )
+    final_response = LLMMessage(sender=None, content="Done")
+
+    with chats.new("Tool use"):
+        llm = MockedChat(responses=[tool_response1, tool_response2, final_response])
+        llm.prompt("Calculate", tools=[_always_fails, _add])
+
+        assert assertions.assert_tool_was_invoked(_always_fails).passed
+        assert not assertions.assert_tool_was_invoked(
+            _always_fails, require_success=True
+        ).passed
+
+        assert assertions.assert_tool_was_invoked(_add).passed
+        assert assertions.assert_tool_was_invoked(_add, require_success=True).passed
+
+    # Multiple calls to the same failing tool
+    tool_response_fail1 = _make_tool_call_response(
+        "_always_fails", {}, call_id="call_1"
+    )
+    tool_response_fail2 = _make_tool_call_response(
+        "_always_fails", {}, call_id="call_2"
+    )
+    final_response_fail = LLMMessage(sender=None, content="Double fail")
+
+    with chats.new("Tool use"):
+        llm = MockedChat(
+            responses=[tool_response_fail1, tool_response_fail2, final_response_fail]
+        )
+        llm.prompt("Try twice", tools=[_always_fails])
+
+        assert assertions.assert_tool_was_invoked(_always_fails).passed
+        assert not assertions.assert_tool_was_invoked(
+            _always_fails, require_success=True
+        ).passed
+
+
 def test_no_nested_chat_without_tools():
     """prompt() answers in the current chat rather than opening a nested one."""
     response = LLMMessage(sender=None, content="Hello.")
