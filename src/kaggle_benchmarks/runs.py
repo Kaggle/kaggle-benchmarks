@@ -49,6 +49,8 @@ class Run(Generic[T]):
     cached: bool = False
     # Details for status=FAILED
     error_message: str | None = None
+    # Created inside `contexts.hidden()`: writes no run file and skips the cache.
+    hidden: bool = False
 
     def __post_init__(self):
         if self.id == "":
