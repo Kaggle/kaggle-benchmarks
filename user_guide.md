@@ -105,6 +105,8 @@ benchmark is rendered correctly on the leaderboard.
     `(passed_tests, total_tests)`.
   - `tuple[float, float]`: Can represent a metric with its confidence
     interval, like `(accuracy, accuracy_ci)`.
+  - `kbench.SplitScores`: `overall`, `public` and `private` scores, from
+    `.evaluate_splits()` (see below). The task is ranked on `overall`.
 
 **A mismatch between the annotated return type and the actual value
 returned by your function will raise a warning like
@@ -197,6 +199,42 @@ evaluation-data row order. The loop exits early when no failures remain.
 > exception type differs (`RuntimeError` summary vs. the original
 > `ValueError`/`TimeoutError` in dev), but `try/except Exception`
 > catches both.
+
+### Holding back a private split
+
+To keep part of your evaluation data out of the files your benchmark
+publishes, pass it as `private` to `.evaluate_splits()`, and return the
+scores from a task annotated `-> kbench.SplitScores`:
+
+``` python
+public_riddle_df, private_riddle_df = riddle_df.iloc[:1], riddle_df.iloc[1:]
+
+@kbench.task(name="riddles")
+def riddles(llm) -> kbench.SplitScores:
+    return solve_and_check_riddle.evaluate_splits(
+        public=public_riddle_df, private=private_riddle_df, llm=[llm]
+    )
+```
+
+`.evaluate_splits()` takes the arguments of `.evaluate()` and calls it once
+per split. The private rows print nothing, are left out of the task's run
+file, and write no run files or cache files of their own. An error they raise
+is replaced by one without details. For you, the rows and their errors are
+written to one file, `private/<task's run file>.private.json`, in the output
+directory, which is as private as the notebook. A row that returns NaN or
+infinity scores 0 and is left out of both files, which cannot hold it.
+
+A row scores 1 or 0 if it passes or fails or returns a bool, or its result
+if the row task returns a number. With `on_failure="continue"` a failed row
+scores 0; by default it fails the task, as in `.evaluate()`. `overall` is the
+mean over all rows. Call `.evaluate_splits()` once per task: a second call
+replaces the private file.
+
+> **What this does not hide.** The models you evaluate receive every private
+> prompt. The `private/` directory, anything a task prints or logs itself, the
+> local HTTP cache (`ENABLE_LOCAL_CACHING`) and tasks that a row runs on a
+> thread of its own can show private rows. Keep the notebook private. The
+> source code of every task is published, so don't write private data in one.
 
 ## 2. Interacting with LLMs
 

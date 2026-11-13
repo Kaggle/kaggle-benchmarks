@@ -94,7 +94,7 @@ class Message(Generic[T]):
             return self._meta["raw_content"]
         if hasattr(self.content, "__dict__"):
             warnings.warn(
-                f"Object of type {type(self.content)} (value: {self.content}) lacks a proper serialization method."
+                f"Object of type {type(self.content)} lacks a proper serialization method."
                 "Falling back to `__dict__`."
             )
             # default=str so one odd attribute degrades to its string form

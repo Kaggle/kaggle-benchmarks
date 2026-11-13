@@ -438,6 +438,18 @@ def _is_tuple_result(value: Any) -> bool:
 
 def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
     """Helper function to prepare the 'results' list for a BenchmarkTaskRun."""
+    if isinstance(run.result, results.SplitScores):
+        kinds = types.BenchmarkTaskRunResultType
+        # AGGREGATED first, since a reader that takes one result takes the first.
+        return [
+            {"type": kind, "numeric_result": {"value": value}}
+            for kind, value in (
+                (kinds.AGGREGATED, run.result.overall),
+                (kinds.PUBLIC, run.result.public),
+                (kinds.PRIVATE, run.result.private),
+            )
+        ]
+
     result_data: dict[str, Any]
     # We cannot use run.task.result_type to decide here since the run result could be
     # loaded from the cache, where its task.result_type information is lost.
