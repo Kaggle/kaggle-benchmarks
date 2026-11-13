@@ -85,7 +85,6 @@ def evaluate_function(
             with Parallel(
                 n_jobs=n_jobs,
                 backend="threading",
-                verbose=7 if not config.disable_tqdm() else 0,
                 timeout=timeout,
             ) as parallel:
                 tasks = (
