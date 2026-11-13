@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.3 (Nov 12th, 2026)
+
+* **Fix import failure with hishel 2.0:** Added a `<2` upper bound to the `hishel[httpx]` dependency. hishel 2.0.0 removed `hishel.BaseFilter`, so `import kaggle_benchmarks` raised `AttributeError` after a fresh `pip install kaggle-benchmarks`. (#253, #255)
+* **Security: stop mounting host `/tmp` into Docker containers:** `DockerEnvironment` mounted the host's whole `/tmp` read-write into the container because of swapped mount arguments. The working-dir mount is removed. User `mounts` with an absolute host path are now bind mounts, which Docker rejected before. (#231, #246)
+* **Fix unreadable cached run files:** A cached run file that is empty, half-written, or fails to load now makes the run execute again and rewrite the file. Before, the run could crash, or a subrun could disappear from its parent's run file. (#245)
+* **Fix `seed` for `openai/gpt-6.1-terra`:** The `seed` parameter is no longer sent to this model, which rejected it with a 400 error. (#249)
+* **Require certifi 2026.10.23:** Raised the `certifi` floor in the package dependencies from `2026.10.19` to `2026.10.23`. (#252)
+
 ## v0.6.2 (Oct 21st, 2026)
 
 * **Security: require patched certifi:** Added a `certifi>=2026.10.19` floor to the package dependencies so `pip install kaggle-benchmarks` no longer leaves a certifi bundle that trusts the compromised emSign/eMudhra roots ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)). (#236)

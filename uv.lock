@@ -2545,7 +2545,7 @@ requires-dist = [
     { name = "certifi", specifier = ">=2026.10.23" },
     { name = "docker", specifier = ">=7.1.0" },
     { name = "google-genai", specifier = ">=1.38.0" },
-    { name = "hishel", extras = ["httpx"], specifier = ">1.1.8" },
+    { name = "hishel", extras = ["httpx"], specifier = ">1.1.8,<2" },
     { name = "joblib" },
     { name = "jupyter" },
     { name = "jupytext", marker = "extra == 'kaggle-client'" },

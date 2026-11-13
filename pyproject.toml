@@ -31,7 +31,9 @@ dependencies = [
   "panel>=1.6.3",
   "playwright>=1.50.0",
   "nest-asyncio>=1.6.0",
-  "hishel[httpx]>1.1.8",
+  # hishel 2.0 removed `hishel.BaseFilter`, which `utils.py` subclasses at import time (#253).
+  # Remove the upper bound after the caching code uses the hishel 2 API.
+  "hishel[httpx]>1.1.8,<2",
   "pydantic>=2.11.5",
   "joblib",
   "google-genai>=1.38.0",
