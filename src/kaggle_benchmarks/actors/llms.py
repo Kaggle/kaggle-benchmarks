@@ -322,7 +322,7 @@ class LLMChat(actors.Actor):
             response.status = utils.Status.SUCCESS
             chat.append(response)
         elif isinstance(invoke_response, Iterator):
-            # Append before streaming so UIs see new_message (with empty
+            # Append before streaming so UIs see new_event (with empty
             # content + RUNNING status) before chunks arrive — lets them
             # render the message header before tokens stream in.
             chat.append(response)
@@ -330,7 +330,7 @@ class LLMChat(actors.Actor):
             response.status = utils.Status.SUCCESS
         elif isinstance(invoke_response, llm_messages.LLMMessage):
             response = invoke_response
-            # Set sender before append: chat.append fires the new_message
+            # Set sender before append: chat.append fires the new_event
             # event, so the sender must already be the Participant (not the
             # backing LLMChat) by then.
             response.sender = sender or self
