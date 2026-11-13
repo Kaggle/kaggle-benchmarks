@@ -35,6 +35,7 @@ Usage:
 # %%
 import base64
 import dataclasses
+import io
 import os
 import tempfile
 from contextlib import contextmanager
@@ -47,6 +48,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 import kaggle_benchmarks as kbench
+from kaggle_benchmarks import events
 from kaggle_benchmarks.content_types import (
     audios,
     images,
@@ -454,6 +456,66 @@ def test_dataset_eval_with_failure_run(llm, api):
     run = dataset_eval_with_failure.run(llm, df=df)
     assert run.status == kbench.utils.Status.SUCCESS
     assert_resilient_with_failure_result(run)
+
+
+# %%
+# --- Test Case: Dataset evaluation with a private split ---
+# One private row fails, quoting its question. It scores 0, and the private
+# questions reach the private file only: no other file, and not the output.
+
+PRIVATE_TAG = "ref-7f3a91"
+
+private_df = pd.DataFrame(
+    [
+        {"question": f"What's the capital of Japan ({PRIVATE_TAG})", "answer": "Tokyo"},
+        {"question": f"What's the capital of Italy ({PRIVATE_TAG})", "answer": "Rome"},
+    ]
+)
+
+SPLIT_LLMS = [
+    pytest.param(
+        kbench.kaggle.load_model("google/gemini-3-flash-preview", api=api),
+        api,
+        id=f"{api}-google/gemini-3-flash-preview",
+    )
+    for api in ["genai", "openai"]
+]
+
+
+@kbench.task(name="split_qa_task", store_task=False)
+def split_qa_task(llm, question, answer) -> bool:
+    response = llm.prompt(question)
+    if answer == "Rome":
+        raise ValueError(f"Intentional failure for sample: {question}")
+    return answer.lower() in response.lower()
+
+
+@kbench.task(name="private_split_eval")
+def private_split_eval(llm) -> kbench.SplitScores:
+    return split_qa_task.evaluate_splits(
+        public=df, private=private_df, llm=[llm], on_failure="continue"
+    )
+
+
+@pytest.mark.parametrize("llm, api", SPLIT_LLMS)
+def test_private_split_eval(llm, api, monkeypatch, tmp_path):
+    monkeypatch.setattr(kbench, "client", kbench.kaggle.KaggleClient(tmp_path))
+    printed = io.StringIO()
+    console = kbench.ui.console.ConsoleUI(output=printed)
+    events.manager.bind(console)
+    try:
+        run = private_split_eval.run(llm)
+    finally:
+        events.manager.unbind(console)
+
+    assert run.result == kbench.SplitScores(overall=0.75, public=1.0, private=0.5)
+    assert "capital of France" in printed.getvalue()  # Public rows are shown.
+    assert PRIVATE_TAG not in printed.getvalue()
+    published = "".join(p.read_text() for p in tmp_path.glob("*") if p.is_file())
+    assert published
+    assert PRIVATE_TAG not in published
+    (private_file,) = tmp_path.glob("private/*.private.json")
+    assert PRIVATE_TAG in private_file.read_text()
 
 
 # %%
