@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
 import pprint
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, get_args
 
@@ -106,6 +107,21 @@ class MetricWithCI(Result[tuple[float, float]]):
     @classmethod
     def format(cls, run) -> str:
         return f"{run.result[0]}(±{run.result[1]})"
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class SplitScores:
+    """Scores of a task over a public and a private split of its rows.
+
+    The task is ranked on `overall`.
+    """
+
+    overall: float
+    public: float
+    private: float
+
+
+class Splits(Result[SplitScores]): ...
 
 
 class Dictionary(Result[dict]):

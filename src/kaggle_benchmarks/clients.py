@@ -31,6 +31,9 @@ class Client:
 
     def store_run(self, run: runs.Run): ...
 
+    def store_private_run(self, run: runs.Run, parent: runs.Run):
+        """Stores the hidden run of a private split, for the author only."""
+
     def skips_cached_run(self, run: runs.Run) -> bool:
         """Determines whether to skip a run because its results are already cached."""
         ...

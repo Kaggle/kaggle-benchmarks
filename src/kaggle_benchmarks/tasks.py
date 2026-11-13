@@ -17,6 +17,9 @@ import datetime  # For Run start_time and end_time
 import functools
 import inspect
 import logging
+import math
+import numbers
+import statistics
 import time
 from typing import (
     TYPE_CHECKING,
@@ -27,6 +30,7 @@ from typing import (
     Literal,
     Self,
     TypeVar,
+    cast,
 )
 
 import pandas as pd
@@ -45,6 +49,16 @@ class NonRecoverableError(Exception):
     """Custom exception for non-recoverable errors during task running."""
 
     pass
+
+
+def _drop_non_finite_rows(run: "runs.Run") -> None:
+    """Unlinks the rows that returned NaN or infinity, which a run file cannot
+    hold: one would cost the file of the run they are linked to."""
+    run.subruns[:] = [
+        row
+        for row in run.subruns
+        if not (isinstance(row.result, numbers.Real) and not math.isfinite(row.result))
+    ]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -88,8 +102,12 @@ class Task(Generic[T]):
         from kaggle_benchmarks import client
 
         # A hidden row shares its cache file name with the public row of the
-        # same index.
-        if not run.hidden and client.skips_cached_run(run):
+        # same index, and a cached SplitScores would load back as one number.
+        if (
+            not run.hidden
+            and self.result_type is not results.Splits
+            and client.skips_cached_run(run)
+        ):
             try:
                 logger.info(
                     f"Skipping run {run.id} for task {self.name} as its output file already exists."
@@ -427,6 +445,73 @@ class Task(Generic[T]):
                 serialization.remove_runs_files(
                     runs.Runs([run for run in all_runs if not run.hidden])
                 )
+
+    def evaluate_splits(
+        self, *, public: pd.DataFrame, private: pd.DataFrame, **kwargs: Any
+    ) -> results.SplitScores:
+        """Evaluates the task over `public`, then over `private` in `contexts.hidden()`.
+
+        Takes the other arguments of `evaluate`. Return the scores from a task
+        annotated `-> kbench.SplitScores`. A run scores its verdict if the task
+        passes or fails, the bool it returns, its result if that is a finite
+        number, and 0 otherwise, failed runs included. `overall` is the mean
+        over all runs.
+
+        The private runs print nothing and are written, for the author, to one
+        file: `private/<calling task's run file>.private.json`.
+        """
+        from kaggle_benchmarks import client, contexts
+
+        caller = contexts.get_current().run
+        if caller is None:
+            raise RuntimeError("evaluate_splits must be called inside a task run.")
+        public_scores = self._scores(self.evaluate(evaluation_data=public, **kwargs))
+        _drop_non_finite_rows(caller)
+        try:
+            with contexts.hidden() as scope:
+                sink = cast("runs.Run", scope.run)
+                # Failed until the scores exist: a run file cannot hold a
+                # pending result.
+                sink.result = results.FAILED
+                private_scores = self._scores(
+                    self.evaluate(evaluation_data=private, **kwargs)
+                )
+                sink.result = scores = results.SplitScores(
+                    overall=statistics.fmean(public_scores + private_scores),
+                    public=statistics.fmean(public_scores),
+                    private=statistics.fmean(private_scores),
+                )
+        finally:
+            # After the scope, so that the file has its final state and error.
+            # Also when a row fails, so the author can see why.
+            if caller.task.store_run:
+                _drop_non_finite_rows(sink)
+                try:
+                    client.store_private_run(sink, caller)
+                except Exception as error:
+                    # Only its type: the message can quote a private row.
+                    logger.warning(
+                        f"Could not write the private run file: {type(error).__name__}"
+                    )
+        return scores
+
+    def _scores(self, evaluated: "runs.Runs[T]") -> list[float]:
+        # A cached run's result is its stored verdict.
+        if self.result_type is results.PassFail:
+            return [
+                float(bool(run.result if run.cached else run.passed))
+                for run in evaluated
+            ]
+        # The returned bool, as the run file and the cache store it, so that a
+        # cached row scores the same as a fresh one.
+        if self.result_type is results.Boolean:
+            return [float(bool(run.result)) for run in evaluated]
+        return [
+            float(run.result)
+            if isinstance(run.result, numbers.Real) and math.isfinite(run.result)
+            else 0.0
+            for run in evaluated
+        ]
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):

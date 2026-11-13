@@ -242,6 +242,7 @@ check_knowledge.run(kbench.llm, question="Capital of Japan?", expected_answer="T
 | `-> dict` | Dictionary | Arbitrary dict result |
 | `-> tuple[int, int]` | PassCount | Count (e.g., `(8, 10)`) |
 | `-> tuple[float, float]` | MetricWithCI | Value ± confidence interval |
+| `-> kbench.SplitScores` | Splits | Overall, public and private scores, from `evaluate_splits` |
 
 > **Note:** `-> None` is equivalent to omitting the annotation — both produce PassFail.
 
@@ -417,6 +418,22 @@ def full_eval(llm, df) -> tuple[float, float]:
     std = float(eval_df.result.str.get("is_correct").std())
     return accuracy, std
 ```
+
+### Private Split Pattern
+
+To keep part of the data out of the published run files:
+
+```python
+@kbench.task(name="is_correct", store_task=False)
+def is_correct(llm, question, answer) -> bool:
+    return answer.lower() in llm.prompt(question).lower()
+
+@kbench.task(name="split_eval")
+def split_eval(llm) -> kbench.SplitScores:
+    return is_correct.evaluate_splits(public=public_df, private=private_df, llm=[llm])
+```
+
+`evaluate_splits` takes the arguments of `evaluate`. The row task should return pass/fail (`-> bool` or no annotation) or a number. Private rows print nothing and are written, with their errors, to one file under `private/` in the output directory, so keep the notebook private. Call it once per task: a second call replaces that file. Models still receive the private prompts, and task source code is published: never write private data in a task function.
 
 ---
 
