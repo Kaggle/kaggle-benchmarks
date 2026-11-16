@@ -15,6 +15,7 @@
 import json
 import math
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -65,6 +66,11 @@ def published(client) -> str:
     )
 
 
+def published_results(client) -> list[dict]:
+    (parent_file,) = client.directory.glob("Parent-*.run.json")
+    return json.loads(parent_file.read_text())["results"]
+
+
 def private_run(client) -> dict:
     (private_file,) = client.directory.glob("private/Parent-*.private.json")
     return json.loads(private_file.read_text())
@@ -81,9 +87,9 @@ def test_publishes_the_scores_and_no_private_row(client, llm):
     # Written once the private half is over, with the scores.
     assert private["state"] == "BENCHMARK_TASK_RUN_STATE_COMPLETED"
     assert len(private["results"]) == 3
-    (parent_file,) = client.directory.glob("Parent-*.run.json")
-    results = json.loads(parent_file.read_text())["results"]
-    assert [(r["type"], r["numericResult"]["value"]) for r in results] == [
+    assert [
+        (r["type"], r["numericResult"]["value"]) for r in published_results(client)
+    ] == [
         ("AGGREGATED", 2 / 6),
         ("PUBLIC", 0.5),
         ("PRIVATE", 0.25),
@@ -148,6 +154,103 @@ def test_split_task_is_not_loaded_from_the_cache(client, llm):
     # A cached row scores its stored verdict.
     assert all(subrun.cached for subrun in run.subruns)
     assert run.result == kbench.SplitScores(overall=2 / 6, public=0.5, private=0.25)
+
+
+def passed(runs):
+    # As the user guide shows: a cached run's `passed` is always true.
+    return sum(run.result if run.cached else run.passed for run in runs) / len(runs)
+
+
+def test_score_is_called_per_split_and_on_both(client, llm):
+    run = run_splits(llm, score=lambda runs: (passed(runs), np.int64(len(runs))))
+
+    assert run.result == kbench.SplitScores(
+        overall=(2 / 6, 6), public=(0.5, 2), private=(0.25, 4)
+    )
+    assert [(r["type"], r["numericResult"]) for r in published_results(client)] == [
+        ("AGGREGATED", {"value": 2 / 6, "confidenceInterval": 6}),
+        ("PUBLIC", {"value": 0.5, "confidenceInterval": 2}),
+        ("PRIVATE", {"value": 0.25, "confidenceInterval": 4}),
+    ]
+
+
+@task()
+def grades(llm, label: str) -> dict:
+    return {"correct": llm.prompt(label) == label, "label": label}
+
+
+def test_dict_rows_with_a_dict_score(client, llm):
+    def accuracy(runs):
+        return {"accuracy": sum(run.result["correct"] for run in runs) / len(runs)}
+
+    run_splits(llm, row_task=grades, score=accuracy)
+
+    assert [(r["type"], r["dictResult"]) for r in published_results(client)] == [
+        ("AGGREGATED", {"accuracy": 2 / 6}),
+        ("PUBLIC", {"accuracy": 0.5}),
+        ("PRIVATE", {"accuracy": 0.25}),
+    ]
+    assert CANARY not in published(client)
+
+
+def test_a_bool_score_is_published_as_a_bool(client, llm):
+    run_splits(llm, score=lambda runs: np.bool_(len(runs) > 2))
+
+    assert [r["booleanResult"] for r in published_results(client)] == [
+        True,
+        False,
+        True,
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [0.5],
+        math.nan,
+        10**400,
+        (0.5, math.inf),
+        {"n": np.int64(1)},
+        {"accuracy": math.nan},
+        {1: 0.5},
+    ],
+)
+def test_a_score_that_no_run_file_can_hold_fails_before_the_private_split(
+    llm, monkeypatch, value
+):
+    prompts = []
+    prompt = llm.prompt
+    monkeypatch.setattr(
+        llm, "prompt", lambda text: prompts.append(text) or prompt(text)
+    )
+
+    with pytest.raises(TypeError, match="public score"):
+        run_splits(llm, score=lambda runs: value)
+    assert prompts and not any(CANARY in text for text in prompts)
+
+
+def test_a_private_score_that_no_run_file_can_hold_is_withheld(client, llm, caplog):
+    def score(runs):
+        labels = {run.params["label"] for run in runs}
+        return {"labels": labels} if CANARY in labels else passed(runs)
+
+    with pytest.raises(RuntimeError, match="withheld"):
+        run_splits(llm, score=score)
+
+    assert CANARY not in published(client) + caplog.text
+
+
+def test_an_error_scoring_the_private_split_is_withheld(client, llm):
+    def score(runs):
+        if any(run.params["label"] == CANARY for run in runs):
+            raise ValueError(CANARY)
+        return passed(runs)
+
+    with pytest.raises(RuntimeError, match="withheld"):
+        run_splits(llm, score=score)
+
+    assert CANARY not in published(client)
+    assert CANARY in private_run(client)["errorMessage"]
 
 
 @task()
