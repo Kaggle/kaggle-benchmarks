@@ -491,7 +491,9 @@ class Task(Generic[T]):
             # Also when a row fails, so the author can see why.
             if caller.task.store_run:
                 try:
-                    client.store_private_run(sink, caller)
+                    # Hidden, so that serializing it shows no private value.
+                    with contexts.reentered(sink):
+                        client.store_private_run(sink, caller)
                 except Exception as error:
                     # Only its type: the message can quote a private row.
                     logger.warning(

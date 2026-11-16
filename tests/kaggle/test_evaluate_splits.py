@@ -288,7 +288,7 @@ def test_a_private_file_that_cannot_be_written_costs_nothing_else(
     assert CANARY not in caplog.text
 
 
-def test_writing_the_private_file_warns_without_quoting_a_row(client, llm, recwarn):
+def test_serialization_warnings_quote_public_rows_only(client, llm, recwarn):
     class Plain:
         def __init__(self, label):
             self.label = label
@@ -303,8 +303,11 @@ def test_writing_the_private_file_warns_without_quoting_a_row(client, llm, recwa
     run_splits(llm, row_task=sends_an_object)
 
     assert len(private_run(client)["subruns"]) == 4
-    assert recwarn  # The serializer warns that the object has no proper form.
-    assert not any(CANARY in str(warning.message) for warning in recwarn)
+    # The serializer warns that the object has no proper form, quoting the
+    # value of a public row only.
+    messages = [str(warning.message) for warning in recwarn]
+    assert any("Plain(yes)" in message for message in messages)
+    assert not any(CANARY in message for message in messages)
 
 
 def test_no_private_file_for_a_task_that_stores_no_run(client, llm):
