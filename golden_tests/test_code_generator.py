@@ -90,7 +90,7 @@ DOC_PROMPT = open(
 ).read()
 
 TEST_MODELS = [
-    "google/gemini-2.5-pro",
+    "google/gemini-3.8-flash",
 ]
 
 TEST_DESCRIPTIONS = [

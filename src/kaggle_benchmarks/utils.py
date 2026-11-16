@@ -161,7 +161,7 @@ def normalize_name(name: str) -> str:
 def task_autopilot(
     task_description: str,
     assertion_description: str,
-    model: str = "google/gemini-2.5-pro",
+    model: str = "google/gemini-3.8-flash",
     **kwargs,
 ) -> str:
     """

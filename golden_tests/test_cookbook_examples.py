@@ -55,8 +55,8 @@ from kaggle_benchmarks.content_types import (
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
-    "google/gemini-2.5-flash",
-    "google/gemini-2.5-pro",
+    "google/gemini-3.8-flash",
+    "google/gemini-3.5-flash-lite",
     "google/gemini-3-flash-preview",
     "google/gemma-4-31b",
     "qwen/qwen3-235b-a22b-instruct-2507",
@@ -72,13 +72,12 @@ TEST_LLM_NAMES = {
 
 # Models to be used as judges for evaluation.
 JUDGE_LLM_NAMES = {
-    "google/gemini-2.5-flash",
+    "google/gemini-3.5-flash-lite",
 }
 
 # Models that support audio input.
 AUDIO_LLM_NAMES = {
-    "google/gemini-2.5-flash",
-    "google/gemini-2.5-pro",
+    "google/gemini-3.8-flash",
     "google/gemini-3-flash-preview",
     "google/gemini-3.1-flash-lite-preview",
 }
@@ -180,14 +179,14 @@ def assess_with_judge_task(llm, judge_llm) -> None:
     "llm, api",
     [
         pytest.param(
-            kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"),
+            kbench.kaggle.load_model("google/gemini-3.5-flash-lite", api="genai"),
             "genai",
-            id="genai-google/gemini-2.5-flash",
+            id="genai-google/gemini-3.5-flash-lite",
         ),
         pytest.param(
-            kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"),
+            kbench.kaggle.load_model("google/gemini-3.5-flash-lite", api="openai"),
             "openai",
-            id="openai-google/gemini-2.5-flash",
+            id="openai-google/gemini-3.5-flash-lite",
         ),
     ],
 )
@@ -439,14 +438,14 @@ def dataset_eval_with_failure(llm, df) -> tuple[int, int]:
     "llm, api",
     [
         pytest.param(
-            kbench.kaggle.load_model("google/gemini-2.5-flash", api="genai"),
+            kbench.kaggle.load_model("google/gemini-3.5-flash-lite", api="genai"),
             "genai",
-            id="genai-google/gemini-2.5-flash",
+            id="genai-google/gemini-3.5-flash-lite",
         ),
         pytest.param(
-            kbench.kaggle.load_model("google/gemini-2.5-flash", api="openai"),
+            kbench.kaggle.load_model("google/gemini-3.5-flash-lite", api="openai"),
             "openai",
-            id="openai-google/gemini-2.5-flash",
+            id="openai-google/gemini-3.5-flash-lite",
         ),
     ],
 )
@@ -556,8 +555,8 @@ def test_image_local_file(llm):
 # Only Gemini models support video input via Model Proxy.
 @benchmark_test(
     include={
-        "google/gemini-2.5-flash",
-        "google/gemini-2.5-pro",
+        "google/gemini-3.8-flash",
+        "google/gemini-3.5-flash-lite",
         "google/gemini-3-flash-preview",
     }
 )
@@ -688,8 +687,8 @@ def test_reasoning_param(llm):
 # (flaky, currently passing).
 @benchmark_test(
     include={
-        "google/gemini-2.5-flash",
-        "google/gemini-2.5-pro",
+        "google/gemini-3.8-flash",
+        "google/gemini-3.5-flash-lite",
         "google/gemini-3-flash-preview",
     },
 )
@@ -1156,7 +1155,7 @@ def test_tool_with_schema_output(llm):
 
 
 CHATROOM_LLM_NAMES = {
-    "google/gemini-2.5-flash",
+    "google/gemini-3.5-flash-lite",
     "google/gemini-3-flash-preview",
     "anthropic/claude-sonnet-4-6@default",
 }
