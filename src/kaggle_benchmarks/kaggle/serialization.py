@@ -436,13 +436,29 @@ def _is_tuple_result(value: Any) -> bool:
     )
 
 
+def _result_value_data(value: Any) -> dict[str, Any]:
+    """Serializes one result value: a pair, a bool, a number or a dict."""
+    # Represented as numeric result for both PassCount or MetricWithCI
+    if _is_tuple_result(value):
+        return {"numericResult": {"value": value[0], "confidenceInterval": value[1]}}
+    if isinstance(value, bool):
+        return {"boolean_result": value}
+    if isinstance(value, (int, float)):
+        return {"numeric_result": {"value": float(value)}}
+    if isinstance(value, dict):
+        return {"dict_result": value}
+    raise NotImplementedError(
+        f"Result type cannot be serialized to show on leaderboard: {type(value)}."
+    )
+
+
 def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
     """Helper function to prepare the 'results' list for a BenchmarkTaskRun."""
+    kinds = types.BenchmarkTaskRunResultType
     if isinstance(run.result, results.SplitScores):
-        kinds = types.BenchmarkTaskRunResultType
         # AGGREGATED first, since a reader that takes one result takes the first.
         return [
-            {"type": kind, "numeric_result": {"value": value}}
+            _result_value_data(value) | {"type": kind}
             for kind, value in (
                 (kinds.AGGREGATED, run.result.overall),
                 (kinds.PUBLIC, run.result.public),
@@ -450,35 +466,17 @@ def _prepare_results_data(run: runs.Run) -> list[dict[str, Any]]:
             )
         ]
 
-    result_data: dict[str, Any]
     # We cannot use run.task.result_type to decide here since the run result could be
     # loaded from the cache, where its task.result_type information is lost.
-
-    # Represented as numeric result for both PassCount or MetricWithCI
-    if _is_tuple_result(run.result):
-        result_data = {
-            "numericResult": {
-                "value": run.result[0],
-                "confidenceInterval": run.result[1],
-            }
-        }
-    elif run.result is None:
+    result_data: dict[str, Any]
+    if run.result is None:
         result_data = {"boolean_result": run.passed}
     elif run.result is results.FAILED:
         result_data = {"boolean_result": False}
-    elif isinstance(run.result, bool):
-        result_data = {"boolean_result": run.result}
-    elif isinstance(run.result, (int, float)):
-        result_data = {"numeric_result": {"value": float(run.result)}}
-    elif isinstance(run.result, dict):
-        result_data = {"dict_result": run.result}
-    else:  # Any other unhandled Result type
-        raise NotImplementedError(
-            f"Result type cannot be serialized to show on leaderboard: {type(run.result)}."
-        )
+    else:
+        result_data = _result_value_data(run.result)
 
-    result_data |= {"type": types.BenchmarkTaskRunResultType.AGGREGATED}
-    return [result_data]
+    return [result_data | {"type": kinds.AGGREGATED}]
 
 
 def _prepare_assertions_data(
