@@ -185,23 +185,6 @@ def test_a_private_file_that_cannot_be_written_costs_nothing_else(
     assert CANARY not in caplog.text
 
 
-def test_rows_returning_nan_score_zero_and_are_left_out_of_the_files(client, llm):
-    """A run file cannot hold NaN, so one linked NaN row would cost the file."""
-
-    @task()
-    def nan_unless_yes(llm, label: str) -> float:
-        return 1.0 if label == "yes" else math.nan
-
-    run = run_splits(llm, row_task=nan_unless_yes)
-
-    assert run.result == kbench.SplitScores(overall=2 / 6, public=0.5, private=0.25)
-    (parent_file,) = client.directory.glob("Parent-*.run.json")
-    parent = json.loads(parent_file.read_text())
-    assert len(parent["results"]) == 3
-    assert len(parent["subruns"]) == 1
-    assert len(private_run(client)["subruns"]) == 1
-
-
 def test_writing_the_private_file_warns_without_quoting_a_row(client, llm, recwarn):
     class Plain:
         def __init__(self, label):

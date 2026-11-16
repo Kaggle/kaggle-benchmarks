@@ -51,16 +51,6 @@ class NonRecoverableError(Exception):
     pass
 
 
-def _drop_non_finite_rows(run: "runs.Run") -> None:
-    """Unlinks the rows that returned NaN or infinity, which a run file cannot
-    hold: one would cost the file of the run they are linked to."""
-    run.subruns[:] = [
-        row
-        for row in run.subruns
-        if not (isinstance(row.result, numbers.Real) and not math.isfinite(row.result))
-    ]
-
-
 @dataclasses.dataclass(frozen=True)
 class Task(Generic[T]):
     func: Callable[..., T]
@@ -466,7 +456,6 @@ class Task(Generic[T]):
         if caller is None:
             raise RuntimeError("evaluate_splits must be called inside a task run.")
         public_scores = self._scores(self.evaluate(evaluation_data=public, **kwargs))
-        _drop_non_finite_rows(caller)
         try:
             with contexts.hidden() as scope:
                 sink = cast("runs.Run", scope.run)
@@ -485,7 +474,6 @@ class Task(Generic[T]):
             # After the scope, so that the file has its final state and error.
             # Also when a row fails, so the author can see why.
             if caller.task.store_run:
-                _drop_non_finite_rows(sink)
                 try:
                     client.store_private_run(sink, caller)
                 except Exception as error:

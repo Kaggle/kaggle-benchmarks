@@ -222,7 +222,7 @@ file, and write no run files or cache files of their own. An error they raise
 is replaced by one without details. For you, the rows and their errors are
 written to one file, `private/<task's run file>.private.json`, in the output
 directory, which is as private as the notebook. A row that returns NaN or
-infinity scores 0 and is left out of both files, which cannot hold it.
+infinity scores 0.
 
 A row scores 1 or 0 if it passes or fails or returns a bool, or its result
 if the row task returns a number. With `on_failure="continue"` a failed row
