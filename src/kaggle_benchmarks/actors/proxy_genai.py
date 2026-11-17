@@ -34,6 +34,12 @@ from kaggle_benchmarks.actors.llms import (
 from kaggle_benchmarks.serializers import genai as genai_serializer
 from kaggle_benchmarks.tools import functions
 
+# Models that reject the `seed` parameter through Model Proxy's GenAI endpoint.
+_SEEDLESS_MODEL_PREFIXES = (
+    "deepseek-ai/deepseek-v4.1-flash",
+    "qwen/qwen3.8-max",
+)
+
 
 class GoogleGenAI(LLMChat):
     def __init__(self, client: genai.Client, model: str, **kwargs):
@@ -138,6 +144,9 @@ class GoogleGenAI(LLMChat):
         **kwargs,
     ) -> LLMResponse | Iterator[LLMResponse]:
         raw_messages = list(self.serializer.dump_messages(messages))
+
+        if self.model.startswith(_SEEDLESS_MODEL_PREFIXES):
+            kwargs.pop("seed", None)
 
         config_params = {}
         if system:
