@@ -216,6 +216,7 @@ def test_extract_int(llm):
 
 
 # Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known flaky (openai): qwen3.8-max — sometimes answers False with native structured output.
 @benchmark_test()
 @kbench.task()
 def test_extract_bool(llm):
@@ -232,6 +233,7 @@ def test_extract_bool(llm):
 
 
 # Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_dict(llm):
@@ -265,6 +267,7 @@ class RPGCharacter:
 
 
 # Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_dataclass(llm):
@@ -296,6 +299,7 @@ class Planet(BaseModel):
 
 
 # Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_pydantic(llm):
@@ -327,6 +331,7 @@ class Casting(BaseModel):
 
 
 # Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_composite_pydantic(llm):
@@ -883,7 +888,7 @@ def test_simple_tool_use(llm):
 # Real-world chunk shapes vary by backend; unit tests can only fake one shape.
 
 STREAMING_TOOL_LLM_NAMES = {
-    "google/gemini-3.5-flash",
+    "google/gemini-3.8-flash",
     "anthropic/claude-sonnet-4-6@default",
 }
 
@@ -1064,6 +1069,7 @@ def get_city_data(city_name: str) -> dict:
 #   withholds schema= from tool rounds, so the model doesn't know what
 #   "CityInfo" means and asks for clarification instead of calling the tool.
 #   This does not affect Gemini 3.x or other model families.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_tool_with_schema_output(llm):
@@ -1179,6 +1185,7 @@ class _CityFact:
     population_millions: float
 
 
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test(include=CHATROOM_LLM_NAMES)
 @kbench.task()
 def test_chatroom_talk_structured_output(llm):
