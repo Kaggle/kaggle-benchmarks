@@ -35,6 +35,7 @@ with context.enter(chat=chats.Chat()) as ctx:
 
 import contextlib
 import dataclasses
+import traceback
 from contextvars import ContextVar
 from typing import Iterator, Self
 
@@ -89,6 +90,47 @@ def enter(**kwargs) -> Iterator[Context]:
             events.manager.dispatch(f"end_{key}", value)
 
         _current.reset(token)
+
+
+@contextlib.contextmanager
+def hidden() -> Iterator[Context]:
+    """Enters a scope whose runs, messages and assertions stay out of every run
+    file and reach no event listener, so no UI shows them.
+
+    An exception leaving the scope is re-raised without its message, which
+    could quote hidden data; the original is kept on the scope's run. It
+    becomes a `RuntimeError` unless it is a `NonRecoverableError` or an
+    `AssertionError`.
+
+    Not hidden: what a task prints or logs itself, the prompts models receive,
+    the opt-in HTTP cache, and runs started on threads that don't copy the
+    current context.
+    """
+    caller = _current.get().run
+    if caller is None:
+        raise RuntimeError("contexts.hidden() must be called inside a task run.")
+
+    sink_chat = chats.Chat(name=caller.task.name)
+    # The caller's id, so that the sink doesn't advance the task's run counter.
+    sink_run = runs.Run(task=caller.task, id=caller.id, chat=sink_chat, hidden=True)
+    try:
+        with enter(run=sink_run, chat=sink_chat) as ctx:
+            yield ctx
+    except Exception as error:
+        # Not logged: the log is shown with the notebook.
+        sink_run.error_message = traceback.format_exc()
+        kept = (NonRecoverableError, AssertionError)
+        kind = next((k for k in kept if isinstance(error, k)), RuntimeError)
+        raise kind(
+            "An error inside a hidden scope was withheld. The original is kept "
+            "on the scope's run."
+        ) from None
+
+
+def output_hidden() -> bool:
+    """Whether the current run is in `hidden()`, so nothing of it may be shown."""
+    run = _current.get().run
+    return run is not None and run.hidden
 
 
 def set(**kwargs):

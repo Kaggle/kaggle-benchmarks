@@ -87,7 +87,9 @@ class Task(Generic[T]):
     def _handle_cached_run(self, run: "runs.Run[T]", ctx) -> "runs.Run[T] | None":
         from kaggle_benchmarks import client
 
-        if client.skips_cached_run(run):
+        # A hidden row shares its cache file name with the public row of the
+        # same index.
+        if not run.hidden and client.skips_cached_run(run):
             try:
                 logger.info(
                     f"Skipping run {run.id} for task {self.name} as its output file already exists."
@@ -123,7 +125,7 @@ class Task(Generic[T]):
         if ctx.parent and ctx.parent.run and run not in ctx.parent.run.subruns:
             ctx.parent.run.subruns.append(run)
 
-        if self.store_run:
+        if self.store_run and not run.hidden:
             try:
                 client.store_run(run)
             except Exception as store_exc:
@@ -154,6 +156,7 @@ class Task(Generic[T]):
             result=results.PENDING,
             params=params,
             param_id=_id,
+            hidden=contexts.output_hidden(),
         )
 
         try:
@@ -379,8 +382,10 @@ class Task(Generic[T]):
                 try:
                     attempt_runs = _evaluate_once()
                 except Exception as e:
+                    # A hidden row's error message can quote the row.
+                    detail = type(e).__name__ if contexts.output_hidden() else e
                     logging.warning(
-                        f"An error occurred during evaluation attempt {attempt}: {e}"
+                        f"An error occurred during evaluation attempt {attempt}: {detail}"
                     )
                     # Always re-raise exception because the `continue_with_exceptions``
                     # setting should only apply to the subruns level.
@@ -417,7 +422,11 @@ class Task(Generic[T]):
             return all_runs
         finally:
             if remove_run_files:
-                serialization.remove_runs_files(all_runs)
+                # A hidden run wrote no file, and shares its file name with a
+                # public run.
+                serialization.remove_runs_files(
+                    runs.Runs([run for run in all_runs if not run.hidden])
+                )
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):
