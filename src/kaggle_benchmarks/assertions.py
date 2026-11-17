@@ -518,7 +518,10 @@ def assess_response_with_judge(
 
 @assertion_handler()
 def assert_tool_was_invoked(
-    tool: str | Callable, expectation: str | None = None
+    tool: str | Callable,
+    expectation: str | None = None,
+    *,
+    require_success: bool = False,
 ) -> AssertionResult:
     """Asserts that a specific tool was invoked during the current task.
 
@@ -528,6 +531,11 @@ def assert_tool_was_invoked(
     Args:
         tool: The tool function or its name as a string.
         expectation: An optional message summarizing the assertion.
+        require_success: If True, only counts invocations that did not raise an
+            error (i.e. whose ``error`` attribute is None). Defaults to False
+            to preserve backward compatibility. Note that checking for no error
+            verifies only that the tool execution did not raise an exception;
+            it does not validate the semantic correctness of the tool output.
     """
     tool_name = tool if isinstance(tool, str) else tool.__name__
     chat = chats.get_current_chat()
@@ -541,7 +549,11 @@ def assert_tool_was_invoked(
                 isinstance(item.content, tool_utils.ToolInvocationResult)
                 and item.content.name == tool_name
             ):
-                return True
+                if require_success:
+                    if item.content.error is None:
+                        return True
+                else:
+                    return True
         return False
 
     return AssertionResult(
