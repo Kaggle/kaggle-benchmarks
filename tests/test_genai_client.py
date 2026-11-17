@@ -90,6 +90,22 @@ def test_invoke_with_config_params():
 
 
 @pytest.mark.parametrize(
+    "model, expected_seed",
+    [
+        ("mocked-gemini", 42),
+        ("deepseek-ai/deepseek-v4.1-flash", None),
+        ("qwen/qwen3.8-max", None),
+    ],
+)
+def test_seed_dropped_for_models_that_reject_it(model, expected_seed):
+    llm = MockedGoogleGenAI()
+    llm.model = model
+    llm.prompt("Hi", seed=42)
+
+    assert llm.config.seed == expected_seed
+
+
+@pytest.mark.parametrize(
     "reasoning, expected_level",
     [
         ("low", "LOW"),

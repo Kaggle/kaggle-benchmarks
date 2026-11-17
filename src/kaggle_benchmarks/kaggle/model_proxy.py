@@ -71,10 +71,12 @@ class ModelProxy:
 
         llm_instance = None
         # Qwen and DeepSeek models support response_format, but the schema must be under 64 characters.
+        # qwen3.8-max over OpenAI rejects the system message the fallback appends, so it gets native structured output.
+        native_qwen = api == "openai" and model.startswith("qwen/qwen3.8-max")
         kwargs.setdefault(
             "support_structured_outputs",
             "meta" not in model
-            and "qwen" not in model
+            and ("qwen" not in model or native_qwen)
             and "deepseek" not in model
             and "gemma" not in model,
         )
