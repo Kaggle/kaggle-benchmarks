@@ -5,11 +5,11 @@ genai://anthropic/claude-opus-4-7@default:
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
+    test_extract_composite_pydantic: failed
+    test_extract_dataclass: failed
+    test_extract_dict: failed
     test_extract_int: passed
-    test_extract_pydantic: passed
+    test_extract_pydantic: failed
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
@@ -19,7 +19,7 @@ genai://anthropic/claude-opus-4-7@default:
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
-    test_tool_with_schema_output: passed
+    test_tool_with_schema_output: failed
 genai://anthropic/claude-sonnet-4-6@default:
   config:
     structured_output: true
@@ -29,72 +29,32 @@ genai://anthropic/claude-sonnet-4-6@default:
     test_chatroom_private_channel: passed
     test_chatroom_remove_participant: passed
     test_chatroom_room_post: passed
-    test_chatroom_talk_structured_output: passed
+    test_chatroom_talk_structured_output: failed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_multi_step_tool_chain: passed
-    test_multiple_tool_selection: passed
-    test_reasoning_param: passed
-    test_simple_tool_use: passed
-    test_stateful_tool_double_execution: passed
-    test_tool_error_handling: passed
-    test_tool_with_schema_output: passed
-genai://deepseek-ai/deepseek-r1-0528:
-  config:
-    structured_output: false
-  tests:
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_reasoning_param: passed
-genai://deepseek-ai/deepseek-v3.2:
-  config:
-    structured_output: false
-  tests:
-    test_complex_tool_return: failed
-    test_dataset_eval: failed
-    test_extract_bool: failed
     test_extract_composite_pydantic: failed
     test_extract_dataclass: failed
     test_extract_dict: failed
-    test_extract_int: failed
+    test_extract_int: passed
     test_extract_pydantic: failed
-    test_multi_step_tool_chain: failed
-    test_multiple_tool_selection: failed
-    test_reasoning_param: failed
-    test_simple_tool_use: failed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
-genai://google/gemini-2.5-flash:
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
+    test_multi_step_tool_chain: passed
+    test_multiple_tool_selection: passed
+    test_reasoning_param: passed
+    test_simple_tool_use: passed
+    test_stateful_tool_double_execution: passed
+    test_streaming_tool_use: passed
+    test_tool_error_handling: passed
+    test_tool_with_schema_output: failed
+genai://deepseek-ai/deepseek-v4.1-flash:
   config:
-    structured_output: true
+    structured_output: false
   tests:
-    test_assess_with_judge: passed
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_chatroom_add_participant: passed
-    test_chatroom_multi_turn: passed
-    test_chatroom_private_channel: passed
-    test_chatroom_remove_participant: passed
-    test_chatroom_room_post: passed
-    test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
-    test_dataset_eval_with_failure_run: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -106,40 +66,11 @@ genai://google/gemini-2.5-flash:
     test_image_url: passed
     test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
-    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: passed
-    test_video_url: passed
-genai://google/gemini-2.5-pro:
-  config:
-    structured_output: true
-  tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_complex_tool_return: passed
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_multi_step_tool_chain: passed
-    test_multiple_tool_selection: passed
-    test_reasoning_captures_traces: passed
-    test_reasoning_param: passed
-    test_simple_tool_use: passed
-    test_stateful_tool_double_execution: passed
-    test_tool_error_handling: passed
-    test_tool_with_schema_output: failed
-    test_video_url: passed
 genai://google/gemini-3-flash-preview:
   config:
     structured_output: true
@@ -200,6 +131,66 @@ genai://google/gemini-3.1-flash-lite-preview:
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: passed
+genai://google/gemini-3.5-flash-lite:
+  config:
+    structured_output: true
+  tests:
+    test_assess_with_judge: passed
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
+    test_complex_tool_return: passed
+    test_dataset_eval: passed
+    test_dataset_eval_with_failure_run: passed
+    test_extract_bool: passed
+    test_extract_composite_pydantic: passed
+    test_extract_dataclass: passed
+    test_extract_dict: passed
+    test_extract_int: passed
+    test_extract_pydantic: passed
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
+    test_multi_step_tool_chain: passed
+    test_multiple_tool_selection: passed
+    test_reasoning_captures_traces: passed
+    test_reasoning_param: passed
+    test_simple_tool_use: passed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
+    test_tool_with_schema_output: passed
+    test_video_url: passed
+genai://google/gemini-3.8-flash:
+  config:
+    structured_output: true
+  tests:
+    test_audio_base64: passed
+    test_audio_local_file: passed
+    test_audio_url: passed
+    test_complex_tool_return: passed
+    test_dataset_eval: passed
+    test_extract_bool: passed
+    test_extract_composite_pydantic: passed
+    test_extract_dataclass: passed
+    test_extract_dict: passed
+    test_extract_int: passed
+    test_extract_pydantic: passed
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
+    test_multi_step_tool_chain: passed
+    test_multiple_tool_selection: passed
+    test_reasoning_captures_traces: passed
+    test_reasoning_param: passed
+    test_simple_tool_use: passed
+    test_stateful_tool_double_execution: passed
+    test_streaming_tool_use: passed
+    test_tool_error_handling: passed
+    test_tool_with_schema_output: passed
+    test_video_url: passed
 genai://google/gemma-4-31b:
   config:
     structured_output: false
@@ -244,7 +235,7 @@ genai://openai/gpt-5.5-2026-04-23:
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: passed
-genai://qwen/qwen3-235b-a22b-instruct-2507:
+genai://qwen/qwen3.8-max:
   config:
     structured_output: false
   tests:
@@ -256,25 +247,9 @@ genai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_dict: passed
     test_extract_int: passed
     test_extract_pydantic: passed
-    test_multi_step_tool_chain: passed
-    test_multiple_tool_selection: passed
-    test_reasoning_param: passed
-    test_simple_tool_use: passed
-    test_stateful_tool_double_execution: passed
-    test_tool_error_handling: passed
-    test_tool_with_schema_output: passed
-genai://qwen/qwen3-next-80b-a3b-instruct:
-  config:
-    structured_output: false
-  tests:
-    test_complex_tool_return: passed
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
     test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
     test_reasoning_param: passed
@@ -330,80 +305,13 @@ openai://anthropic/claude-sonnet-4-6@default:
     test_reasoning_param: passed
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
+    test_streaming_tool_use: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: passed
-openai://deepseek-ai/deepseek-r1-0528:
+openai://deepseek-ai/deepseek-v4.1-flash:
   config:
     structured_output: false
   tests:
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_reasoning_param: passed
-openai://deepseek-ai/deepseek-v3.2:
-  config:
-    structured_output: false
-  tests:
-    test_complex_tool_return: failed
-    test_dataset_eval: failed
-    test_extract_bool: failed
-    test_extract_composite_pydantic: failed
-    test_extract_dataclass: failed
-    test_extract_dict: failed
-    test_extract_int: failed
-    test_extract_pydantic: failed
-    test_multi_step_tool_chain: failed
-    test_multiple_tool_selection: failed
-    test_reasoning_param: failed
-    test_simple_tool_use: failed
-    test_stateful_tool_double_execution: failed
-    test_tool_error_handling: failed
-openai://google/gemini-2.5-flash:
-  config:
-    structured_output: true
-  tests:
-    test_assess_with_judge: passed
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
-    test_chatroom_add_participant: passed
-    test_chatroom_multi_turn: passed
-    test_chatroom_private_channel: passed
-    test_chatroom_remove_participant: passed
-    test_chatroom_room_post: passed
-    test_chatroom_talk_structured_output: passed
-    test_complex_tool_return: passed
-    test_dataset_eval: passed
-    test_dataset_eval_with_failure_run: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
-    test_image_base64: passed
-    test_image_local_file: passed
-    test_image_url: passed
-    test_multi_step_tool_chain: failed
-    test_multiple_tool_selection: failed
-    test_reasoning_captures_traces: passed
-    test_reasoning_param: passed
-    test_simple_tool_use: passed
-    test_stateful_tool_double_execution: passed
-    test_tool_error_handling: passed
-    test_tool_with_schema_output: passed
-    test_video_url: passed
-openai://google/gemini-2.5-pro:
-  config:
-    structured_output: true
-  tests:
-    test_audio_base64: passed
-    test_audio_local_file: passed
-    test_audio_url: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
     test_extract_bool: passed
@@ -415,15 +323,13 @@ openai://google/gemini-2.5-pro:
     test_image_base64: passed
     test_image_local_file: passed
     test_image_url: passed
-    test_multi_step_tool_chain: failed
-    test_multiple_tool_selection: failed
-    test_reasoning_captures_traces: passed
+    test_multi_step_tool_chain: passed
+    test_multiple_tool_selection: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
-    test_tool_with_schema_output: failed
-    test_video_url: passed
+    test_tool_with_schema_output: passed
 openai://google/gemini-3-flash-preview:
   config:
     structured_output: true
@@ -439,7 +345,7 @@ openai://google/gemini-3-flash-preview:
     test_chatroom_talk_structured_output: passed
     test_complex_tool_return: passed
     test_dataset_eval: passed
-    test_extra_api_params_max_tokens_openai: failed
+    test_extra_api_params_max_tokens_openai: passed
     test_extract_bool: passed
     test_extract_composite_pydantic: passed
     test_extract_dataclass: passed
@@ -484,6 +390,66 @@ openai://google/gemini-3.1-flash-lite-preview:
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: passed
+openai://google/gemini-3.5-flash-lite:
+  config:
+    structured_output: true
+  tests:
+    test_assess_with_judge: passed
+    test_chatroom_add_participant: passed
+    test_chatroom_multi_turn: passed
+    test_chatroom_private_channel: passed
+    test_chatroom_remove_participant: passed
+    test_chatroom_room_post: passed
+    test_chatroom_talk_structured_output: passed
+    test_complex_tool_return: passed
+    test_dataset_eval: passed
+    test_dataset_eval_with_failure_run: passed
+    test_extract_bool: passed
+    test_extract_composite_pydantic: passed
+    test_extract_dataclass: passed
+    test_extract_dict: passed
+    test_extract_int: passed
+    test_extract_pydantic: passed
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
+    test_multi_step_tool_chain: passed
+    test_multiple_tool_selection: passed
+    test_reasoning_captures_traces: passed
+    test_reasoning_param: passed
+    test_simple_tool_use: passed
+    test_stateful_tool_double_execution: passed
+    test_tool_error_handling: passed
+    test_tool_with_schema_output: passed
+    test_video_url: passed
+openai://google/gemini-3.8-flash:
+  config:
+    structured_output: true
+  tests:
+    test_audio_base64: passed
+    test_audio_local_file: passed
+    test_audio_url: passed
+    test_complex_tool_return: passed
+    test_dataset_eval: passed
+    test_extract_bool: passed
+    test_extract_composite_pydantic: passed
+    test_extract_dataclass: passed
+    test_extract_dict: passed
+    test_extract_int: passed
+    test_extract_pydantic: passed
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
+    test_multi_step_tool_chain: passed
+    test_multiple_tool_selection: passed
+    test_reasoning_captures_traces: passed
+    test_reasoning_param: passed
+    test_simple_tool_use: passed
+    test_stateful_tool_double_execution: passed
+    test_streaming_tool_use: passed
+    test_tool_error_handling: passed
+    test_tool_with_schema_output: passed
+    test_video_url: passed
 openai://google/gemma-4-31b:
   config:
     structured_output: false
@@ -528,9 +494,9 @@ openai://openai/gpt-5.5-2026-04-23:
     test_stateful_tool_double_execution: passed
     test_tool_error_handling: passed
     test_tool_with_schema_output: passed
-openai://qwen/qwen3-235b-a22b-instruct-2507:
+openai://qwen/qwen3.8-max:
   config:
-    structured_output: false
+    structured_output: true
   tests:
     test_complex_tool_return: passed
     test_dataset_eval: passed
@@ -539,26 +505,10 @@ openai://qwen/qwen3-235b-a22b-instruct-2507:
     test_extract_dataclass: passed
     test_extract_dict: passed
     test_extract_int: passed
-    test_extract_pydantic: passed
-    test_multi_step_tool_chain: passed
-    test_multiple_tool_selection: passed
-    test_reasoning_param: passed
-    test_simple_tool_use: passed
-    test_stateful_tool_double_execution: passed
-    test_tool_error_handling: passed
-    test_tool_with_schema_output: passed
-openai://qwen/qwen3-next-80b-a3b-instruct:
-  config:
-    structured_output: false
-  tests:
-    test_complex_tool_return: passed
-    test_dataset_eval: passed
-    test_extract_bool: passed
-    test_extract_composite_pydantic: passed
-    test_extract_dataclass: passed
-    test_extract_dict: passed
-    test_extract_int: passed
-    test_extract_pydantic: passed
+    test_extract_pydantic: failed
+    test_image_base64: passed
+    test_image_local_file: passed
+    test_image_url: passed
     test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
     test_reasoning_param: passed

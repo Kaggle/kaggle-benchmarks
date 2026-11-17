@@ -59,13 +59,11 @@ TEST_LLM_NAMES = {
     "google/gemini-3.5-flash-lite",
     "google/gemini-3-flash-preview",
     "google/gemma-4-31b",
-    "qwen/qwen3-235b-a22b-instruct-2507",
-    "qwen/qwen3-next-80b-a3b-instruct",
+    "qwen/qwen3.8-max",
     "anthropic/claude-sonnet-4-6@default",
     "anthropic/claude-opus-4-7@default",
     "openai/gpt-5.5-2026-04-23",
-    "deepseek-ai/deepseek-r1-0528",
-    "deepseek-ai/deepseek-v3.2",
+    "deepseek-ai/deepseek-v4.1-flash",
     # xai/grok-4.20 excluded: genai→xAI tool/reasoning routing is broken in MP.
     "google/gemini-3.1-flash-lite-preview",
 }
@@ -201,8 +199,6 @@ def test_assess_with_judge(llm, api, judge_llm_name):
 # --- Test Case: Structured Output (Integer Extraction) ---
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
-# Known failures (openai): deepseek-r1 — nondeterministic on structured int extraction.
 @benchmark_test()
 @kbench.task()
 def test_extract_int(llm):
@@ -218,7 +214,7 @@ def test_extract_int(llm):
 # --- Test Case: Structured Output (Bool Extraction) ---
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known flaky (openai): qwen3.8-max — sometimes answers False with native structured output.
 @benchmark_test()
 @kbench.task()
 def test_extract_bool(llm):
@@ -234,7 +230,7 @@ def test_extract_bool(llm):
 # --- Test Case: Structured Output (Dict Extraction) ---
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_dict(llm):
@@ -267,7 +263,7 @@ class RPGCharacter:
     inventory: str
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_dataclass(llm):
@@ -298,7 +294,8 @@ class Planet(BaseModel):
     moons: list[str] = Field(default_factory=list, description="List of major moons")
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
+# Known flaky (openai): qwen3.8-max — sometimes returns an empty moons list.
 @benchmark_test()
 @kbench.task()
 def test_extract_pydantic(llm):
@@ -329,7 +326,7 @@ class Casting(BaseModel):
     actors: list[FriendsActor]
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
 def test_extract_composite_pydantic(llm):
@@ -459,15 +456,7 @@ def test_dataset_eval_with_failure_run(llm, api):
 # --- Test Case: Image inputs (URL) ---
 
 
-# Excluded: text-only models that don't support image inputs via Model Proxy.
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_image_url(llm):
     """Sends an image URL directly to the model."""
@@ -489,16 +478,8 @@ def test_image_url(llm):
 # --- Test Case: Image inputs (Base64) ---
 
 
-# Excluded: text-only models that don't support image inputs via Model Proxy.
 # Known failures: gpt-5.5 — model reports "no image attached" for 1x1 pixel.
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_image_base64(llm):
     """Sends a base64 encoded image with explicit format specification."""
@@ -523,15 +504,7 @@ def test_image_base64(llm):
 # --- Test Case: Image inputs (local file) ---
 
 
-# Excluded: text-only models that don't support image inputs via Model Proxy.
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-        "qwen/qwen3-235b-a22b-instruct-2507",
-        "qwen/qwen3-next-80b-a3b-instruct",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_image_local_file(llm):
     # Kaggle logo
@@ -890,11 +863,7 @@ def run_simple_calculator(a: float, b: float, operator: str) -> float:
     raise ValueError(f"Unknown operator: {operator}")
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_simple_tool_use(llm):
     problem = "What is 50 plus 25?"
@@ -914,7 +883,7 @@ def test_simple_tool_use(llm):
 # Real-world chunk shapes vary by backend; unit tests can only fake one shape.
 
 STREAMING_TOOL_LLM_NAMES = {
-    "google/gemini-3.5-flash",
+    "google/gemini-3.8-flash",
     "anthropic/claude-sonnet-4-6@default",
 }
 
@@ -944,11 +913,7 @@ def increment_counter() -> int:
     return increment_counter.count
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_stateful_tool_double_execution(llm):
     increment_counter.count = 0  # Reset for each test run
@@ -975,11 +940,7 @@ def multiply_tool(a: float, b: float) -> float:
 
 # Gemini 2.x via OpenAI backend rejects multiple tool declarations.
 # GenAI backend handles multiple tools correctly.
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_multiple_tool_selection(llm):
     add_tool.calls = 0
@@ -1007,11 +968,7 @@ def get_user_profile(user_id: str) -> dict:
 
 
 # Known failures: (none currently).
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_complex_tool_return(llm):
     response = llm.prompt(
@@ -1030,11 +987,7 @@ def flaky_tool() -> str:
     raise ValueError("Tool execution failed simulated error.")
 
 
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_tool_error_handling(llm):
     response = llm.prompt(
@@ -1064,13 +1017,8 @@ def format_population(population: int) -> str:
 
 
 # Known failures (openai): Gemini 2.x rejects multiple tool declarations.
-# Known failures (genai): deepseek-v3.2 — flaky 500 errors on multi-step chains.
 @pytest.mark.slow
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-    }
-)
+@benchmark_test()
 @kbench.task()
 def test_multi_step_tool_chain(llm):
     """Tests that the LLM can chain tool calls: look up a value then format it."""
@@ -1116,12 +1064,8 @@ def get_city_data(city_name: str) -> dict:
 #   withholds schema= from tool rounds, so the model doesn't know what
 #   "CityInfo" means and asks for clarification instead of calling the tool.
 #   This does not affect Gemini 3.x or other model families.
-@benchmark_test(
-    exclude={
-        "deepseek-ai/deepseek-r1-0528",
-        "deepseek-ai/deepseek-v3.2",
-    }
-)
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
+@benchmark_test()
 @kbench.task()
 def test_tool_with_schema_output(llm):
     """Tests that tools and schema= work together: tool provides data,
@@ -1236,6 +1180,7 @@ class _CityFact:
     population_millions: float
 
 
+# Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test(include=CHATROOM_LLM_NAMES)
 @kbench.task()
 def test_chatroom_talk_structured_output(llm):
