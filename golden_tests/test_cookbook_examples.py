@@ -199,7 +199,6 @@ def test_assess_with_judge(llm, api, judge_llm_name):
 # --- Test Case: Structured Output (Integer Extraction) ---
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 @benchmark_test()
 @kbench.task()
 def test_extract_int(llm):
@@ -215,7 +214,6 @@ def test_extract_int(llm):
 # --- Test Case: Structured Output (Bool Extraction) ---
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 # Known flaky (openai): qwen3.8-max — sometimes answers False with native structured output.
 @benchmark_test()
 @kbench.task()
@@ -232,7 +230,6 @@ def test_extract_bool(llm):
 # --- Test Case: Structured Output (Dict Extraction) ---
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 # Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
@@ -266,7 +263,6 @@ class RPGCharacter:
     inventory: str
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 # Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
@@ -298,8 +294,8 @@ class Planet(BaseModel):
     moons: list[str] = Field(default_factory=list, description="List of major moons")
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 # Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
+# Known flaky (openai): qwen3.8-max — sometimes returns an empty moons list.
 @benchmark_test()
 @kbench.task()
 def test_extract_pydantic(llm):
@@ -330,7 +326,6 @@ class Casting(BaseModel):
     actors: list[FriendsActor]
 
 
-# Known failures (genai): gpt-5.5 — MP sends empty json_schema.name.
 # Known failures (genai): Claude — MP forwards propertyOrdering to Anthropic (400).
 @benchmark_test()
 @kbench.task()
