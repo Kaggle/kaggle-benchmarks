@@ -17,6 +17,9 @@ import datetime  # For Run start_time and end_time
 import functools
 import inspect
 import logging
+import math
+import numbers
+import statistics
 import time
 from typing import (
     TYPE_CHECKING,
@@ -27,6 +30,7 @@ from typing import (
     Literal,
     Self,
     TypeVar,
+    cast,
 )
 
 import pandas as pd
@@ -88,8 +92,12 @@ class Task(Generic[T]):
         from kaggle_benchmarks import client
 
         # A hidden row shares its cache file name with the public row of the
-        # same index.
-        if not run.hidden and client.skips_cached_run(run):
+        # same index, and a cached SplitScores would load back as one number.
+        if (
+            not run.hidden
+            and self.result_type is not results.Splits
+            and client.skips_cached_run(run)
+        ):
             try:
                 logger.info(
                     f"Skipping run {run.id} for task {self.name} as its output file already exists."
@@ -427,6 +435,86 @@ class Task(Generic[T]):
                 serialization.remove_runs_files(
                     runs.Runs([run for run in all_runs if not run.hidden])
                 )
+
+    def evaluate_splits(
+        self,
+        *,
+        public: pd.DataFrame,
+        private: pd.DataFrame,
+        score: "Callable[[runs.Runs[T]], results.SplitValue] | None" = None,
+        **kwargs: Any,
+    ) -> results.SplitScores:
+        """Evaluates the task over `public`, then over `private` in `contexts.hidden()`.
+
+        Takes the other arguments of `evaluate`. Return the scores from a task
+        annotated `-> kbench.SplitScores`.
+
+        `score` turns the runs of a split into its score: a bool, a finite
+        number, a `(score, confidence)` pair or a dict of JSON values. It is
+        called on the public runs, the private runs and both together for
+        `overall`, and every score is published. A cached run's `passed` is
+        always true; its `result` holds the verdict.
+
+        By default a run scores its verdict if the task passes or fails, the
+        bool it returns, its result if that is a finite number, and 0
+        otherwise, failed runs included, and a split scores the mean.
+
+        The private runs print nothing and are written, for the author, to one
+        file: `private/<calling task's run file>.private.json`.
+        """
+        from kaggle_benchmarks import client, contexts, runs
+
+        caller = contexts.get_current().run
+        if caller is None:
+            raise RuntimeError("evaluate_splits must be called inside a task run.")
+        if score is None:
+            score = self._mean_score
+
+        public_runs = self.evaluate(evaluation_data=public, **kwargs)
+        # Checked here, as in the hidden scope a wrong type would raise a
+        # withheld error.
+        public_score = results.split_value(score(public_runs), "public")
+        try:
+            with contexts.hidden() as scope:
+                sink = cast("runs.Run", scope.run)
+                # Failed until the scores exist: a run file cannot hold a
+                # pending result.
+                sink.result = results.FAILED
+                private_runs = self.evaluate(evaluation_data=private, **kwargs)
+                sink.result = scores = results.SplitScores(
+                    overall=score(runs.Runs([*public_runs, *private_runs])),
+                    public=public_score,
+                    private=score(private_runs),
+                )
+        finally:
+            # After the scope, so that the file has its final state and error.
+            # Also when a row fails, so the author can see why.
+            if caller.task.store_run:
+                try:
+                    # Hidden, so that serializing it shows no private value.
+                    with contexts.reentered(sink):
+                        client.store_private_run(sink, caller)
+                except Exception as error:
+                    # Only its type: the message can quote a private row.
+                    logger.warning(
+                        f"Could not write the private run file: {type(error).__name__}"
+                    )
+        return scores
+
+    def _mean_score(self, evaluated: "runs.Runs[T]") -> float:
+        def row_score(run: "runs.Run[T]") -> float:
+            # A cached run's result is its stored verdict.
+            if self.result_type is results.PassFail:
+                return float(bool(run.result if run.cached else run.passed))
+            # The returned bool, as the run file and the cache store it, so
+            # that a cached row scores the same as a fresh one.
+            if self.result_type is results.Boolean:
+                return float(bool(run.result))
+            if isinstance(run.result, numbers.Real) and math.isfinite(run.result):
+                return float(run.result)
+            return 0.0
+
+        return statistics.fmean(map(row_score, evaluated))
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):
