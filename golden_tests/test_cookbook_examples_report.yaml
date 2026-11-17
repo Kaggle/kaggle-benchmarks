@@ -183,7 +183,7 @@ genai://google/gemini-3.8-flash:
     test_image_url: passed
     test_multi_step_tool_chain: passed
     test_multiple_tool_selection: passed
-    test_reasoning_captures_traces: failed
+    test_reasoning_captures_traces: passed
     test_reasoning_param: passed
     test_simple_tool_use: passed
     test_stateful_tool_double_execution: passed
