@@ -36,20 +36,20 @@ def logger():
 def test_start_end_chat(logger):
     with chats.new("test"):
         assert len(logger.events["new_chat"]) == 1
-        assert len(logger.events["new_message"]) == 1
+        assert len(logger.events["new_event"]) == 1
         user.send("hi")
-        assert len(logger.events["new_message"]) == 2
+        assert len(logger.events["new_event"]) == 2
 
     assert len(logger.events["end_chat"]) == 1
 
 
-def test_new_message(logger):
+def test_new_event(logger):
     user.send("hi")
-    assert len(logger.events["new_message"]) == 1
+    assert len(logger.events["new_event"]) == 1
 
     with chats.new("test"):
         user.send("hi")
-        assert len(logger.events["new_message"]) == 3
+        assert len(logger.events["new_event"]) == 3
 
 
 def test_console_ui(capsys):
