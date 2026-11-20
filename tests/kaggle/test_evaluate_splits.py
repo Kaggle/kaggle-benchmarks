@@ -15,6 +15,7 @@
 import json
 import math
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -65,6 +66,11 @@ def published(client) -> str:
     )
 
 
+def published_results(client) -> list[dict]:
+    (parent_file,) = client.directory.glob("Parent-*.run.json")
+    return json.loads(parent_file.read_text())["results"]
+
+
 def private_run(client) -> dict:
     (private_file,) = client.directory.glob("private/Parent-*.private.json")
     return json.loads(private_file.read_text())
@@ -81,9 +87,9 @@ def test_publishes_the_scores_and_no_private_row(client, llm):
     # Written once the private half is over, with the scores.
     assert private["state"] == "BENCHMARK_TASK_RUN_STATE_COMPLETED"
     assert len(private["results"]) == 3
-    (parent_file,) = client.directory.glob("Parent-*.run.json")
-    results = json.loads(parent_file.read_text())["results"]
-    assert [(r["type"], r["numericResult"]["value"]) for r in results] == [
+    assert [
+        (r["type"], r["numericResult"]["value"]) for r in published_results(client)
+    ] == [
         ("AGGREGATED", 2 / 6),
         ("PUBLIC", 0.5),
         ("PRIVATE", 0.25),
@@ -150,6 +156,103 @@ def test_split_task_is_not_loaded_from_the_cache(client, llm):
     assert run.result == kbench.SplitScores(overall=2 / 6, public=0.5, private=0.25)
 
 
+def passed(runs):
+    # As the user guide shows: a cached run's `passed` is always true.
+    return sum(run.result if run.cached else run.passed for run in runs) / len(runs)
+
+
+def test_score_is_called_per_split_and_on_both(client, llm):
+    run = run_splits(llm, score=lambda runs: (passed(runs), np.int64(len(runs))))
+
+    assert run.result == kbench.SplitScores(
+        overall=(2 / 6, 6), public=(0.5, 2), private=(0.25, 4)
+    )
+    assert [(r["type"], r["numericResult"]) for r in published_results(client)] == [
+        ("AGGREGATED", {"value": 2 / 6, "confidenceInterval": 6}),
+        ("PUBLIC", {"value": 0.5, "confidenceInterval": 2}),
+        ("PRIVATE", {"value": 0.25, "confidenceInterval": 4}),
+    ]
+
+
+@task()
+def grades(llm, label: str) -> dict:
+    return {"correct": llm.prompt(label) == label, "label": label}
+
+
+def test_dict_rows_with_a_dict_score(client, llm):
+    def accuracy(runs):
+        return {"accuracy": sum(run.result["correct"] for run in runs) / len(runs)}
+
+    run_splits(llm, row_task=grades, score=accuracy)
+
+    assert [(r["type"], r["dictResult"]) for r in published_results(client)] == [
+        ("AGGREGATED", {"accuracy": 2 / 6}),
+        ("PUBLIC", {"accuracy": 0.5}),
+        ("PRIVATE", {"accuracy": 0.25}),
+    ]
+    assert CANARY not in published(client)
+
+
+def test_a_bool_score_is_published_as_a_bool(client, llm):
+    run_splits(llm, score=lambda runs: np.bool_(len(runs) > 2))
+
+    assert [r["booleanResult"] for r in published_results(client)] == [
+        True,
+        False,
+        True,
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [0.5],
+        math.nan,
+        10**400,
+        (0.5, math.inf),
+        {"n": np.int64(1)},
+        {"accuracy": math.nan},
+        {1: 0.5},
+    ],
+)
+def test_a_score_that_no_run_file_can_hold_fails_before_the_private_split(
+    llm, monkeypatch, value
+):
+    prompts = []
+    prompt = llm.prompt
+    monkeypatch.setattr(
+        llm, "prompt", lambda text: prompts.append(text) or prompt(text)
+    )
+
+    with pytest.raises(TypeError, match="public score"):
+        run_splits(llm, score=lambda runs: value)
+    assert prompts and not any(CANARY in text for text in prompts)
+
+
+def test_a_private_score_that_no_run_file_can_hold_is_withheld(client, llm, caplog):
+    def score(runs):
+        labels = {run.params["label"] for run in runs}
+        return {"labels": labels} if CANARY in labels else passed(runs)
+
+    with pytest.raises(RuntimeError, match="withheld"):
+        run_splits(llm, score=score)
+
+    assert CANARY not in published(client) + caplog.text
+
+
+def test_an_error_scoring_the_private_split_is_withheld(client, llm):
+    def score(runs):
+        if any(run.params["label"] == CANARY for run in runs):
+            raise ValueError(CANARY)
+        return passed(runs)
+
+    with pytest.raises(RuntimeError, match="withheld"):
+        run_splits(llm, score=score)
+
+    assert CANARY not in published(client)
+    assert CANARY in private_run(client)["errorMessage"]
+
+
 @task()
 def raises_on_canary(llm, label: str):
     if label == CANARY:
@@ -185,24 +288,7 @@ def test_a_private_file_that_cannot_be_written_costs_nothing_else(
     assert CANARY not in caplog.text
 
 
-def test_rows_returning_nan_score_zero_and_are_left_out_of_the_files(client, llm):
-    """A run file cannot hold NaN, so one linked NaN row would cost the file."""
-
-    @task()
-    def nan_unless_yes(llm, label: str) -> float:
-        return 1.0 if label == "yes" else math.nan
-
-    run = run_splits(llm, row_task=nan_unless_yes)
-
-    assert run.result == kbench.SplitScores(overall=2 / 6, public=0.5, private=0.25)
-    (parent_file,) = client.directory.glob("Parent-*.run.json")
-    parent = json.loads(parent_file.read_text())
-    assert len(parent["results"]) == 3
-    assert len(parent["subruns"]) == 1
-    assert len(private_run(client)["subruns"]) == 1
-
-
-def test_writing_the_private_file_warns_without_quoting_a_row(client, llm, recwarn):
+def test_serialization_warnings_quote_public_rows_only(client, llm, recwarn):
     class Plain:
         def __init__(self, label):
             self.label = label
@@ -217,8 +303,11 @@ def test_writing_the_private_file_warns_without_quoting_a_row(client, llm, recwa
     run_splits(llm, row_task=sends_an_object)
 
     assert len(private_run(client)["subruns"]) == 4
-    assert recwarn  # The serializer warns that the object has no proper form.
-    assert not any(CANARY in str(warning.message) for warning in recwarn)
+    # The serializer warns that the object has no proper form, quoting the
+    # value of a public row only.
+    messages = [str(warning.message) for warning in recwarn]
+    assert any("Plain(yes)" in message for message in messages)
+    assert not any(CANARY in message for message in messages)
 
 
 def test_no_private_file_for_a_task_that_stores_no_run(client, llm):

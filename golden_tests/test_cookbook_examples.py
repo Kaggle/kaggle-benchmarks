@@ -36,13 +36,19 @@ Usage:
 import base64
 import dataclasses
 import io
+import json
+import logging
 import os
 import tempfile
-from contextlib import contextmanager
+import traceback
+import warnings
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import httpx
+import numpy as np
 import pandas as pd
 import pytest
 from pydantic import BaseModel, Field
@@ -54,6 +60,8 @@ from kaggle_benchmarks.content_types import (
     images,
     videos,
 )
+from kaggle_benchmarks.kaggle import serialization
+from kaggle_benchmarks.tasks import NonRecoverableError
 
 # Models to be tested as the primary subject.
 TEST_LLM_NAMES = {
@@ -459,11 +467,128 @@ def test_dataset_eval_with_failure_run(llm, api):
 
 
 # %%
-# --- Test Case: Dataset evaluation with a private split ---
-# One private row fails, quoting its question. It scores 0, and the private
-# questions reach the private file only: no other file, and not the output.
+# --- Test Cases: Dataset evaluation with a private split ---
+# `evaluate_splits` runs the private rows in `contexts.hidden()`. Their
+# questions carry PRIVATE_TAG, which must reach `private/*.private.json` and
+# nothing else: no other file, no console output, no log record, no warning.
+# Exact scores are asserted only on the capital-city rows, which are
+# deterministic; the judge and tool rows are checked for structure and leaks.
 
 PRIVATE_TAG = "ref-7f3a91"
+# On public rows, to show that the routes checked for PRIVATE_TAG are live.
+PUBLIC_TAG = "pub-2c8e41"
+SPLIT_MODEL = "google/gemini-3-flash-preview"
+
+SPLIT_LLMS = [
+    pytest.param(
+        kbench.kaggle.load_model(SPLIT_MODEL, api=api),
+        api,
+        id=f"{api}-{SPLIT_MODEL}",
+    )
+    for api in ["genai", "openai"]
+]
+# The cheaper cases run on one API.
+SPLIT_LLM_GENAI = SPLIT_LLMS[:1]
+
+
+@dataclass
+class SplitOutcome:
+    """What one run of a split task left behind."""
+
+    run: kbench.Run | None
+    error: Exception | None
+    directory: Path
+    printed: str
+    logs: list[str]
+    warnings: list[str]
+
+    def published_files(self) -> list[Path]:
+        return [
+            p
+            for p in sorted(self.directory.rglob("*"))
+            if p.is_file() and "private" not in p.relative_to(self.directory).parts
+        ]
+
+    def published(self) -> str:
+        return "".join(p.read_text() for p in self.published_files())
+
+    def private_file(self) -> dict:
+        (path,) = self.directory.glob("private/*.private.json")
+        return json.loads(path.read_text())
+
+    def run_file(self) -> dict:
+        assert self.run is not None
+        name = serialization.generate_run_filename(
+            self.run.task.name, self.run.cache_id
+        )
+        return json.loads((self.directory / name).read_text())
+
+
+class _RecordText(logging.Handler):
+    def __init__(self):
+        super().__init__(level=logging.DEBUG)
+        self.texts: list[str] = []
+
+    def emit(self, record):
+        # The formatted text holds the traceback of an exception logged too.
+        self.texts.append(self.format(record))
+
+
+def run_split(
+    task, llm, directory: Path, write_atif: bool = False, **task_kwargs
+) -> SplitOutcome:
+    """Runs `task` on `llm`, writing into `directory`, and records the console
+    output, every log record at DEBUG and above, and every warning.
+
+    Not caplog/monkeypatch: the shared runs below are module-scoped fixtures.
+    """
+    printed = io.StringIO()
+    console = kbench.ui.console.ConsoleUI(output=printed)
+    handler = _RecordText()
+    root = logging.getLogger()
+    run, error = None, None
+    with ExitStack() as stack:
+        patch = stack.enter_context(pytest.MonkeyPatch.context())
+        patch.setattr(kbench, "client", kbench.kaggle.KaggleClient(directory))
+        patch.setattr(kbench.config, "write_atif", write_atif)
+        stack.callback(root.setLevel, root.level)
+        root.setLevel(logging.DEBUG)
+        root.addHandler(handler)
+        stack.callback(root.removeHandler, handler)
+        events.manager.bind(console)
+        stack.callback(events.manager.unbind, console)
+        caught = stack.enter_context(warnings.catch_warnings(record=True))
+        warnings.simplefilter("always")
+        try:
+            run = task.run(llm, **task_kwargs)
+        except Exception as e:
+            error = e
+    return SplitOutcome(
+        run=run,
+        error=error,
+        directory=directory,
+        printed=printed.getvalue(),
+        logs=handler.texts,
+        warnings=[str(w.message) for w in caught],
+    )
+
+
+def assert_private_tag_not_leaked(outcome: SplitOutcome):
+    assert PRIVATE_TAG not in outcome.printed
+    leaked_logs = [text for text in outcome.logs if PRIVATE_TAG in text]
+    assert not leaked_logs
+    leaked_warnings = [text for text in outcome.warnings if PRIVATE_TAG in text]
+    assert not leaked_warnings
+    published = outcome.published_files()
+    assert published
+    leaked_files = [p.name for p in published if PRIVATE_TAG in p.read_text()]
+    assert not leaked_files
+    assert PRIVATE_TAG in json.dumps(outcome.private_file())
+
+
+# %%
+# Smoke test: plain prompts, one private row fails while quoting its question.
+# It scores 0, and the private questions reach the private file only.
 
 private_df = pd.DataFrame(
     [
@@ -471,15 +596,6 @@ private_df = pd.DataFrame(
         {"question": f"What's the capital of Italy ({PRIVATE_TAG})", "answer": "Rome"},
     ]
 )
-
-SPLIT_LLMS = [
-    pytest.param(
-        kbench.kaggle.load_model("google/gemini-3-flash-preview", api=api),
-        api,
-        id=f"{api}-google/gemini-3-flash-preview",
-    )
-    for api in ["genai", "openai"]
-]
 
 
 @kbench.task(name="split_qa_task", store_task=False)
@@ -498,24 +614,312 @@ def private_split_eval(llm) -> kbench.SplitScores:
 
 
 @pytest.mark.parametrize("llm, api", SPLIT_LLMS)
-def test_private_split_eval(llm, api, monkeypatch, tmp_path):
-    monkeypatch.setattr(kbench, "client", kbench.kaggle.KaggleClient(tmp_path))
-    printed = io.StringIO()
-    console = kbench.ui.console.ConsoleUI(output=printed)
-    events.manager.bind(console)
-    try:
-        run = private_split_eval.run(llm)
-    finally:
-        events.manager.unbind(console)
+def test_private_split_eval(llm, api, tmp_path):
+    outcome = run_split(private_split_eval, llm, tmp_path)
 
-    assert run.result == kbench.SplitScores(overall=0.75, public=1.0, private=0.5)
-    assert "capital of France" in printed.getvalue()  # Public rows are shown.
-    assert PRIVATE_TAG not in printed.getvalue()
-    published = "".join(p.read_text() for p in tmp_path.glob("*") if p.is_file())
-    assert published
-    assert PRIVATE_TAG not in published
-    (private_file,) = tmp_path.glob("private/*.private.json")
-    assert PRIVATE_TAG in private_file.read_text()
+    assert outcome.error is None
+    assert outcome.run.result == kbench.SplitScores(
+        overall=0.75, public=1.0, private=0.5
+    )
+    assert "capital of France" in outcome.printed  # Public rows are shown.
+    assert_private_tag_not_leaked(outcome)
+
+
+# %%
+# Rich case: threads, a judge, a tool, a bare assert and a numpy
+# (score, confidence) pair. Side chats and tool calls are where a private row
+# could leak, and worker threads must inherit the hidden scope.
+
+CAPITALS = {
+    "australia": "Canberra",
+    "canada": "Ottawa",
+    "italy": "Rome",
+    "japan": "Tokyo",
+}
+
+
+def lookup_capital(country: str) -> str:
+    """Returns the capital city of a country, given its English name."""
+    return CAPITALS.get(country.strip().lower(), "unknown")
+
+
+# Only these rows are scored, so that the scores don't depend on the judge
+# or on the model calling the tool.
+SCORED_KINDS = {"capital", "assert"}
+
+
+def tagged_rows(tag: str, rows: list[tuple[str, str, str]]) -> pd.DataFrame:
+    """Rows of (kind, question, answer), each question ending with `tag`."""
+    return pd.DataFrame(
+        [{"kind": k, "question": f"{q} ({tag})", "answer": a} for k, q, a in rows]
+    )
+
+
+rich_public_df = tagged_rows(
+    PUBLIC_TAG,
+    [
+        ("capital", "What's the capital of France", "Paris"),
+        ("capital", "What's the capital of Germany", "Berlin"),
+        ("judge", "In one sentence, what's the capital of Canada", "Ottawa"),
+        (
+            "tool",
+            "Use the lookup_capital tool to find the capital of Australia",
+            "Canberra",
+        ),
+    ],
+)
+rich_private_df = tagged_rows(
+    PRIVATE_TAG,
+    [
+        ("capital", "What's the capital of Japan", "Tokyo"),
+        ("capital", "What's the capital of Italy", "Rome"),
+        ("assert", "What's the capital of Spain", "Madrid"),
+        ("judge", "In one sentence, what's the capital of Japan", "Tokyo"),
+        ("tool", "Use the lookup_capital tool to find the capital of Italy", "Rome"),
+    ],
+)
+
+
+@kbench.task(name="rich_split_row", store_task=False)
+def rich_split_row(llm, kind, question, answer) -> bool:
+    if kind == "tool":
+        response = llm.prompt(question, tools=[lookup_capital])
+    else:
+        response = llm.prompt(question)
+    if kind == "judge":
+        # The criterion quotes the question, so the judge's chat holds it.
+        assessment = kbench.assertions.assess_response_with_judge(
+            response_text=response,
+            judge_llm=llm,
+            criteria=[f"The response answers '{question}' with {answer}."],
+        )
+        kbench.assertions.assert_true(
+            assessment is not None, expectation="The judge should assess."
+        )
+    if kind == "assert":
+        assert False, f"Intentional bare assert for: {question}"
+    return answer.lower() in response.lower()
+
+
+def wilson(hits: Iterable[bool]) -> tuple[np.float32, np.float32]:
+    """The accuracy and the half-width of its 95% Wilson interval, which is
+    not 0 when every row passes, so the run file keeps it."""
+    values = np.array(list(hits), dtype=np.float32)
+    n, p, z = values.size, values.mean(), np.float32(1.96)
+    half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / (1 + z**2 / n)
+    return p, half
+
+
+def wilson_accuracy(runs: kbench.Runs) -> tuple[np.float32, np.float32]:
+    """Returns numpy scalars, which `evaluate_splits` must convert."""
+    return wilson(
+        run.result is True for run in runs if run.params["kind"] in SCORED_KINDS
+    )
+
+
+@kbench.task(name="private_split_rich")
+def private_split_rich(llm) -> kbench.SplitScores:
+    return rich_split_row.evaluate_splits(
+        public=rich_public_df,
+        private=rich_private_df,
+        llm=[llm],
+        n_jobs=2,
+        on_failure="continue",
+        score=wilson_accuracy,
+    )
+
+
+@pytest.fixture(scope="module")
+def rich_outcome(llm, api, tmp_path_factory) -> SplitOutcome:
+    """One run per model and API, shared by the tests below."""
+    directory = tmp_path_factory.mktemp(f"rich-{api}")
+    return run_split(private_split_rich, llm, directory, write_atif=True)
+
+
+@pytest.mark.parametrize("llm, api", SPLIT_LLMS, scope="module")
+def test_private_split_rich(llm, api, rich_outcome):
+    outcome = rich_outcome
+    assert outcome.error is None
+    run = outcome.run
+
+    # Scored rows: public capitals pass; private capitals pass, the assert fails.
+    assert run.result == kbench.SplitScores(
+        overall=wilson([True, True, True, True, False]),
+        public=wilson([True, True]),
+        private=wilson([True, True, False]),
+    )
+    results = outcome.run_file()["results"]
+    assert [r["type"] for r in results] == ["AGGREGATED", "PUBLIC", "PRIVATE"]
+    expected = (run.result.overall, run.result.public, run.result.private)
+    for result, (value, confidence) in zip(results, expected):
+        assert result["numericResult"] == {
+            "value": value,
+            "confidenceInterval": confidence,
+        }
+
+    # The public rows of every kind are shown and published.
+    assert outcome.printed.count(PUBLIC_TAG) >= len(rich_public_df)
+    assert outcome.published().count(PUBLIC_TAG) >= len(rich_public_df)
+    assert len(run.subruns) == len(rich_public_df)
+    assert_private_tag_not_leaked(outcome)
+
+    # Every private row is in the private file, each with its own chats.
+    private = outcome.private_file()
+    rows = {}
+    for row in private["subruns"]:
+        text = json.dumps(row)
+        (question,) = [q for q in rich_private_df.question if q in text]
+        rows[question] = row
+    assert set(rows) == set(rich_private_df.question)
+    by_kind = dict(zip(rich_private_df.kind, rich_private_df.question))
+
+    # The bare assert stays a failed assertion, and doesn't fail the row.
+    assert_row = rows[by_kind["assert"]]
+    assert assert_row["state"] == "BENCHMARK_TASK_RUN_STATE_COMPLETED"
+    (failed,) = assert_row["assertions"]
+    assert failed["status"] == "BENCHMARK_TASK_RUN_ASSERTION_STATUS_FAILED"
+    assert "AssertionError" in failed["expectation"]
+    assert PRIVATE_TAG in failed["expectation"]
+
+    # The judge's side chat is kept, with the criterion quoting the row.
+    judge_row = rows[by_kind["judge"]]
+    assert len(judge_row["conversations"]) >= 2
+    assert "impartial and strict technical evaluator" in json.dumps(judge_row)
+
+
+@pytest.mark.xfail(
+    strict=False,
+    reason="Pending fix: the private file's root run has no model slug, "
+    "start time or end time.",
+)
+@pytest.mark.parametrize("llm, api", SPLIT_LLMS, scope="module")
+def test_private_split_rich_private_file_metadata(llm, api, rich_outcome):
+    outcome = rich_outcome
+    private = outcome.private_file()
+    published = outcome.run_file()
+    assert private.get("modelVersion", {}).get("slug")
+    assert private["modelVersion"]["slug"] == published["modelVersion"]["slug"]
+    assert private.get("startTime")
+    assert private.get("endTime")
+
+
+@pytest.mark.xfail(
+    strict=False,
+    reason="Pending fix: WRITE_ATIF=True writes no private/<stem>.atif.json.",
+)
+@pytest.mark.parametrize("llm, api", SPLIT_LLMS, scope="module")
+def test_private_split_rich_private_atif(llm, api, rich_outcome):
+    outcome = rich_outcome
+    # The public run files got theirs, so the setting is on.
+    assert list(outcome.directory.glob("*.atif.json"))
+    private_atif = list(outcome.directory.glob("private/*.atif.json"))
+    assert len(private_atif) == 1
+    assert PRIVATE_TAG in private_atif[0].read_text()
+
+
+# %%
+# Dict case: `score=` returns a dict. The platform makes the keys of the first
+# (AGGREGATED) dict result into public leaf tasks, so they must be fixed, never
+# taken from the rows.
+
+
+def accuracy_and_count(runs: kbench.Runs) -> dict:
+    hits = [run.result is True for run in runs]
+    return {"accuracy": sum(hits) / len(hits), "n": len(hits)}
+
+
+@kbench.task(name="split_plain_row", store_task=False)
+def split_plain_row(llm, question, answer) -> bool:
+    return answer.lower() in llm.prompt(question).lower()
+
+
+@kbench.task(name="private_split_dict")
+def private_split_dict(llm) -> kbench.SplitScores:
+    return split_plain_row.evaluate_splits(
+        public=df, private=private_df, llm=[llm], score=accuracy_and_count
+    )
+
+
+@pytest.mark.parametrize("llm, api", SPLIT_LLM_GENAI)
+def test_private_split_dict(llm, api, tmp_path):
+    outcome = run_split(private_split_dict, llm, tmp_path)
+
+    assert outcome.error is None
+    assert outcome.run.result == kbench.SplitScores(
+        overall={"accuracy": 1.0, "n": 4},
+        public={"accuracy": 1.0, "n": 2},
+        private={"accuracy": 1.0, "n": 2},
+    )
+    results = outcome.run_file()["results"]
+    assert [r["type"] for r in results] == ["AGGREGATED", "PUBLIC", "PRIVATE"]
+    for result in results:
+        assert set(result["dictResult"]) == {"accuracy", "n"}
+        assert PRIVATE_TAG not in json.dumps(result)
+    assert_private_tag_not_leaked(outcome)
+
+
+# %%
+# Stop case: a private row raises NonRecoverableError, which stops the task.
+# The error leaves without its message, and the private file keeps it.
+
+
+@kbench.task(name="split_stop_row", store_task=False)
+def split_stop_row(llm, question, answer) -> bool:
+    response = llm.prompt(question)
+    if answer == "Rome":
+        raise NonRecoverableError(f"Intentional stop at: {question}")
+    return answer.lower() in response.lower()
+
+
+@kbench.task(name="private_split_stop")
+def private_split_stop(llm, n_jobs: int = 2) -> kbench.SplitScores:
+    return split_stop_row.evaluate_splits(
+        public=df, private=private_df, llm=[llm], n_jobs=n_jobs, on_failure="continue"
+    )
+
+
+@pytest.fixture(scope="module")
+def stop_outcome(llm, api, tmp_path_factory) -> SplitOutcome:
+    """One run per model and API, shared by the tests below."""
+    directory = tmp_path_factory.mktemp(f"stop-{api}")
+    return run_split(private_split_stop, llm, directory)
+
+
+def assert_stopped_and_withheld(outcome: SplitOutcome):
+    assert isinstance(outcome.error, NonRecoverableError)
+    assert "withheld" in str(outcome.error)
+    shown = "".join(traceback.format_exception(outcome.error))
+    assert PRIVATE_TAG not in shown
+
+
+@pytest.mark.parametrize("llm, api", SPLIT_LLM_GENAI, scope="module")
+def test_private_split_stop(llm, api, stop_outcome):
+    outcome = stop_outcome
+    assert_stopped_and_withheld(outcome)
+    assert_private_tag_not_leaked(outcome)
+    private = outcome.private_file()
+    assert "Intentional stop at" in private["errorMessage"]
+    assert PRIVATE_TAG in private["errorMessage"]
+
+
+@pytest.mark.xfail(
+    strict=False,
+    reason="Pending fix: the private file stays COMPLETED after a NonRecoverableError.",
+)
+@pytest.mark.parametrize("llm, api", SPLIT_LLM_GENAI, scope="module")
+def test_private_split_stop_private_file_state(llm, api, stop_outcome):
+    assert stop_outcome.private_file()["state"] == "BENCHMARK_TASK_RUN_STATE_ERRORED"
+
+
+@pytest.mark.xfail(
+    strict=False,
+    reason="Pending fix: with n_jobs=1 in notebook mode, joblib 1.6 replaces an "
+    "error raised after the first row with an AttributeError of its own, on any "
+    "split (orchestration/scheduling.py runs Parallel with verbose=7).",
+)
+@pytest.mark.parametrize("llm, api", SPLIT_LLM_GENAI)
+def test_private_split_stop_sequential(llm, api, tmp_path):
+    assert_stopped_and_withheld(run_split(private_split_stop, llm, tmp_path, n_jobs=1))
 
 
 # %%

@@ -127,6 +127,18 @@ def hidden() -> Iterator[Context]:
         ) from None
 
 
+@contextlib.contextmanager
+def reentered(run: runs.Run) -> Iterator[None]:
+    """Makes `run` current again, without changing its status or dispatching
+    an event: for work on a hidden run after its scope, which must stay hidden.
+    """
+    token = _current.set(dataclasses.replace(_current.get(), run=run))
+    try:
+        yield
+    finally:
+        _current.reset(token)
+
+
 def output_hidden() -> bool:
     """Whether the current run is in `hidden()`, so nothing of it may be shown."""
     run = _current.get().run

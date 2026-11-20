@@ -433,7 +433,7 @@ def split_eval(llm) -> kbench.SplitScores:
     return is_correct.evaluate_splits(public=public_df, private=private_df, llm=[llm])
 ```
 
-`evaluate_splits` takes the arguments of `evaluate`. The row task should return pass/fail (`-> bool` or no annotation) or a number. Private rows print nothing and are written, with their errors, to one file under `private/` in the output directory, so keep the notebook private. Call it once per task: a second call replaces that file. Models still receive the private prompts, and task source code is published: never write private data in a task function.
+`evaluate_splits` takes the arguments of `evaluate`. By default the row task should return pass/fail (`-> bool` or no annotation) or a number, and each split scores the mean. For any other row type, or another metric, pass `score=fn`: it gets a split's runs and returns a bool, a finite number, a `(score, ci)` pair or a dict of JSON values, all published as is, so return aggregates only. A cached run's `passed` is always true: read `run.result if run.cached else run.passed`. Private rows print nothing and are written, with their errors, to one file under `private/` in the output directory, so keep the notebook private. Call it once per task: a second call replaces that file. Models still receive the private prompts, and task source code is published: never write private data in a task function.
 
 ---
 

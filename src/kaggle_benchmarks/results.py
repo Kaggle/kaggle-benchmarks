@@ -13,8 +13,14 @@
 # limitations under the License.
 
 import dataclasses
+import json
+import math
+import numbers
 import pprint
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, get_args
+
+import numpy as np
+from google.protobuf import struct_pb2
 
 T = TypeVar("T")
 
@@ -109,16 +115,56 @@ class MetricWithCI(Result[tuple[float, float]]):
         return f"{run.result[0]}(±{run.result[1]})"
 
 
+SplitValue = float | bool | tuple[float, float] | dict[str, Any]
+
+
+def split_value(value: Any, name: str) -> SplitValue:
+    """Returns `value` as a bool, a float, a pair of floats or a dict, the forms
+    a run file holds, or raises `TypeError` if it cannot hold it."""
+
+    def is_number(item: Any) -> bool:
+        return (
+            isinstance(item, numbers.Real)
+            and not isinstance(item, (bool, np.bool_))
+            and math.isfinite(item)
+        )
+
+    try:
+        if isinstance(value, (bool, np.bool_)):
+            return bool(value)
+        if is_number(value):
+            return float(value)
+        if isinstance(value, tuple) and len(value) == 2 and all(map(is_number, value)):
+            return (float(value[0]), float(value[1]))
+        if isinstance(value, dict):
+            # As the run file is written: a Struct, then JSON without NaN.
+            struct_pb2.Struct().update(value)
+            json.dumps(value, allow_nan=False)
+            return value
+    except (TypeError, ValueError, OverflowError):
+        pass
+    raise TypeError(
+        f"The {name} score must be a bool, a finite number, a (score, confidence) "
+        f"pair or a dict of JSON values, not {value!r:.50}."
+    )
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SplitScores:
     """Scores of a task over a public and a private split of its rows.
 
-    The task is ranked on `overall`.
+    Each is a bool, a finite number, a `(score, confidence)` pair or a dict of
+    JSON values, and all three are published. The task is ranked on `overall`.
     """
 
-    overall: float
-    public: float
-    private: float
+    overall: SplitValue
+    public: SplitValue
+    private: SplitValue
+
+    def __post_init__(self):
+        for field in dataclasses.fields(self):
+            value = split_value(getattr(self, field.name), field.name)
+            object.__setattr__(self, field.name, value)
 
 
 class Splits(Result[SplitScores]): ...

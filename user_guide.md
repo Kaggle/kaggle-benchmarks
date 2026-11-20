@@ -45,6 +45,7 @@ You can define a task by decorating a Python function with
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task(name="my_first_task")
 def my_task(llm):
     # ... task logic ...
@@ -67,7 +68,9 @@ def solve_riddle(llm, riddle: str, answer: str):
     """Asks a riddle and checks for a keyword in the answer."""
     response = kbench.llm.prompt(riddle)
     kbench.assertions.assert_contains_regex(
-        f"(?i){answer}", response, expectation="The model should answer the riddle correctly."
+        f"(?i){answer}",
+        response,
+        expectation="The model should answer the riddle correctly.",
     )
 ```
 
@@ -106,7 +109,9 @@ benchmark is rendered correctly on the leaderboard.
   - `tuple[float, float]`: Can represent a metric with its confidence
     interval, like `(accuracy, accuracy_ci)`.
   - `kbench.SplitScores`: `overall`, `public` and `private` scores, from
-    `.evaluate_splits()` (see below). The task is ranked on `overall`.
+    `.evaluate_splits()` (see below). Each is a bool, a finite number, a
+    `(score, confidence)` pair or a dict of JSON values. The task is ranked
+    on `overall`.
 
 **A mismatch between the annotated return type and the actual value
 returned by your function will raise a warning like
@@ -170,8 +175,8 @@ with kbench.client.enable_cache():
     results = solve_and_check_riddle.evaluate(
         llm=[kbench.llm],
         evaluation_data=riddle_df,
-        on_failure="continue",   # collect failures into results.errored_runs
-        max_attempts=3,          # retry transient failures
+        on_failure="continue",  # collect failures into results.errored_runs
+        max_attempts=3,  # retry transient failures
     )
 
 print(f"Completed: {len(results.completed_runs)}")
@@ -209,6 +214,7 @@ scores from a task annotated `-> kbench.SplitScores`:
 ``` python
 public_riddle_df, private_riddle_df = riddle_df.iloc[:1], riddle_df.iloc[1:]
 
+
 @kbench.task(name="riddles")
 def riddles(llm) -> kbench.SplitScores:
     return solve_and_check_riddle.evaluate_splits(
@@ -222,13 +228,46 @@ file, and write no run files or cache files of their own. An error they raise
 is replaced by one without details. For you, the rows and their errors are
 written to one file, `private/<task's run file>.private.json`, in the output
 directory, which is as private as the notebook. A row that returns NaN or
-infinity scores 0 and is left out of both files, which cannot hold it.
+infinity scores 0, but no run file can hold it: a public one costs the task's
+run file, and a private one the private file.
 
-A row scores 1 or 0 if it passes or fails or returns a bool, or its result
-if the row task returns a number. With `on_failure="continue"` a failed row
-scores 0; by default it fails the task, as in `.evaluate()`. `overall` is the
-mean over all rows. Call `.evaluate_splits()` once per task: a second call
-replaces the private file.
+By default a row scores 1 or 0 if it passes or fails or returns a bool, or
+its result if the row task returns a number, and each split scores the mean
+of its rows. With `on_failure="continue"` a failed row scores 0; by default it
+fails the task, as in `.evaluate()`. `overall` is the mean over all rows. Call
+`.evaluate_splits()` once per task: a second call replaces the private file.
+
+To score splits another way, or for a row task that returns a tuple or a
+dict, which score 0 by default, pass `score`. It gets the runs of a split and returns a bool, a finite
+number, a `(score, confidence)` pair or a dict of JSON values. It is called on
+the public runs, on the private runs and on both together for `overall`. A
+run loaded from the cache always has `passed` true, and holds its verdict in
+`result`:
+
+``` python
+import statistics
+
+
+def accuracy_with_ci(runs):
+    passed = [float(run.result if run.cached else run.passed) for run in runs]
+    mean = statistics.fmean(passed)
+    return mean, 1.96 * statistics.pstdev(passed) / len(passed) ** 0.5
+
+
+@kbench.task(name="riddles")
+def riddles(llm) -> kbench.SplitScores:
+    return solve_and_check_riddle.evaluate_splits(
+        public=public_riddle_df,
+        private=private_riddle_df,
+        llm=[llm],
+        score=accuracy_with_ci,
+    )
+```
+
+> **Every score is published, the private one included.** Whatever `score`
+> returns for the private split, or for `overall`, goes into the task's run
+> file as it is. Return aggregates only: never labels, answers, prompts or
+> anything else read from a private row.
 
 > **What this does not hide.** The models you evaluate receive every private
 > prompt. The `private/` directory, anything a task prints or logs itself, the
@@ -257,10 +296,12 @@ the model’s output into an instance of that schema.
 ``` python
 from dataclasses import dataclass
 
+
 @dataclass
 class CapitalInfo:
     city: str
     country: str
+
 
 info = kbench.llm.prompt("What is the capital of France?", schema=CapitalInfo)
 # info is now an instance of CapitalInfo
@@ -273,8 +314,7 @@ as
 ``` python
 # Pass the image directly to the prompt
 response = kbench.llm.prompt(
-    "What is the animal in the picture?",
-    image=images.from_url(image_url)
+    "What is the animal in the picture?", image=images.from_url(image_url)
 )
 ```
 
@@ -286,7 +326,7 @@ from kaggle_benchmarks.content_types import videos
 
 response = kbench.llm.prompt(
     "What is this video about?",
-    video=videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+    video=videos.from_url("https://www.youtube.com/watch?v=aqz-KE-bpKQ"),
 )
 ```
 
@@ -302,20 +342,17 @@ from kaggle_benchmarks.content_types import audios
 
 # From a local file
 response = kbench.llm.prompt(
-    "Transcribe this audio.",
-    audio=audios.from_path("speech.mp3")
+    "Transcribe this audio.", audio=audios.from_path("speech.mp3")
 )
 
 # From a URL
 response = kbench.llm.prompt(
-    "Transcribe this audio.",
-    audio=audios.from_url("https://example.com/speech.mp3")
+    "Transcribe this audio.", audio=audios.from_url("https://example.com/speech.mp3")
 )
 
 # From base64
 response = kbench.llm.prompt(
-    "Transcribe this audio.",
-    audio=audios.from_base64(b64_string, format="mp3")
+    "Transcribe this audio.", audio=audios.from_base64(b64_string, format="mp3")
 )
 ```
 
@@ -411,7 +448,9 @@ prompting the LLM. This is how you can send images, for example.
 
 ``` python
 image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Cute_dog.jpg/320px-Cute_dog.jpg"
-image = kbench.content_types.images.from_base64(kbench.content_types.images.image_url_to_base64(image_url))
+image = kbench.content_types.images.from_base64(
+    kbench.content_types.images.image_url_to_base64(image_url)
+)
 with kbench.chats.new("image_chat"):
     # Send an image first
     kbench.user.send(image)
@@ -454,6 +493,7 @@ items:
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task()
 def fun_fact_task(llm):
     items_to_ask_about = ["the sun", "a black hole", "the moon"]
@@ -469,6 +509,7 @@ def fun_fact_task(llm):
 
     # Now, 'responses' contains one fun fact for each item, and each was requested
     # in a separate, clean chat context, which is much more efficient.
+
 
 fun_fact_task.run(kbench.llm)
 ```
@@ -495,8 +536,12 @@ with kbench.chats.new("Conversation") as chat:
         if msg.sender.role == "assistant":
             print(f"Input tokens: {msg.usage.input_tokens}")
             print(f"Output tokens: {msg.usage.output_tokens}")
-            print(f"Input cost (nanodollars): {msg.usage.input_tokens_cost_nanodollars}")
-            print(f"Output cost (nanodollars): {msg.usage.output_tokens_cost_nanodollars}")
+            print(
+                f"Input cost (nanodollars): {msg.usage.input_tokens_cost_nanodollars}"
+            )
+            print(
+                f"Output cost (nanodollars): {msg.usage.output_tokens_cost_nanodollars}"
+            )
             print(f"Backend latency (ms): {msg.usage.total_backend_latency_ms}")
 ```
 
@@ -570,6 +615,7 @@ Inside `with room:` you only ever do two things:
 ``` python
 import kaggle_benchmarks as kbench
 
+
 @kbench.task()
 def debate_task(llm):
     room = kbench.ChatRoom(
@@ -577,11 +623,15 @@ def debate_task(llm):
         name="Moderator",
     )
     pro = room.add_participant(
-        llm, name="Pro", avatar="🔵",
+        llm,
+        name="Pro",
+        avatar="🔵",
         system_prompt="Argue IN FAVOR of the topic. Be concise.",
     )
     con = room.add_participant(
-        llm, name="Con", avatar="🔴",
+        llm,
+        name="Con",
+        avatar="🔴",
         system_prompt="Argue AGAINST the topic. Be concise.",
     )
 
@@ -602,10 +652,12 @@ the returned value is the parsed object.
 ``` python
 import dataclasses
 
+
 @dataclasses.dataclass
 class Move:
     row: int
     col: int
+
 
 move = player.reply(schema=Move)  # returns Move instance
 ```
@@ -618,9 +670,7 @@ see both the parent room and the channel interleaved in time; non-members
 never see channel messages.
 
 ``` python
-wolf_chat = room.private_channel(
-    [alice, bob], name="Werewolf Night Chat"
-)
+wolf_chat = room.private_channel([alice, bob], name="Werewolf Night Chat")
 with wolf_chat:
     wolf_chat.post("Pick a villager to eliminate.")
     for wolf in [alice, bob]:
@@ -733,6 +783,7 @@ def check_capital(llm, country: str, capital: str):
         expectation=f"The model should identify {capital} as the capital of {country}.",
     )
 
+
 # Run the task
 check_capital.run(
     llm=kbench.llm,
@@ -748,9 +799,7 @@ When writing assertions, it is highly recommended to include the
 
 ``` python
 kbench.assertions.assert_equal(
-    "610",
-    code_output,
-    expectation="The code should print the 15th Fibonacci number."
+    "610", code_output, expectation="The code should print the 15th Fibonacci number."
 )
 ```
 
@@ -772,6 +821,7 @@ positive:
 ``` python
 from kaggle_benchmarks.assertions import assertion_handler, AssertionResult
 
+
 @assertion_handler()
 def assert_is_positive(value: float, expectation: str) -> AssertionResult:
     """Custom assertion to check if a number is positive."""
@@ -781,15 +831,16 @@ def assert_is_positive(value: float, expectation: str) -> AssertionResult:
     # Simply return the result to keep it recorded in the run results
     return kbench.assertions.AssertionResult(
         passed=passed,
-        expectation=expectation
-        or f"Expected {value} to be positive.",
+        expectation=expectation or f"Expected {value} to be positive.",
     )
+
 
 # Using the custom assertion in a task
 @kbench.task()
 def check_number(llm):
     response = kbench.llm.prompt("Give me a positive number.", schema=float)
     assert_is_positive(response, expectation="LLM should return a positive number.")
+
 
 check_number.run(kbench.llm)
 ```
@@ -812,6 +863,7 @@ technical concept:
 
 ``` python
 import kaggle_benchmarks as kbench
+
 
 @kbench.task()
 def summarize_story(llm):
@@ -839,6 +891,7 @@ def summarize_story(llm):
             expectation=f"Criterion: {result.criterion}. Reason: {result.reason}",
         )
 
+
 summarize_story.run(kbench.llm)
 ```
 
@@ -855,12 +908,15 @@ import dataclasses
 from typing import Iterable, List
 import textwrap
 
+
 @dataclasses.dataclass
 class StoryCritique:
     """A custom schema for receiving a story critique."""
+
     overall_rating: int  # 1-5
     feedback: str
     passed_checks: List[str]
+
 
 def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
     """Custom prompt for the judge."""
@@ -878,6 +934,7 @@ def custom_story_prompt(criteria: Iterable[str], response_text: str) -> str:
         - passed_checks (list of strings for met criteria)
     """)
 
+
 @kbench.task()
 def critique_story(llm):
     story = llm.prompt("Write a very short story about a robot.")
@@ -892,8 +949,9 @@ def critique_story(llm):
 
     kbench.assertions.assert_true(
         critique.overall_rating >= 4,
-        expectation=f"Story rating {critique.overall_rating} should be at least 4."
+        expectation=f"Story rating {critique.overall_rating} should be at least 4.",
     )
+
 
 critique_story.run(kbench.llm)
 ```

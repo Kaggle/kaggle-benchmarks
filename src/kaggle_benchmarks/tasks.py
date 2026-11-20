@@ -51,16 +51,6 @@ class NonRecoverableError(Exception):
     pass
 
 
-def _drop_non_finite_rows(run: "runs.Run") -> None:
-    """Unlinks the rows that returned NaN or infinity, which a run file cannot
-    hold: one would cost the file of the run they are linked to."""
-    run.subruns[:] = [
-        row
-        for row in run.subruns
-        if not (isinstance(row.result, numbers.Real) and not math.isfinite(row.result))
-    ]
-
-
 @dataclasses.dataclass(frozen=True)
 class Task(Generic[T]):
     func: Callable[..., T]
@@ -447,47 +437,63 @@ class Task(Generic[T]):
                 )
 
     def evaluate_splits(
-        self, *, public: pd.DataFrame, private: pd.DataFrame, **kwargs: Any
+        self,
+        *,
+        public: pd.DataFrame,
+        private: pd.DataFrame,
+        score: "Callable[[runs.Runs[T]], results.SplitValue] | None" = None,
+        **kwargs: Any,
     ) -> results.SplitScores:
         """Evaluates the task over `public`, then over `private` in `contexts.hidden()`.
 
         Takes the other arguments of `evaluate`. Return the scores from a task
-        annotated `-> kbench.SplitScores`. A run scores its verdict if the task
-        passes or fails, the bool it returns, its result if that is a finite
-        number, and 0 otherwise, failed runs included. `overall` is the mean
-        over all runs.
+        annotated `-> kbench.SplitScores`.
+
+        `score` turns the runs of a split into its score: a bool, a finite
+        number, a `(score, confidence)` pair or a dict of JSON values. It is
+        called on the public runs, the private runs and both together for
+        `overall`, and every score is published. A cached run's `passed` is
+        always true; its `result` holds the verdict.
+
+        By default a run scores its verdict if the task passes or fails, the
+        bool it returns, its result if that is a finite number, and 0
+        otherwise, failed runs included, and a split scores the mean.
 
         The private runs print nothing and are written, for the author, to one
         file: `private/<calling task's run file>.private.json`.
         """
-        from kaggle_benchmarks import client, contexts
+        from kaggle_benchmarks import client, contexts, runs
 
         caller = contexts.get_current().run
         if caller is None:
             raise RuntimeError("evaluate_splits must be called inside a task run.")
-        public_scores = self._scores(self.evaluate(evaluation_data=public, **kwargs))
-        _drop_non_finite_rows(caller)
+        if score is None:
+            score = self._mean_score
+
+        public_runs = self.evaluate(evaluation_data=public, **kwargs)
+        # Checked here, as in the hidden scope a wrong type would raise a
+        # withheld error.
+        public_score = results.split_value(score(public_runs), "public")
         try:
             with contexts.hidden() as scope:
                 sink = cast("runs.Run", scope.run)
                 # Failed until the scores exist: a run file cannot hold a
                 # pending result.
                 sink.result = results.FAILED
-                private_scores = self._scores(
-                    self.evaluate(evaluation_data=private, **kwargs)
-                )
+                private_runs = self.evaluate(evaluation_data=private, **kwargs)
                 sink.result = scores = results.SplitScores(
-                    overall=statistics.fmean(public_scores + private_scores),
-                    public=statistics.fmean(public_scores),
-                    private=statistics.fmean(private_scores),
+                    overall=score(runs.Runs([*public_runs, *private_runs])),
+                    public=public_score,
+                    private=score(private_runs),
                 )
         finally:
             # After the scope, so that the file has its final state and error.
             # Also when a row fails, so the author can see why.
             if caller.task.store_run:
-                _drop_non_finite_rows(sink)
                 try:
-                    client.store_private_run(sink, caller)
+                    # Hidden, so that serializing it shows no private value.
+                    with contexts.reentered(sink):
+                        client.store_private_run(sink, caller)
                 except Exception as error:
                     # Only its type: the message can quote a private row.
                     logger.warning(
@@ -495,23 +501,20 @@ class Task(Generic[T]):
                     )
         return scores
 
-    def _scores(self, evaluated: "runs.Runs[T]") -> list[float]:
-        # A cached run's result is its stored verdict.
-        if self.result_type is results.PassFail:
-            return [
-                float(bool(run.result if run.cached else run.passed))
-                for run in evaluated
-            ]
-        # The returned bool, as the run file and the cache store it, so that a
-        # cached row scores the same as a fresh one.
-        if self.result_type is results.Boolean:
-            return [float(bool(run.result)) for run in evaluated]
-        return [
-            float(run.result)
-            if isinstance(run.result, numbers.Real) and math.isfinite(run.result)
-            else 0.0
-            for run in evaluated
-        ]
+    def _mean_score(self, evaluated: "runs.Runs[T]") -> float:
+        def row_score(run: "runs.Run[T]") -> float:
+            # A cached run's result is its stored verdict.
+            if self.result_type is results.PassFail:
+                return float(bool(run.result if run.cached else run.passed))
+            # The returned bool, as the run file and the cache store it, so
+            # that a cached row scores the same as a fresh one.
+            if self.result_type is results.Boolean:
+                return float(bool(run.result))
+            if isinstance(run.result, numbers.Real) and math.isfinite(run.result):
+                return float(run.result)
+            return 0.0
+
+        return statistics.fmean(map(row_score, evaluated))
 
     def bind_dataframe(self, df: pd.DataFrame, **kwargs) -> Self:
         def func(**kwargs):

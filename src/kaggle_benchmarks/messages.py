@@ -14,6 +14,7 @@
 
 import dataclasses
 import json
+import reprlib
 import warnings
 from typing import TYPE_CHECKING, Any, Generic, Iterable, TypeVar
 
@@ -93,9 +94,18 @@ class Message(Generic[T]):
         if "raw_content" in self._meta:
             return self._meta["raw_content"]
         if hasattr(self.content, "__dict__"):
+            from kaggle_benchmarks import contexts
+
+            # A hidden message's value could quote a private row.
+            # reprlib: short, and never raises, which would lose the run file.
+            value = (
+                ""
+                if contexts.output_hidden()
+                else f" (value: {reprlib.repr(self.content)})"
+            )
             warnings.warn(
-                f"Object of type {type(self.content)} lacks a proper serialization method."
-                "Falling back to `__dict__`."
+                f"Object of type {type(self.content)}{value} lacks a proper "
+                "serialization method. Falling back to `__dict__`."
             )
             # default=str so one odd attribute degrades to its string form
             # rather than raising, which would lose the whole run file.
