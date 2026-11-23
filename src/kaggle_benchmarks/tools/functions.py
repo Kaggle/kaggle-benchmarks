@@ -23,8 +23,8 @@ class ToolSchemaError(Exception):
     """Raised when a function schema cannot be generated."""
 
 
-def get_function_schema(func: Callable) -> dict:
-    """Generates a JSON schema for a function's parameters using Pydantic."""
+def _get_function_arguments(func: Callable) -> dict[str, tuple[type, Any]]:
+    """Generates a Pydantic model for a function's arguments."""
     sig = inspect.signature(func)
     fields = {}
 
@@ -36,12 +36,17 @@ def get_function_schema(func: Callable) -> dict:
 
         fields[name] = (annotation, default)
 
+    return fields
+
+
+def get_function_schema(func: Callable) -> dict:
+    """Generates a JSON schema for a function's parameters using Pydantic."""
     try:
-        DynamicModel = pydantic.create_model(f"{func.__name__}", **fields)
-        return DynamicModel.model_json_schema()
+        model = pydantic.create_model(func.__name__, **_get_function_arguments(func))
+        return model.model_json_schema()
     except pydantic.PydanticSchemaGenerationError as e:
         raise ToolSchemaError(
-            "Unable to generate json schema for function {func.__name__} arguments", e
+            f"Unable to generate json schema for function {func.__name__} arguments", e
         )
 
 

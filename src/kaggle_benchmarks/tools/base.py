@@ -20,6 +20,8 @@ from typing import Any, Callable, Generic, Self, TypeVar
 import pydantic
 
 T = TypeVar("T")
+F = TypeVar("F")
+Name = TypeVar("Name", bound=str)
 
 
 class ToolInvocationLimitExhausted(Exception):
@@ -81,6 +83,10 @@ class ToolInvocation:
             thought=call_data.get("_thought"),
         )
 
+    # Allows serialization as content message
+    def get_payload(self):
+        return dataclasses.asdict(self)
+
 
 @dataclasses.dataclass
 class ToolInvocationResult:
@@ -105,19 +111,28 @@ class ToolInvocationResult:
             return f"{self.name}({self.arguments}): Error: {self.error}"
         return f"{self.name}({self.arguments}) -> {self.output}"
 
-
-class ToolCallModel(pydantic.BaseModel):
-    """Represents a tool call in a structured response."""
-
-    name: str
-    arguments: dict[str, Any]
+    def get_payload(self):
+        return dataclasses.asdict(self)
 
 
-class ModelResponse(pydantic.BaseModel, Generic[T]):
-    """A structured response from the LLM that may contain tool calls or a message."""
+class ToolCallModel(pydantic.BaseModel, Generic[Name, T]):
+    # Represents a tool call in a structured response.
+    # Generic Name allows for overwriting str with Literal['tool_name']
+    name: Name
+    arguments: T
 
-    tools: list[ToolCallModel] | None = None
+
+class ModelResponse(pydantic.BaseModel, Generic[T, F]):
+    # A structured response from the LLM that may contain tool calls or a message.
+
+    tools: list[F] | None = None
     message: T | None = None
+
+    model_config = pydantic.ConfigDict(
+        title="Response",
+        extra="forbid",
+        arbitrary_types_allowed=False,
+    )
 
 
 def describe_tools(tools: list[Callable]) -> str:
@@ -211,3 +226,13 @@ def invoke_tool(call: ToolInvocation, tools: list[Callable]) -> ToolInvocationRe
             error=error_message,
             call_id=call.call_id,
         )
+
+
+def iter_invocations(chat):
+    from kaggle_benchmarks import llm_messages
+
+    for item in chat.messages:
+        if isinstance(item.content, ToolInvocationResult):
+            yield item.content
+        elif isinstance(item, llm_messages.LLMMessage):
+            yield from item.tool_calls or []
