@@ -1,6 +1,8 @@
 # Create an image that will run personal benchmarks on Kaggle
 # BASE LAYER: Contains OS, system deps, and third-party libraries.
-FROM python:3.11
+# Debian release pinned explicitly: the Playwright apt list below is
+# release-specific. Keep the Python version in sync with .python-version.
+FROM python:3.12-trixie
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
@@ -10,9 +12,9 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 # Manually install Playwright's system dependencies for Debian Trixie.
-# This step is necessary because the base image was recently updated to Debian
-# Trixie, which changed the names and availability of several packages required
-# by Playwright's browsers.
+# This step is necessary because Debian Trixie changed the names and
+# availability of several packages required by Playwright's browsers.
+# Re-check this list whenever the Debian release in the FROM line changes.
 #
 # This list of packages was obtained from the detailed error logs produced
 # by Playwright when it failed to launch a browser.
@@ -50,9 +52,13 @@ RUN apt-get update && apt-get install -y \
 # Pre-install external dependencies from the lockfile.
 # We use --no-install-project because the source code isn't here yet.
 # This ensures all third-party libs are cached in this base layer.
+# .python-version is mounted so this venv uses the same interpreter the top
+# layer's `uv sync` will ask for; otherwise a mismatch makes the top layer
+# delete this venv and reinstall everything.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=.python-version,target=.python-version \
     uv sync --frozen --no-install-project --no-dev --group kaggle
 
 RUN uv run playwright install chromium --only-shell
