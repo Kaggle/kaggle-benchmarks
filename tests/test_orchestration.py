@@ -16,6 +16,7 @@ import random
 import time
 
 import pandas as pd
+import pytest
 
 from kaggle_benchmarks import orchestration
 from kaggle_benchmarks._config import ExecutionMode, config
@@ -143,3 +144,24 @@ def test_tqdm_enabled_in_notebook_mode():
 
     assert disable_flags
     assert all(flag is False for flag in disable_flags)
+
+
+def test_row_error_keeps_its_type_with_progress_shown(cfg):
+    # joblib's own verbose output replaced a row's exception with an
+    # AttributeError at n_jobs=1, so a NonRecoverableError no longer stopped a task.
+    cfg.execution_mode = ExecutionMode.NOTEBOOK
+
+    def fails_on_second(x):
+        if x == 2:
+            raise ValueError("boom")
+        return x
+
+    with pytest.raises(ValueError, match="boom"):
+        list(
+            orchestration.evaluate_function(
+                func=fails_on_second,
+                grid={},
+                evaluation_data=pd.DataFrame({"x": [1, 2]}),
+                n_jobs=1,
+            )
+        )
