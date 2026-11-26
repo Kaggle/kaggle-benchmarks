@@ -31,6 +31,11 @@ class EventManager:
             self.listeners.remove(listener)
 
     def dispatch(self, event, *args, **kwargs):
+        from kaggle_benchmarks import contexts
+
+        # Any listener can print or save what it is given.
+        if contexts.output_hidden():
+            return
         for listener in list(self.listeners):
             if hasattr(listener, event):
                 getattr(listener, event)(*args, **kwargs)
