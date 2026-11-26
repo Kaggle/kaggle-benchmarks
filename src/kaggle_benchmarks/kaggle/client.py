@@ -102,6 +102,15 @@ class KaggleClient(clients.Client):
             source=_source(run),
         )
 
+    def store_private_run(self, run: runs.Run, parent: runs.Run):
+        # Not "*.run.json": the platform reads any output file named so.
+        name = self._get_run_filepath(parent).name.removesuffix(
+            serialization.RUN_FILE_SUFFIX
+        )
+        path = self.directory / "private" / f"{name}.private.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        save_proto(serialization.dump_run(run), path)
+
     def _subrun_paths(self, run: runs.Run) -> dict[str, str]:
         """Maps each row of a dataset eval to its own trajectory file.
 
